@@ -3,7 +3,7 @@
 
 if [ $# -lt 2 ]
 then
-	echo "Usage: headers_install.sh OUTDIR SRCDIR [FILES...]"
+	echo "Usage: headers_install.sh OUTDIR SRCDIR [FILES...]
 	echo
 	echo "Prepares kernel header files for use by user space, by removing"
 	echo "all compiler.h definitions and #includes, removing any"

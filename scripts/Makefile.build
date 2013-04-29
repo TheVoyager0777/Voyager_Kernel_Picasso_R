@@ -503,11 +503,10 @@ ifdef CONFIG_LTO_CLANG
     # combine symversions for later processing
     update_lto_symversions =				\
 	rm -f $@.symversions; 				\
-	for i in $(filter-out FORCE,$^); do		\
-		if [ -f $$i.symversions ]; then		\
-			cat $$i.symversions 		\
-				>> $@.symversions;	\
-		fi;					\
+	for i in $(foreach n,						\
+			$(filter-out FORCE,$^),				\
+			$(if $(wildcard $(n).symversions),$(n))); do	\
+		cat $$i.symversions >> $@.symversions;			\
 	done;
   endif
   # rebuild the symbol table with llvm-ar to include IR files
@@ -583,8 +582,8 @@ else
 ref_prefix = EXTERN(
 endif
 
-filter_export_list = sed -ne '/___ksymtab/s/.*+\([^ "]*\).*/$(ref_prefix)\1)/p'
-link_export_list = rm -f $(dummy-object);\
+filter_export_list = sed -ne '/___ksymtab/s/.*+\([^ ]*\).*/EXTERN(\1)/p'
+link_export_list = rm -f $(dummy-object); \
 	echo | $(CC) $(a_flags) -c -o $(dummy-object) -x assembler -;\
 	$(LD) $(ld_flags) -r -o $@ -T $(ksyms-lds) $(dummy-object);\
 	rm $(dummy-object) $(ksyms-lds)
