@@ -219,7 +219,6 @@ static void __static_key_slow_dec_cpuslocked(struct static_key *key,
 	 * returns is unbalanced, because all other static_key_slow_inc()
 	 * instances block while the update is in progress.
 	 */
-	val = atomic_fetch_add_unless(&key->enabled, -1, 1);
 	if (val != 1) {
 		WARN(val < 0, "jump label: negative count!\n");
 		return;
@@ -481,7 +480,7 @@ struct static_key_mod {
 
 static inline struct static_key_mod *static_key_mod(struct static_key *key)
 {
-	WARN_ON_ONCE(!static_key_linked(key));
+	WARN_ON_ONCE(!(key->type & JUMP_TYPE_LINKED));
 	return (struct static_key_mod *)(key->type & ~JUMP_TYPE_MASK);
 }
 
@@ -527,7 +526,7 @@ static void __jump_label_mod_update(struct static_key *key)
 	for (mod = static_key_mod(key); mod; mod = mod->next) {
 		struct jump_entry *stop;
 		struct module *m;
-
+		
 		/*
 		 * NULL if the static_key is defined in a module
 		 * that does not use it
@@ -540,8 +539,6 @@ static void __jump_label_mod_update(struct static_key *key)
 			stop = __stop___jump_table;
 		else
 			stop = m->jump_entries + m->num_jump_entries;
-		__jump_label_update(key, mod->entries, stop,
-				    m && m->state == MODULE_STATE_COMING);
 	}
 }
 
@@ -595,7 +592,7 @@ static int jump_label_add_module(struct module *mod)
 			continue;
 
 		key = iterk;
-		if (within_module((unsigned long)key, mod)) {
+		if (within_module(iter->key, mod)) {
 			static_key_set_entries(key, iter);
 			continue;
 		}
@@ -646,6 +643,10 @@ static void jump_label_del_module(struct module *mod)
 		key = jump_entry_key(iter);
 
 		if (within_module((unsigned long)key, mod))
+			continue;
+
+		/* No memory during module load */
+		if (WARN_ON(!static_key_linked(key)))
 			continue;
 
 		/* No memory during module load */
@@ -708,9 +709,10 @@ jump_label_module_notify(struct notifier_block *self, unsigned long val,
 	case MODULE_STATE_COMING:
 		ret = jump_label_add_module(mod);
 		if (ret) {
-			WARN(1, "Failed to allocate memory: jump_label may not work properly.\n");
+			WARN(1, "Failed to allocatote memory: jump_label may not work properly.\n");
 			jump_label_del_module(mod);
 		}
+		jump_label_unlock();
 		break;
 	case MODULE_STATE_GOING:
 		jump_label_del_module(mod);
