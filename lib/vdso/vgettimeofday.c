@@ -22,25 +22,13 @@
  * Reworked and rebased over arm version by: Mark Salyzyn <salyzyn@android.com>
  */
 
-#include <linux/compiler.h>	/* for notrace				*/
-#include <linux/hrtimer.h>
-#include <linux/time.h>
 #include <asm/barrier.h>
-#include <asm/bug.h>
-#include <asm/cp15.h>
-#include <asm/page.h>
-#include <asm/unistd.h>
-
-#ifndef CONFIG_AEABI
-#error This code depends on AEABI system call conventions
-#endif
-
+#include <linux/compiler.h>	/* for notrace				*/
 #include <linux/math64.h>	/* for __iter_div_u64_rem()		*/
 #include <uapi/linux/time.h>	/* for struct timespec			*/
 
 #include "compiler.h"
 #include "datapage.h"
-#include "../../../lib/vdso/vgettimeofday.c"
 
 DEFINE_FALLBACK(gettimeofday, struct timeval *, tv, struct timezone *, tz)
 DEFINE_FALLBACK(clock_gettime, clockid_t, clock, struct timespec *, ts)
@@ -115,7 +103,7 @@ static notrace int do_monotonic_coarse(const struct vdso_data *vd,
 	return 0;
 }
 
-#ifdef CONFIG_ARM_ARCH_TIMER
+#ifdef ARCH_PROVIDES_TIMER
 
 /*
  * Returns the clock delta, in nanoseconds left-shifted by the clock
@@ -125,13 +113,7 @@ static notrace u64 get_clock_shifted_nsec(const u64 cycle_last,
 					  const u32 mult,
 					  const u64 mask)
 {
-	u64 cycle_delta;
-	u64 cycle_now;
-	u64 nsec;
 	u64 res;
-	
-	isb();
-	cycle_now = arch_vdso_read_counter();
 
 	/* Read the virtual counter. */
 	res = arch_vdso_read_counter();
@@ -265,7 +247,7 @@ static notrace int do_monotonic_raw(const struct vdso_data *vd,
 	return 0;
 }
 
-#else /* CONFIG_ARM_ARCH_TIMER */
+#else /* ARCH_PROVIDES_TIMER */
 
 static notrace int do_realtime(const struct vdso_data *vd, struct timespec *ts)
 {
@@ -283,7 +265,7 @@ static notrace int do_monotonic_raw(const struct vdso_data *vd,
 	return -1;
 }
 
-#endif /* CONFIG_ARM_ARCH_TIMER */
+#endif /* ARCH_PROVIDES_TIMER */
 
 notrace int __vdso_clock_gettime(clockid_t clock, struct timespec *ts)
 {
