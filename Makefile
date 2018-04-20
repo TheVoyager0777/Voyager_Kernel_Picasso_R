@@ -674,6 +674,22 @@ CFLAGS_GCOV	:= -fprofile-arcs -ftest-coverage \
 	$(call cc-disable-warning,maybe-uninitialized,)
 export CFLAGS_GCOV
 
+# The all: target is the default when no target is given on the
+# command line.
+# This allow a user to issue only 'make' to build a kernel including modules
+# Defaults to vmlinux, but the arch makefile usually adds further targets
+all: vmlinux
+
+CFLAGS_GCOV	:= -fprofile-arcs -ftest-coverage \
+	$(call cc-option,-fno-tree-loop-im) \
+	$(call cc-disable-warning,maybe-uninitialized,)
+export CFLAGS_GCOV
+
+# The arch Makefiles can override CC_FLAGS_FTRACE. We may also append it later.
+ifdef CONFIG_FUNCTION_TRACER
+  CC_FLAGS_FTRACE := -pg
+endif
+
 # Make toolchain changes before including arch/$(SRCARCH)/Makefile to ensure
 # ar/cc/ld-* macros return correct values.
 ifdef CONFIG_LD_GOLD

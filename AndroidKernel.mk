@@ -69,7 +69,7 @@ ifeq ($(KERNEL_LLVM_SUPPORT), true)
     ifeq ($(shell echo $(SDCLANG_PATH) | head -c 1),/)
        KERNEL_LLVM_BIN := $(SDCLANG_PATH)/clang
     else
-       KERNEL_LLVM_BIN := $(shell pwd)/$(SDCLANG_PATH)/clang
+       KERNEL_LLVM_BIN := $(ANDROID_BUILD_TOP)/$(SDCLANG_PATH)/clang
     endif
     $(warning "Using sdllvm" $(KERNEL_LLVM_BIN))
   else
