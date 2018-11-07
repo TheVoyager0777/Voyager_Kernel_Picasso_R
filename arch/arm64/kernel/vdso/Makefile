@@ -21,7 +21,7 @@ ccflags-y += -nostdlib -Wl,-soname=linux-vdso.so.1 \
 ldflags-y := -shared -nostdlib -soname=linux-vdso.so.1  --hash-style=sysv \
 		--build-id -n -T
 ccflags-y := -fno-stack-protector
-ccflags-y += -DDISABLE_BRANCH_PROFILING
+ccflags-y += -DDISABLE_BRANCH_PROFILING -ffixed-x18
 ccflags-y += $(DISABLE_LTO)
 
 # Force -O2 to avoid libgcc dependencies
