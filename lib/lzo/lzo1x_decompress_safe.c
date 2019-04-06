@@ -51,6 +51,14 @@ int lzo1x_decompress_safe(const unsigned char *in, size_t in_len,
 
 	if (unlikely(in_len < 3))
 		goto input_overrun;
+
+	if (likely(in_len >= 5) && likely(*ip == 17)) {
+		bitstream_version = ip[1];
+		ip += 2;
+	} else {
+		bitstream_version = 0;
+	}
+
 	if (*ip > 17) {
 		t = *ip++ - 17;
 		if (t < 4) {
