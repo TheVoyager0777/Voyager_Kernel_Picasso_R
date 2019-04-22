@@ -1,3 +1,7 @@
 menu "Tech packages"
 
+source "techpack/data/Kconfig"
+
+source "techpack/audio/Kconfig"
+
 endmenu
