@@ -1781,6 +1781,47 @@ out_unlock:
 	return retval ?: nbytes;
 }
 
+static ssize_t cpuset_write_resmask_assist(struct kernfs_open_file *of,
+					   struct cs_target tgt, size_t nbytes,
+					   loff_t off)
+{
+	pr_info("cpuset_assist: setting %s to %s\n", tgt.name, tgt.cpus);
+	return cpuset_write_resmask(of, tgt.cpus, nbytes, off);
+}
+
+static ssize_t cpuset_write_resmask_wrapper(struct kernfs_open_file *of,
+					 char *buf, size_t nbytes, loff_t off)
+{
+#ifdef CONFIG_CPUSET_ASSIST
+	static struct cs_target cs_targets[] = {
+		{ "audio-app",		CONFIG_CPUSET_AUDIO_APP },
+		{ "background",		CONFIG_CPUSET_BG },
+		{ "camera-daemon",	CONFIG_CPUSET_CAMERA },
+		{ "display",		CONFIG_CPUSET_DISPLAY },
+		{ "foreground",		CONFIG_CPUSET_FG },
+		{ "restricted",		CONFIG_CPUSET_RESTRICTED },
+		{ "system-background",	CONFIG_CPUSET_SYSTEM_BG },
+		{ "top-app",		CONFIG_CPUSET_TOP_APP },
+	};
+	struct cpuset *cs = css_cs(of_css(of));
+	int i;
+
+	if (task_is_booster(current)) {
+		for (i = 0; i < ARRAY_SIZE(cs_targets); i++) {
+			struct cs_target tgt = cs_targets[i];
+
+			if (!strcmp(cs->css.cgroup->kn->name, tgt.name))
+				return cpuset_write_resmask_assist(of, tgt,
+								   nbytes, off);
+		}
+	}
+#endif
+
+	buf = strstrip(buf);
+
+	return cpuset_write_resmask(of, buf, nbytes, off);
+}
+
 /*
  * These ascii lists should be read in a single call, by using a user
  * buffer large enough to hold the entire map.  If read in smaller
