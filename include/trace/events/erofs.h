@@ -113,10 +113,17 @@ TRACE_EVENT(erofs_readpage,
 
 TRACE_EVENT(erofs_readpages,
 
+<<<<<<< HEAD
 	TP_PROTO(struct inode *inode, pgoff_t start, unsigned int nrpage,
 		bool raw),
 
 	TP_ARGS(inode, start, nrpage, raw),
+=======
+	TP_PROTO(struct inode *inode, struct page *page, unsigned int nrpage,
+		bool raw),
+
+	TP_ARGS(inode, page, nrpage, raw),
+>>>>>>> 70a7728e1b4b (fs/erofs: add driver from 5.6)
 
 	TP_STRUCT__entry(
 		__field(dev_t,		dev	)
@@ -129,7 +136,11 @@ TRACE_EVENT(erofs_readpages,
 	TP_fast_assign(
 		__entry->dev	= inode->i_sb->s_dev;
 		__entry->nid	= EROFS_I(inode)->nid;
+<<<<<<< HEAD
 		__entry->start	= start;
+=======
+		__entry->start	= page->index;
+>>>>>>> 70a7728e1b4b (fs/erofs: add driver from 5.6)
 		__entry->nrpage	= nrpage;
 		__entry->raw	= raw;
 	),
