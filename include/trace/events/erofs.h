@@ -118,7 +118,6 @@ TRACE_EVENT(erofs_readpages,
 
 	TP_ARGS(inode, page, nrpage, raw),
 
-
 	TP_STRUCT__entry(
 		__field(dev_t,		dev	)
 		__field(erofs_nid_t,	nid	)
