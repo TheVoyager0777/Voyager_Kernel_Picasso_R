@@ -917,7 +917,8 @@ LD_FLAGS_LTO_CLANG := -mllvm -import-instr-limit=5
 KBUILD_LDFLAGS += $(LD_FLAGS_LTO_CLANG)
 KBUILD_LDFLAGS_MODULE += $(LD_FLAGS_LTO_CLANG)
 
-KBUILD_LDFLAGS_MODULE += -T scripts/module-lto.lds
+KBUILD_LDFLAGS_MODULE += -T $(srctree)/scripts/module-lto.lds
+>>>>>>> ec4174eff9f5 (ANDROID: kbuild: fix module linker script flags for LTO)
 
 # allow disabling only clang LTO where needed
 DISABLE_LTO_CLANG := -fno-lto
