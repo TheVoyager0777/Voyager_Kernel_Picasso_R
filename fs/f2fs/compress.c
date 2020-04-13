@@ -66,6 +66,15 @@ static void f2fs_set_compressed_page(struct page *page,
 	page->mapping = inode->i_mapping;
 }
 
+static void f2fs_put_compressed_page(struct page *page)
+{
+	set_page_private(page, (unsigned long)NULL);
+	ClearPagePrivate(page);
+	page->mapping = NULL;
+	unlock_page(page);
+	put_page(page);
+}
+
 static void f2fs_drop_rpages(struct compress_ctx *cc, int len, bool unlock)
 {
 	int i;
@@ -1067,6 +1076,8 @@ static int f2fs_write_compressed_pages(struct compress_ctx *cc,
 	loff_t psize;
 	int i, err;
 
+        if (!f2fs_trylock_op(sbi))
+		return -EAGAIN;
 	if (IS_NOQUOTA(inode)) {
 		/*
 		 * We need to wait for node_write to avoid block allocation during
@@ -1433,6 +1444,8 @@ void f2fs_free_dic(struct decompress_io_ctx *dic)
 			if (!dic->tpages[i])
 				continue;
 			f2fs_compress_free_page(dic->tpages[i]);
+			unlock_page(dic->tpages[i]);
+			put_page(dic->tpages[i]);
 		}
 		kfree(dic->tpages);
 	}

@@ -149,6 +149,11 @@ static inline int f2fs_getxattr(struct inode *inode, int index,
 {
 	return -EOPNOTSUPP;
 }
+static inline ssize_t f2fs_listxattr(struct dentry *dentry, char *buffer,
+		size_t buffer_size)
+{
+	return -EOPNOTSUPP;
+}
 static inline int f2fs_init_xattr_caches(struct f2fs_sb_info *sbi) { return 0; }
 static inline void f2fs_destroy_xattr_caches(struct f2fs_sb_info *sbi) { }
 #endif
