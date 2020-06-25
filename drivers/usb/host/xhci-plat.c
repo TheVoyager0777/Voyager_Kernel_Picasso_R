@@ -487,6 +487,7 @@ static int xhci_plat_resume(struct device *dev)
 	if (ret)
 		return ret;
 
+<<<<<<< HEAD
 	ret = xhci_resume(xhci, false);
 	pm_runtime_disable(dev);
 	pm_runtime_set_active(dev);
@@ -513,6 +514,7 @@ static int xhci_plat_restore(struct device *dev)
 
 	/* resume from hibernation/power-collapse */
 	ret = xhci_resume(xhci, true);
+
 	pm_runtime_disable(dev);
 	pm_runtime_set_active(dev);
 	pm_runtime_enable(dev);
