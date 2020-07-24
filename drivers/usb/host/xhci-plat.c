@@ -487,7 +487,6 @@ static int xhci_plat_resume(struct device *dev)
 	if (ret)
 		return ret;
 
-<<<<<<< HEAD
 	ret = xhci_resume(xhci, false);
 	pm_runtime_disable(dev);
 	pm_runtime_set_active(dev);
@@ -537,7 +536,7 @@ static int __maybe_unused xhci_plat_runtime_idle(struct device *dev)
 
 	pm_runtime_mark_last_busy(dev);
 	pm_runtime_autosuspend(dev);
-	return -EBUSY;
+	return xhci_resume(xhci, 0);
 }
 
 static int __maybe_unused xhci_plat_runtime_suspend(struct device *dev)
