@@ -49,6 +49,19 @@ static DEFINE_MUTEX(thermal_list_lock);
 static DEFINE_MUTEX(thermal_governor_lock);
 static DEFINE_MUTEX(poweroff_lock);
 
+#ifdef CONFIG_DRM
+struct screen_monitor {
+	struct notifier_block thermal_notifier;
+	int screen_state;
+};
+
+struct screen_monitor sm;
+#endif
+
+static atomic_t switch_mode = ATOMIC_INIT(10);
+static atomic_t temp_state = ATOMIC_INIT(0);
+static char boost_buf[128];
+
 static atomic_t in_suspend;
 static bool power_off_triggered;
 
