@@ -3,6 +3,7 @@
  * Copyright (C) 2021 XiaoMi, Inc.
  */
 
+#define DEBUG
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/slab.h>

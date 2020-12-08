@@ -2,6 +2,7 @@
 /* Copyright (c) 2011-2019, The Linux Foundation. All rights reserved.
  * Copyright (C) 2021 XiaoMi, Inc.
  */
+#define DEBUG
 #include <linux/bitops.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
