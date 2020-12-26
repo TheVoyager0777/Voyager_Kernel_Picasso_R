@@ -214,10 +214,7 @@ struct irq_data {
  * IRQD_DEFAULT_TRIGGER_SET	- Expected trigger already been set
  * IRQD_AFFINITY_ON_ACTIVATE	- Affinity is set on activation. Don't call
  *				  irq_chip::irq_set_affinity() when deactivated.
-<<<<<<< HEAD
  * IRQD_PERF_CRITICAL		- IRQ is performance-critical
-=======
->>>>>>> 831ff8141a93 (Merge 4.14.194 into android-4.14-stable)
  */
 enum {
 	IRQD_TRIGGER_MASK		= 0xf,
