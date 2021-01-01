@@ -49,10 +49,15 @@ static void devfreq_max_unboost(struct work_struct *work);
 }
 
 static struct df_boost_drv df_boost_drv_g __read_mostly = {
+<<<<<<< HEAD
 	BOOST_DEV_INIT(df_boost_drv_g, DEVFREQ_MSM_CPUBW,
 		       CONFIG_DEVFREQ_MSM_CPUBW_BOOST_FREQ),
 	BOOST_DEV_INIT(df_boost_drv_g, DEVFREQ_MSM_LLCCBW,
 		       CONFIG_DEVFREQ_MSM_LLCCBW_BOOST_FREQ)
+=======
+	BOOST_DEV_INIT(df_boost_drv_g, DEVFREQ_CPU_LLCC_DDR_BW,
+		       CONFIG_DEVFREQ_CPU_LLCC_DDR_BW_BOOST_FREQ)
+>>>>>>> 06f172978a32 (devfreq: Introduce devfreq boost driver)
 };
 
 static void __devfreq_boost_kick(struct boost_dev *b)
@@ -76,9 +81,45 @@ void devfreq_boost_kick(enum df_device device)
 	__devfreq_boost_kick(&d->devices[device]);
 }
 
+<<<<<<< HEAD
 void devfreq_boost_kick_max(enum df_device device, unsigned int duration_ms)
 {
 	struct df_boost_drv *d = &df_boost_drv_g;
+=======
+static void __devfreq_boost_kick_max(struct boost_dev *b,
+				     unsigned int duration_ms)
+{
+	unsigned long boost_jiffies, curr_expires, new_expires;
+
+	if (!READ_ONCE(b->df) || test_bit(SCREEN_OFF, &b->state))
+		return;
+
+	boost_jiffies = msecs_to_jiffies(duration_ms);
+	do {
+		curr_expires = atomic_long_read(&b->max_boost_expires);
+		new_expires = jiffies + boost_jiffies;
+
+		/* Skip this boost if there's a longer boost in effect */
+		if (time_after(curr_expires, new_expires))
+			return;
+	} while (atomic_long_cmpxchg(&b->max_boost_expires, curr_expires,
+				     new_expires) != curr_expires);
+
+	set_bit(MAX_BOOST, &b->state);
+	if (!mod_delayed_work(system_unbound_wq, &b->max_unboost,
+			      boost_jiffies)) {
+		/* Set the bit again in case we raced with the unboost worker */
+		set_bit(MAX_BOOST, &b->state);
+		wake_up(&b->boost_waitq);
+	}
+}
+
+void devfreq_boost_kick_max(enum df_device device, unsigned int duration_ms)
+{
+	struct df_boost_drv *d = &df_boost_drv_g;
+
+	__devfreq_boost_kick_max(&d->devices[device], duration_ms);
+>>>>>>> 06f172978a32 (devfreq: Introduce devfreq boost driver)
 }
 
 void devfreq_register_boost_device(enum df_device device, struct devfreq *df)
@@ -173,6 +214,8 @@ static int msm_drm_notifier_cb(struct notifier_block *nb,
 
 		if (*blank == MSM_DRM_BLANK_UNBLANK) {
 			clear_bit(SCREEN_OFF, &b->state);
+			__devfreq_boost_kick_max(b,
+				CONFIG_DEVFREQ_WAKE_BOOST_DURATION_MS);
 		} else {
 			set_bit(SCREEN_OFF, &b->state);
 			wake_up(&b->boost_waitq);
@@ -275,9 +318,14 @@ static int __init devfreq_boost_init(void)
 	for (i = 0; i < DEVFREQ_MAX; i++) {
 		struct boost_dev *b = &d->devices[i];
 
+<<<<<<< HEAD
 		thread[i] = kthread_run_perf_critical(cpu_perf_mask,
 						      devfreq_boost_thread, b,
 						      "devfreq_boostd/%d", i);
+=======
+		thread[i] = kthread_run(devfreq_boost_thread, b,
+					"devfreq_boostd/%d", i);
+>>>>>>> 06f172978a32 (devfreq: Introduce devfreq boost driver)
 		if (IS_ERR(thread[i])) {
 			ret = PTR_ERR(thread[i]);
 			pr_err("Failed to create kthread, err: %d\n", ret);
