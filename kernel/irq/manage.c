@@ -1654,7 +1654,7 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 			irqd_set(&desc->irq_data, IRQD_NO_BALANCING);
 		}
 
-if (new->flags & (IRQF_PERF_AFFINE | IRQF_PRIME_AFFINE)) {
+		if (new->flags & (IRQF_PERF_AFFINE | IRQF_PRIME_AFFINE)) {
 			affine_one_perf_thread(new);
 			irqd_set(&desc->irq_data, IRQD_PERF_CRITICAL);
 			*old_ptr = new;
@@ -1826,7 +1826,7 @@ static struct irqaction *__free_irq(struct irq_desc *desc, void *dev_id)
 		action_ptr = &action->next;
 	}
 
-        if (irqd_has_set(&desc->irq_data, IRQD_PERF_CRITICAL)) {
+	if (irqd_has_set(&desc->irq_data, IRQD_PERF_CRITICAL)) {
 		struct irq_desc_list *data;
 
 		raw_spin_lock(&perf_irqs_lock);
