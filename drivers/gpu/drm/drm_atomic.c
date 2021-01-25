@@ -2254,6 +2254,7 @@ int drm_mode_atomic_ioctl(struct drm_device *dev,
 		cpu_input_boost_kick();
 		devfreq_boost_kick(DEVFREQ_MSM_CPUBW);
 		devfreq_boost_kick(DEVFREQ_MSM_LLCCBW);
+		devfreq_boost_kick(DEVFREQ_CPU_LLCC_DDR_BW);
 	}
 
 	drm_modeset_acquire_init(&ctx, 0);
