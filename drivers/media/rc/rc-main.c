@@ -1863,6 +1863,8 @@ int rc_register_device(struct rc_dev *dev)
 			goto out_raw;
 	}
 
+	dev->registered = true;
+
 	rc = device_add(&dev->dev);
 	if (rc)
 		goto out_rx_free;
@@ -1871,8 +1873,6 @@ int rc_register_device(struct rc_dev *dev)
 	dev_info(&dev->dev, "%s as %s\n",
 		 dev->device_name ?: "Unspecified device", path ?: "N/A");
 	kfree(path);
-
-	dev->registered = true;
 
 	/*
 	 * once the the input device is registered in rc_setup_rx_device,
