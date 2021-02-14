@@ -288,7 +288,6 @@ static ssize_t gadget_dev_desc_UDC_show(struct config_item *item, char *page)
 	udc_name = gi->composite.gadget_driver.udc_name;
 	ret = sprintf(page, "%s\n", udc_name ?: "");
 	mutex_unlock(&gi->lock);
-
 	return ret;
 }
 
