@@ -1651,17 +1651,11 @@ stop:
 	f2fs_update_time(sbi, CP_TIME);
 	trace_f2fs_write_checkpoint(sbi->sb, cpc->reason, "finish checkpoint");
 out:
-<<<<<<< HEAD
 	mutex_unlock(&sbi->cp_mutex);
-=======
+	
 	#if defined(CONFIG_UFSTW)
 		bdev_clear_turbo_write(sbi->sb->s_bdev);
 	#endif
-
-	if (cpc->reason != CP_RESIZE)
-		up_write(&sbi->cp_global_sem);
->>>>>>> 79ccfea6e3c4 (scsi: ufs: Add Support for UFS2.1 WB+HPB)
-	return err;
 }
 
 void f2fs_init_ino_entry_info(struct f2fs_sb_info *sbi)
