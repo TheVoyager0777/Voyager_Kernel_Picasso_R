@@ -334,6 +334,11 @@ static int qcom_pcie_init_2_1_0(struct qcom_pcie *pcie)
 	/* enable external reference clock */
 	val = readl(pcie->parf + PCIE20_PARF_PHY_REFCLK);
 	val |= BIT(16);
+
+	/* USE_PAD is required only for ipq806x */
+	if (!of_device_is_compatible(node, "qcom,pcie-apq8064"))
+		val &= ~PHY_REFCLK_USE_PAD;
+	val |= PHY_REFCLK_SSP_EN;
 	writel(val, pcie->parf + PCIE20_PARF_PHY_REFCLK);
 
 	ret = reset_control_deassert(res->phy_reset);
