@@ -53,6 +53,9 @@
 #include <asm/sysreg.h>
 #include <trace/events/exception.h>
 
+/* Save pt_regs ptr to get panic info for display in xbl mode */
+void *panic_info = NULL;
+
 static const char *handler[]= {
 	"Synchronous Abort",
 	"IRQ",
@@ -195,6 +198,10 @@ static int __die(const char *str, int err, struct pt_regs *regs)
 	struct task_struct *tsk = current;
 	static int die_counter;
 	int ret;
+
+	/* Save regs to display in xbl mode */
+	if (!panic_info)
+		panic_info = (void *)regs;
 
 	pr_emerg("Internal error: %s: %x [#%d]" S_PREEMPT S_SMP "\n",
 		 str, err, ++die_counter);
@@ -866,9 +873,8 @@ static int bug_handler(struct pt_regs *regs, unsigned int esr)
 }
 
 static struct break_hook bug_break_hook = {
-	.esr_val = 0xf2000000 | BUG_BRK_IMM,
-	.esr_mask = 0xffffffff,
 	.fn = bug_handler,
+	.imm = BUG_BRK_IMM,
 };
 
 #ifdef CONFIG_KASAN_SW_TAGS
@@ -976,9 +982,9 @@ static struct break_hook refcount_break_hook = {
 /* This registration must happen early, before debug_traps_init(). */
 void __init trap_init(void)
 {
-	register_break_hook(&bug_break_hook);
+	register_kernel_break_hook(&bug_break_hook);
+	register_kernel_break_hook(&refcount_break_hook);
 #ifdef CONFIG_KASAN_SW_TAGS
 	register_break_hook(&kasan_break_hook);
 #endif
-	register_kernel_break_hook(&refcount_break_hook);
 }
