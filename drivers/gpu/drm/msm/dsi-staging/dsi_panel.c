@@ -1197,8 +1197,6 @@ static int dsi_panel_parse_timing(struct dsi_mode_info *mode,
 		       rc);
 		goto error;
 	}
-	if (framerate_override)
-		mode->h_front_porch = 32;
 
 	rc = utils->read_u32(utils->data,
 				"qcom,mdss-dsi-h-back-porch",
@@ -1208,8 +1206,6 @@ static int dsi_panel_parse_timing(struct dsi_mode_info *mode,
 		       rc);
 		goto error;
 	}
-	if (framerate_override)
-		mode->h_back_porch = 16;
 
 	rc = utils->read_u32(utils->data,
 				"qcom,mdss-dsi-h-pulse-width",
