@@ -2480,11 +2480,7 @@ int ext4_generic_delete_entry(handle_t *handle,
 	de = (struct ext4_dir_entry_2 *)entry_buf;
 	while (i < buf_size - csum_size) {
 		if (ext4_check_dir_entry(dir, NULL, de, bh,
-<<<<<<< HEAD
 					 bh->b_data, bh->b_size, i))
-=======
-					 entry_buf, buf_size, lblk, i))
->>>>>>> c7e41692205c (Merge branch 'aosp-new/android-4.14-stable' of https://source.codeaurora.org/quic/la/kernel/msm-4.14 into eleven)
 			return -EFSCORRUPTED;
 		if (de == de_del)  {
 			if (pde)
