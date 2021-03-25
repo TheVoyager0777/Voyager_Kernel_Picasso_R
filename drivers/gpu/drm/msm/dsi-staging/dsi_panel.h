@@ -451,4 +451,6 @@ int dsi_panel_get_thermal_hbm_disabled(struct dsi_panel *panel,
 				bool *thermal_hbm_disabled);
 
 
+int dsi_panel_apply_dc_mode(struct dsi_panel *panel);
+
 #endif /* _DSI_PANEL_H_ */
