@@ -72,6 +72,9 @@ KBUILD_CFLAGS += -fno-pic
 KBUILD_CFLAGS += $(call cc-option,-fcf-protection=none)
 >>>>>>> c0303b03885f (Merge 4.14.222 into android-4.14-stable)
 
+# Intel CET isn't enabled in the kernel
+KBUILD_CFLAGS += $(call cc-option,-fcf-protection=none)
+
 ifeq ($(CONFIG_X86_32),y)
         BITS := 32
         UTS_MACHINE := i386
