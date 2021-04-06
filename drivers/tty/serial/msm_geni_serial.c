@@ -618,17 +618,6 @@ static int msm_geni_serial_ioctl(struct uart_port *uport, unsigned int cmd,
 		ret = !pm_runtime_status_suspended(uport->dev);
 		break;
 	}
-	case TIOCFAULT: {
-		uart_error = port->uart_error;
-		port->uart_error = UART_ERROR_DEFAULT;
-		IPC_LOG_MSG(port->ipc_log_misc,
-			"%s:TIOCFAULT - uart_error_set:%d new_uart_error:%d\n",
-			__func__, uart_error, port->uart_error);
-		if (port->qwork)
-			queue_work(port->qwork, &port->work);
-		ret = uart_error;
-		break;
-	}
 	default:
 		break;
 	}

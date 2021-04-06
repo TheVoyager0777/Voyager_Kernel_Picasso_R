@@ -1265,14 +1265,11 @@ static int get_string(struct usb_composite_dev *cdev,
 			collect_langs(sp, s->wData);
 		}
 
-<<<<<<< HEAD
-=======
 		for (len = 0; len <= USB_MAX_STRING_LEN && s->wData[len]; len++)
 			continue;
 		if (!len)
 			return -EINVAL;
 
->>>>>>> 0a976bebe33f (Merge tag 'v4.19.183' of https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux into baseline-r)
 		s->bLength = 2 * (len + 1);
 		return s->bLength;
 	}
