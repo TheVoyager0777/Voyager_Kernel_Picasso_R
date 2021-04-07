@@ -264,17 +264,16 @@ static int z_erofs_decompress_generic(struct z_erofs_decompress_req *rq,
 
 	i = 0;
 	while (1) {
-		dst = vm_map_ram(rq->out, nrpages_out, -1, PAGE_KERNEL);
-
+		dst = vm_map_ram(rq->out, nrpages_out, -1);
 		/* retry two more times (totally 3 times) */
 		if (dst || ++i >= 3)
 			break;
-		vm_unmap_aliases();
 	}
 
 	if (!dst)
 		return -ENOMEM;
 
+		vm_unmap_aliases();
 	dst_maptype = 2;
 
 dstmap_out:
