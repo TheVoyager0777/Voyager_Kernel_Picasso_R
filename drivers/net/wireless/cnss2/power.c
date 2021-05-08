@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-2.0-only
-/* Copyright (c) 2016-2020, The Linux Foundation. All rights reserved. */
+/* Copyright (c) 2016-2021, The Linux Foundation. All rights reserved. */
 
 #include <linux/clk.h>
 #include <linux/delay.h>
@@ -760,6 +760,57 @@ static int cnss_select_pinctrl_state(struct cnss_plat_data *plat_priv,
 
 	return 0;
 out:
+	return ret;
+}
+
+/**
+ * cnss_select_pinctrl_enable - select WLAN_GPIO for Active pinctrl status
+ * @plat_priv: Platform private data structure pointer
+ *
+ * For QCA6490/QCA6390, PMU requires minimum 100ms delay between BT_EN_GPIO
+ * off and WLAN_EN_GPIO on. This is done to avoid power up issues.
+ *
+ * Return: Status of pinctrl select operation. 0 - Success.
+ */
+static int cnss_select_pinctrl_enable(struct cnss_plat_data *plat_priv)
+{
+	int ret = 0, bt_en_gpio = plat_priv->pinctrl_info.bt_en_gpio;
+	u8 wlan_en_state = 0;
+
+	if (bt_en_gpio < 0)
+		goto set_wlan_en;
+
+	switch (plat_priv->device_id) {
+	case QCA6390_DEVICE_ID:
+	case QCA6490_DEVICE_ID:
+		break;
+	default:
+		goto set_wlan_en;
+	}
+
+	if (gpio_get_value(bt_en_gpio)) {
+		cnss_pr_dbg("BT_EN_GPIO State: On\n");
+		ret = cnss_select_pinctrl_state(plat_priv, true);
+		if (!ret)
+			return ret;
+		wlan_en_state = 1;
+	}
+	if (!gpio_get_value(bt_en_gpio)) {
+		cnss_pr_dbg("BT_EN_GPIO State: Off. Delay WLAN_GPIO enable\n");
+		/* check for BT_EN_GPIO down race during above operation */
+		if (wlan_en_state) {
+			cnss_pr_dbg("Reset WLAN_EN as BT got turned off during enable\n");
+			cnss_select_pinctrl_state(plat_priv, false);
+			wlan_en_state = 0;
+		}
+		/* 100 ms delay for BT_EN and WLAN_EN QCA6490/QCA6390 PMU
+		 * sequencing.
+		 */
+		msleep(100);
+	}
+set_wlan_en:
+	if (!wlan_en_state)
+		ret = cnss_select_pinctrl_state(plat_priv, true);
 	return ret;
 }
 

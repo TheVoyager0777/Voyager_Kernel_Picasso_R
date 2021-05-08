@@ -385,6 +385,14 @@ static int bt_configure_gpios(int on)
 	return rc;
 }
 
+static void bt_free_gpios(void)
+{
+	if (bt_power_pdata->bt_gpio_sys_rst > 0)
+		gpio_free(bt_power_pdata->bt_gpio_sys_rst);
+	if  (bt_power_pdata->bt_gpio_debug  >  0)
+		gpio_free(bt_power_pdata->bt_gpio_debug);
+}
+
 static int bluetooth_power(int on)
 {
 	int rc = 0;
