@@ -6851,6 +6851,9 @@ static ssize_t bnxt_show_temp(struct device *dev,
 	mutex_unlock(&bp->hwrm_cmd_lock);
 
 	return sprintf(buf, "%u\n", temp);
+	if (rc)
+		return rc;
+	return len;
 }
 static SENSOR_DEVICE_ATTR(temp1_input, 0444, bnxt_show_temp, NULL, 0);
 
