@@ -2980,6 +2980,9 @@ int mmc_set_uhs_voltage(struct mmc_host *host, u32 ocr)
 	err = mmc_wait_for_cmd(host, &cmd, 0);
 	if (err)
 		goto err_command;
+		
+	if (!mmc_host_is_spi(host) && (cmd.resp[0] & R1_ERROR))
+		return -EIO;
 
 	if (!mmc_host_is_spi(host) && (cmd.resp[0] & R1_ERROR)) {
 		err = -EIO;
