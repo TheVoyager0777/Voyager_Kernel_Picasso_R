@@ -1103,6 +1103,9 @@ static int hgsl_wait_timestamp(struct file *filep, unsigned long arg)
 
 	timestamp = param.timestamp;
 
+	if (param.context_id >= HGSL_CONTEXT_NUM)
+		return -EINVAL;
+
 	read_lock(&hgsl->ctxt_lock);
 	ctxt = hgsl->contexts[param.context_id];
 	if (ctxt == NULL) {
