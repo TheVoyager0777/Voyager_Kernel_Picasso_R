@@ -2234,9 +2234,8 @@ long _do_fork(unsigned long clone_flags,
 	/* Boost DDR bus to the max for 150 ms when userspace launches an app */
 	if (task_is_zygote(current)){
 		cpu_input_boost_kick_max(150);
-		devfreq_boost_kick_max(DEVFREQ_MSM_CPUBW, 150);
-		devfreq_boost_kick_max(DEVFREQ_MSM_LLCCBW, 150);
-		devfreq_boost_kick_max(DEVFREQ_CPU_LLCC_DDR_BW, 50);
+		devfreq_boost_kick_max(DEVFREQ_MSM_LLCCBW_DDR, 50);
+		devfreq_boost_kick_max(DEVFREQ_MSM_CPU_LLCCBW, 50);
 	}
 
 	/*
