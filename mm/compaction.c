@@ -2448,8 +2448,6 @@ static void compact_nodes(void)
 
 	for_each_online_node(nid)
 		compact_node(nid);
-
-	zswap_compact();
 }
 
 /* The written value is actually unused, all memory is compacted */
@@ -2486,8 +2484,9 @@ static ssize_t sysfs_compact_node(struct device *dev,
 	if (nid >= 0 && nid < nr_node_ids && node_online(nid)) {
 		/* Flush pending updates to the LRU lists */
 		lru_add_drain_all();
-
 		compact_node(nid);
+		
+        	zswap_compact();
 	}
 
 	return count;
