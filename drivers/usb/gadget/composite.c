@@ -1190,10 +1190,6 @@ static void collect_langs(struct usb_gadget_strings **sp, __le16 *buf)
 	while (*sp) {
 		s = *sp;
 		language = cpu_to_le16(s->language);
-		for (tmp = buf; *tmp && tmp < &buf[USB_MAX_STRING_LEN]; tmp++) {
-			if (*tmp == language)
-				goto repeat;
-		}
 		*tmp++ = language;
 repeat:
 		sp++;
@@ -1264,11 +1260,6 @@ static int get_string(struct usb_composite_dev *cdev,
 			sp = get_containers_gs(uc);
 			collect_langs(sp, s->wData);
 		}
-
-		for (len = 0; len <= USB_MAX_STRING_LEN && s->wData[len]; len++)
-			continue;
-		if (!len)
-			return -EINVAL;
 
 		s->bLength = 2 * (len + 1);
 		return s->bLength;
@@ -2288,8 +2279,6 @@ int composite_dev_prepare(struct usb_composite_driver *composite,
 	if (!cdev->req)
 		return -ENOMEM;
 
-	cdev->req->buf = kmalloc(USB_COMP_EP0_BUFSIZ +
-				(gadget->extra_buf_alloc), GFP_KERNEL);
 	if (!cdev->req->buf)
 		goto fail;
 

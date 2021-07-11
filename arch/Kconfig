@@ -493,7 +493,6 @@ config ARCH_SUPPORTS_LTO_CLANG
 	  - compiling inline assembly with clang's integrated assembler,
 	  - and linking with LLD.
 
-<<<<<<< HEAD
 config ARCH_SUPPORTS_THINLTO
 	bool
 	help
