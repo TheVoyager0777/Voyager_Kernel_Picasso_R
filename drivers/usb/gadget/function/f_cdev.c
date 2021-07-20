@@ -816,11 +816,6 @@ static int usb_cser_bind(struct usb_configuration *c, struct usb_function *f)
 	port->port_usb.notify = ep;
 	ep->driver_data = cdev;
 	/* allocate notification */
-	port->port_usb.notify_req = usb_cser_alloc_req(ep,
-			sizeof(struct usb_cdc_notification) + 2,
-			cdev->gadget->extra_buf_alloc, GFP_KERNEL);
-	if (!port->port_usb.notify_req)
-		goto fail;
 
 	port->port_usb.notify_req->complete = usb_cser_notify_complete;
 	port->port_usb.notify_req->context = port;
@@ -1054,11 +1049,6 @@ static void usb_cser_start_io(struct f_cdev *port)
 		goto start_io_out;
 	}
 
-	ret = usb_cser_alloc_requests(port->port_usb.in,
-				&port->write_pool,
-				BRIDGE_TX_QUEUE_SIZE, BRIDGE_TX_BUF_SIZE,
-				cdev->gadget->extra_buf_alloc,
-				usb_cser_write_complete);
 	if (ret) {
 		usb_cser_free_requests(port->port_usb.out, &port->read_pool);
 		pr_err("unable to allocate IN requests\n");
