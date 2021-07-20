@@ -1220,7 +1220,7 @@ int ion_alloc_fd_with_caller_pid(size_t len, unsigned int heap_id_mask, unsigned
 
 	if (heap->flags & ION_HEAP_FLAG_DEFER_FREE) {
 		heap->wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_MEM_RECLAIM |
-					   WQ_CPU_INTENSIVE, 0, heap->name);
+					   WQ_CPU_INTENSIVE, 1, heap->name);
 		BUG_ON(!heap->wq);
 	}
 
