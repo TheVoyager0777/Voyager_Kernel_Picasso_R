@@ -51,6 +51,15 @@
 static struct ion_device *internal_dev;
 static atomic_long_t total_heap_bytes;
 
+static struct ion_device ion_dev = {
+	.heaps = PLIST_HEAD_INIT(ion_dev.heaps),
+	.dev = {
+		.minor = MISC_DYNAMIC_MINOR,
+		.name = "ion",
+		.fops = &ion_fops
+		}
+	}
+
 int ion_walk_heaps(int heap_id, enum ion_heap_type type, void *data,
 		   int (*f)(struct ion_heap *heap, void *data))
 {
@@ -68,7 +77,7 @@ int ion_walk_heaps(int heap_id, enum ion_heap_type type, void *data,
 			continue;
 		ret_val = f(heap, data);
 		break;
-	}
+		}
 	up_write(&dev->lock);
 	return ret_val;
 }
@@ -1109,13 +1118,12 @@ struct dma_buf *ion_alloc_dmabuf(size_t len, unsigned int heap_id_mask,
 	}
 
 	down_read(&dev->lock);
-	plist_for_each_entry(heap, &dev->heaps, node) {
-		/* if the caller didn't specify this heap id */
-		if (!((1 << heap->id) & heap_id_mask))
-			continue;
-		buffer = ion_buffer_create(heap, dev, len, flags);
-		if (!IS_ERR(buffer) || PTR_ERR(buffer) == -EINTR)
-			break;
+        plist_for_each_entry(heap, &idev->heaps, node) {
+		if (BIT(heap->id) & heap_id_mask) {
+			buffer = ion_buffer_create(heap, len, flags);
+			if (!IS_ERR(buffer) || PTR_ERR(buffer) == -EINTR)
+				break;
+		}
 	}
 	up_read(&dev->lock);
 
@@ -1203,6 +1211,7 @@ int ion_alloc_fd(size_t len, unsigned int heap_id_mask, unsigned int flags)
 	return fd;
 }
 
+void ion_add_heap(struct ion_device *idev, struct ion_heap *heap)
 int ion_alloc_fd_with_caller_pid(size_t len, unsigned int heap_id_mask, unsigned int flags, int pid_info)
 {
 	int fd;
@@ -1212,6 +1221,8 @@ int ion_alloc_fd_with_caller_pid(size_t len, unsigned int heap_id_mask, unsigned
 	if (IS_ERR(dmabuf))
 		return PTR_ERR(dmabuf);
 
+        plist_node_init(&heap->node, -heap->id);
+	plist_add(&heap->node, &idev->heaps);
 	fd = dma_buf_fd(dmabuf, O_CLOEXEC);
 	if (fd < 0)
 		dma_buf_put(dmabuf);
@@ -1241,7 +1252,11 @@ int ion_query_heaps(struct ion_heap_query *query)
 
 	max_cnt = query->cnt;
 
-	plist_for_each_entry(heap, &dev->heaps, node) {
+	plist_for_each_entry(heap, &idev->heaps, node) {
+		if (heap->type == type && ION_HEAP(heap->id) == heap_id) {
+			ret = f(heap, data);
+			break;
+			}
 		strlcpy(hdata.name, heap->name, sizeof(hdata.name));
 		hdata.name[sizeof(hdata.name) - 1] = '\0';
 		hdata.type = heap->type;

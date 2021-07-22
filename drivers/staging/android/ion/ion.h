@@ -299,6 +299,7 @@ struct ion_device *ion_device_create(void);
  * @heap:		the heap to add
  */
 void ion_device_add_heap(struct ion_device *dev, struct ion_heap *heap);
+void ion_add_heap(struct ion_device *idev, struct ion_heap *heap);
 
 /**
  * some helpers for common operations on buffers using the sg_table
