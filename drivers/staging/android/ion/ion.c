@@ -1471,6 +1471,57 @@ static int ion_init_sysfs(void)
 		kobject_put(ion_kobj);
 		return ret;
 	}
+	union {
+		struct ion_allocation_data allocation;
+		struct ion_prefetch_data prefetch;
+	} data;
+	int fd, *output;
+
+	switch (cmd) {
+	case ION_IOC_ALLOC:
+		if (copy_from_user(&data, (void __user *)arg,
+				   sizeof(struct ion_allocation_data)))
+			return -EFAULT;
+
+		fd = ion_alloc_fd(&data.allocation);
+		if (fd < 0)
+			return fd;
+
+		output = &fd;
+		arg += offsetof(struct ion_allocation_data, fd);
+		break;
+	case ION_IOC_PREFETCH:
+		/* The data used in ion_prefetch_data begins at `regions` */
+		if (copy_from_user(&data.prefetch.regions,
+				   (void __user *)arg +
+				   offsetof(struct ion_prefetch_data, regions),
+				   sizeof(struct ion_prefetch_data) -
+				   offsetof(struct ion_prefetch_data, regions)))
+			return -EFAULT;
+
+		return ion_walk_heaps(data.prefetch.heap_id,
+				      ION_HEAP_TYPE_SYSTEM_SECURE,
+				      &data.prefetch,
+				      ion_system_secure_heap_prefetch);
+	case ION_IOC_DRAIN:
+		/* The data used in ion_prefetch_data begins at `regions` */
+		if (copy_from_user(&data.prefetch.regions,
+				   (void __user *)arg +
+				   offsetof(struct ion_prefetch_data, regions),
+				   sizeof(struct ion_prefetch_data) -
+				   offsetof(struct ion_prefetch_data, regions)))
+			return -EFAULT;
+
+		return ion_walk_heaps(data.prefetch.heap_id,
+				      ION_HEAP_TYPE_SYSTEM_SECURE,
+				      &data.prefetch,
+				      ion_system_secure_heap_drain);
+	default:
+		return -ENOTTY;
+	}
+
+	if (copy_to_user((void __user *)arg, output, sizeof(*output)))
+		return -EFAULT;
 
 	return 0;
 }
