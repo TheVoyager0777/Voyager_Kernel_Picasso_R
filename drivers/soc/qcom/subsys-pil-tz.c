@@ -810,7 +810,7 @@ static struct pil_reset_ops pil_ops_trusted = {
 static void log_failure_reason(const struct pil_tz_data *d)
 {
 	size_t size;
-	char *smem_reason;//xiaomi change, reason[MAX_SSR_REASON_LEN];
+	char *smem_reason, reason[MAX_SSR_REASON_LEN];
 	const char *name = d->subsys_desc.name;
 
 	if (d->smem_id == -1)
@@ -827,16 +827,8 @@ static void log_failure_reason(const struct pil_tz_data *d)
 		return;
 	}
 
-    //Xiaomi changed
-	strlcpy(last_modem_sfr_reason, smem_reason, min(size, (size_t)MAX_SSR_REASON_LEN));
-	pr_err("%s subsystem failure reason: %s.\n", name, last_modem_sfr_reason);
-	
-    //Xiaomi added
-    //If the NV protected file (critical_info) is destroyed, restart to recovery to inform user
-	if (strnstr(last_modem_sfr_reason, STR_NV_SIGNATURE_DESTROYED, strlen(last_modem_sfr_reason))) {
-		pr_err("errimei_dev: the NV has been destroyed, should restart to recovery\n");
-		schedule_delayed_work(&create_kobj_work, msecs_to_jiffies(1*1000));
-	}
+	strlcpy(reason, smem_reason, min(size, (size_t)MAX_SSR_REASON_LEN));
+	pr_err("%s subsystem failure reason: %s.\n", name, reason);
 }
 
 static int subsys_shutdown(const struct subsys_desc *subsys, bool force_stop)
@@ -1325,44 +1317,14 @@ static struct platform_driver pil_tz_driver = {
 	},
 };
 
-static int last_modem_sfr_proc_show(struct seq_file *m, void *v)
-{
-	seq_printf(m, "%s\n", last_modem_sfr_reason);
-	return 0;
-}
-
-static int last_modem_sfr_proc_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, last_modem_sfr_proc_show, NULL);
-}
-
-static const struct file_operations last_modem_sfr_file_ops = {
-	.owner   = THIS_MODULE,
-	.open    = last_modem_sfr_proc_open,
-	.read    = seq_read,
-	.llseek  = seq_lseek,
-	.release = single_release,
-};
-
 static int __init pil_tz_init(void)
 {
-	last_modem_sfr_entry = proc_create("last_mcrash", S_IFREG | S_IRUGO, NULL, &last_modem_sfr_file_ops);
-	if (!last_modem_sfr_entry) {
-		printk(KERN_ERR "pil: cannot create proc entry last_mcrash\n");
-	}
-	
 	return platform_driver_register(&pil_tz_driver);
 }
 module_init(pil_tz_init);
 
 static void __exit pil_tz_exit(void)
 {
-	schedule_work(&clean_kobj_work);
-	if (last_modem_sfr_entry) {
-		remove_proc_entry("last_mcrash", NULL);
-		last_modem_sfr_entry = NULL;
-	}
-	
 	platform_driver_unregister(&pil_tz_driver);
 }
 module_exit(pil_tz_exit);
