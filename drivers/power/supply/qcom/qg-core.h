@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2021 The Linux Foundation. All rights reserved.
  * Copyright (C) 2021 XiaoMi, Inc.
  */
 
@@ -187,6 +187,7 @@ struct qpnp_qg {
 	bool			tcss_active;
 	bool			fastcharge_mode_enabled;
 	bool			bass_active;
+	bool			first_profile_load;
 	bool			shutdown_delay;
 	int			charge_status;
 	int			charge_type;
@@ -206,6 +207,7 @@ struct qpnp_qg {
 	int			max_fcc_limit_ma;
 	int			bsoc_bass_entry;
 	int			qg_v_ibat;
+	int			qg_charge_counter;
 	u32			fifo_done_count;
 	u32			wa_flags;
 	u32			seq_no;
