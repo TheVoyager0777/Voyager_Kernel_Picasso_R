@@ -2905,13 +2905,6 @@ static inline int is_reserved(int cpu)
 	return test_bit(CPU_RESERVED, &rq->walt_flags);
 }
 
-static inline int mark_reserved(int cpu)
-{
-	struct rq *rq = cpu_rq(cpu);
-
-	return test_and_set_bit(CPU_RESERVED, &rq->walt_flags);
-}
-
 static inline void clear_reserved(int cpu)
 {
 	struct rq *rq = cpu_rq(cpu);
