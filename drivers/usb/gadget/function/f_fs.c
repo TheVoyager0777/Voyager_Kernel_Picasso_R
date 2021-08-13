@@ -3777,7 +3777,7 @@ static void ffs_func_unbind(struct usb_configuration *c,
 	/* Drain any pending AIO completions */
 	drain_workqueue(ffs->io_completion_wq);
 	if (!--opts->refcnt) {
-		ffs_event_add(ffs, FUNCTIONFS_UNBIND);a
+		ffs_event_add(ffs, FUNCTIONFS_UNBIND);
 		functionfs_unbind(ffs);
 	}
 
