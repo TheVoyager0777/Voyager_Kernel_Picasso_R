@@ -1794,10 +1794,6 @@ void *vm_map_ram(struct page **pages, unsigned int count, int node)
 		addr = va->va_start;
 		mem = (void *)addr;
 	}
-	if (vmap_page_range(addr, addr + size, prot, pages) < 0) {
-		vm_unmap_ram(mem, count);
-		return NULL;
-	}
 	return mem;
 }
 EXPORT_SYMBOL(vm_map_ram);
