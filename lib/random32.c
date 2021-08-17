@@ -359,9 +359,6 @@ static DEFINE_PER_CPU(struct siprand_state, net_rand_state) __latent_entropy;
 static inline u32 siprand_u32(struct siprand_state *s)
 {
 	unsigned long v0 = s->v0, v1 = s->v1, v2 = s->v2, v3 = s->v3;
-
-	PRND_SIPROUND(v0, v1, v2, v3);
-	PRND_SIPROUND(v0, v1, v2, v3);
 	s->v0 = v0;  s->v1 = v1;  s->v2 = v2;  s->v3 = v3;
 	return v1 + v3;
 }
@@ -434,8 +431,6 @@ void prandom_seed(u32 entropy)
 
 		do {
 			v3 ^= entropy;
-			PRND_SIPROUND(v0, v1, v2, v3);
-			PRND_SIPROUND(v0, v1, v2, v3);
 			v0 ^= entropy;
 		} while (unlikely(!v0 || !v1 || !v2 || !v3));
 
@@ -460,15 +455,11 @@ static int __init prandom_init_early(void)
 		v0 = jiffies;
 	if (!arch_get_random_long(&v1))
 		v1 = random_get_entropy();
-	v2 = v0 ^ PRND_K0;
-	v3 = v1 ^ PRND_K1;
 
 	for_each_possible_cpu(i) {
 		struct siprand_state *state;
 
 		v3 ^= i;
-		PRND_SIPROUND(v0, v1, v2, v3);
-		PRND_SIPROUND(v0, v1, v2, v3);
 		v0 ^= i;
 
 		state = per_cpu_ptr(&net_rand_state, i);
@@ -498,8 +489,8 @@ static void prandom_reseed(struct timer_list *unused)
 	 */
 	for_each_possible_cpu(i) {
 		struct siprand_state *state;
-		unsigned long v0 = get_random_long(), v2 = v0 ^ PRND_K0;
-		unsigned long v1 = get_random_long(), v3 = v1 ^ PRND_K1;
+		unsigned long v0 = get_random_long(), v2 = v0;
+		unsigned long v1 = get_random_long(), v3 = v1;
 #if BITS_PER_LONG == 32
 		int j;
 
