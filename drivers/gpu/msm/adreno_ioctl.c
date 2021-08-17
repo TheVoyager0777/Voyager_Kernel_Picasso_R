@@ -1,18 +1,10 @@
-/* Copyright (c) 2002,2007-2018,2020 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2002,2007-2020, The Linux Foundation. All rights reserved.
  */
 
-#include <linux/ioctl.h>
-#include "kgsl_device.h"
+#include <linux/slab.h>
+
 #include "adreno.h"
 #include "adreno_a5xx.h"
 
@@ -76,7 +68,7 @@ long adreno_ioctl_perfcounter_get(struct kgsl_device_private *dev_priv,
 	 * active count inside that function.
 	 */
 
-	result = adreno_perfcntr_active_oob_get(adreno_dev);
+	result = adreno_perfcntr_active_oob_get(device);
 	if (result) {
 		mutex_unlock(&device->mutex);
 		return (long)result;
@@ -95,7 +87,7 @@ long adreno_ioctl_perfcounter_get(struct kgsl_device_private *dev_priv,
 				get->countable, PERFCOUNTER_FLAG_NONE);
 	}
 
-	adreno_perfcntr_active_oob_put(adreno_dev);
+	adreno_perfcntr_active_oob_put(device);
 
 	mutex_unlock(&device->mutex);
 
@@ -186,25 +178,21 @@ long adreno_ioctl_helper(struct kgsl_device_private *dev_priv,
 	long ret;
 	int i;
 
-	static DEFINE_RATELIMIT_STATE(_rs,
-			DEFAULT_RATELIMIT_INTERVAL,
-			DEFAULT_RATELIMIT_BURST);
-
 	for (i = 0; i < len; i++) {
 		if (_IOC_NR(cmd) == _IOC_NR(cmds[i].cmd))
 			break;
 	}
 
 	if (i == len) {
-		KGSL_DRV_INFO(dev_priv->device,
-			"invalid ioctl code 0x%08X\n", cmd);
+		dev_err(dev_priv->device->dev,
+			     "invalid ioctl code 0x%08X\n", cmd);
 		return -ENOIOCTLCMD;
 	}
 
-	if (WARN_ON(_IOC_SIZE(cmds[i].cmd) > sizeof(data))) {
-		if (__ratelimit(&_rs))
-			WARN(1, "data too big for ioctl 0x%08X: %d/%zu\n",
-				cmd, _IOC_SIZE(cmds[i].cmd), sizeof(data));
+	if (_IOC_SIZE(cmds[i].cmd > sizeof(data))) {
+		dev_err_ratelimited(dev_priv->device->dev,
+			"data too big for ioctl 0x%08x: %d/%zu\n",
+			cmd, _IOC_SIZE(cmds[i].cmd), sizeof(data));
 		return -EINVAL;
 	}
 

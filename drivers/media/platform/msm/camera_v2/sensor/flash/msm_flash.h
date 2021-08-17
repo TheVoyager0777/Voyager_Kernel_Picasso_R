@@ -1,4 +1,5 @@
-/* Copyright (c) 2009-2016, 2018, The Linux Foundation. All rights reserved.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Copyright (c) 2009-2016, 2018, 2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -36,17 +37,18 @@ enum msm_camera_flash_state_t {
 struct msm_flash_ctrl_t;
 
 struct msm_flash_func_t {
-	int32_t (*camera_flash_init)(struct msm_flash_ctrl_t *,
-		struct msm_flash_cfg_data_t *);
-	int32_t (*camera_flash_release)(struct msm_flash_ctrl_t *);
-	int32_t (*camera_flash_off)(struct msm_flash_ctrl_t *,
-		struct msm_flash_cfg_data_t *);
-	int32_t (*camera_flash_low)(struct msm_flash_ctrl_t *,
-		struct msm_flash_cfg_data_t *);
-	int32_t (*camera_flash_high)(struct msm_flash_ctrl_t *,
-		struct msm_flash_cfg_data_t *);
-	int32_t (*camera_flash_query_current)(struct msm_flash_ctrl_t *,
-		struct msm_flash_query_data_t *);
+	int32_t (*camera_flash_init)(struct msm_flash_ctrl_t *flash_ctrl,
+		struct msm_flash_cfg_data_t *flash_data);
+	int32_t (*camera_flash_release)(struct msm_flash_ctrl_t *flash_ctrl);
+	int32_t (*camera_flash_off)(struct msm_flash_ctrl_t *flash_ctrl,
+		struct msm_flash_cfg_data_t *flash_data);
+	int32_t (*camera_flash_low)(struct msm_flash_ctrl_t *flash_ctrl,
+		struct msm_flash_cfg_data_t *flash_data);
+	int32_t (*camera_flash_high)(struct msm_flash_ctrl_t *flash_ctrl,
+		struct msm_flash_cfg_data_t *flash_data);
+	int32_t (*camera_flash_query_current)(
+		struct msm_flash_ctrl_t *flash_ctrl,
+		struct msm_flash_query_data_t *flash_query_data);
 
 };
 

@@ -1,13 +1,7 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 #ifndef __Q6_ADM_V2_H__
 #define __Q6_ADM_V2_H__
@@ -42,6 +36,7 @@ enum {
 	ADM_SRS_TRUMEDIA,
 	ADM_RTAC_AUDVOL_CAL,
 	ADM_LSM_AUDPROC_PERSISTENT_CAL,
+	ADM_AUDPROC_PERSISTENT_CAL,
 	ADM_MAX_CAL_TYPES
 };
 
@@ -84,6 +79,17 @@ struct msm_pcm_channel_mixer {
 	bool enable;
 	int rule;
 	int channel_weight[ADM_MAX_CHANNELS][ADM_MAX_CHANNELS];
+	int port_idx;
+	int input_channel;
+	uint16_t in_ch_map[ADM_MAX_CHANNELS];
+	uint16_t out_ch_map[ADM_MAX_CHANNELS];
+	bool override_in_ch_map;
+	bool override_out_ch_map;
+};
+
+struct ffv_spf_freeze_param_t {
+	uint16_t freeze;
+	uint16_t source_id;
 };
 
 int srs_trumedia_open(int port_id, int copp_idx, __s32 srs_tech_id,
@@ -114,7 +120,8 @@ int adm_pack_and_set_one_pp_param(int port_id, int copp_idx,
 
 int adm_open(int port, int path, int rate, int mode, int topology,
 			   int perf_mode, uint16_t bits_per_sample,
-			   int app_type, int acdbdev_id);
+			   int app_type, int acdbdev_id, int session_type,
+			   uint32_t pass_thr);
 
 int adm_map_rtac_block(struct rtac_cal_block_data *cal_block);
 
@@ -130,6 +137,11 @@ int adm_connect_afe_port(int mode, int session_id, int port_id);
 void adm_ec_ref_rx_id(int  port_id);
 
 void adm_num_ec_ref_rx_chans(int num_chans);
+
+void adm_num_ec_ref_rx_chans_downmixed(int num_chans);
+
+int adm_ec_ref_chmixer_weights(int out_channel_idx,
+			uint16_t *weights, int count);
 
 void adm_ec_ref_rx_bit_width(int bit_width);
 
@@ -202,6 +214,8 @@ int adm_get_sound_focus(int port_id, int copp_idx,
 			struct sound_focus_param *soundFocusData);
 int adm_get_source_tracking(int port_id, int copp_idx,
 			    struct source_tracking_param *sourceTrackingData);
+int adm_get_doa_tracking_mon(int port_id, int copp_idx,
+			    struct doa_tracking_mon_param *doa_tracking_data);
 int adm_set_custom_chmix_cfg(int port_id, int copp_idx,
 			     unsigned int session_id, char *params,
 			     uint32_t params_length, int direction,
@@ -215,4 +229,11 @@ int adm_programable_channel_mixer(int port_id, int copp_idx, int session_id,
 void msm_dts_srs_acquire_lock(void);
 void msm_dts_srs_release_lock(void);
 void adm_set_native_mode(int mode);
+int adm_set_ffecns_freeze_event(bool ffecns_freeze_event);
+int crus_adm_set_params(int port_id, int copp_idx, uint32_t module_id,
+			 uint32_t param_id, char *params,
+			 uint32_t params_length);
+int crus_adm_get_params(int port_id, int copp_idx, uint32_t module_id,
+			uint32_t param_id, char *params, uint32_t params_length,
+			uint32_t client_id);
 #endif /* __Q6_ADM_V2_H__ */

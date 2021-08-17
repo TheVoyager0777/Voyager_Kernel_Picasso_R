@@ -1,14 +1,8 @@
-/* Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
  */
+
 #ifndef __QG_UTIL_H__
 #define __QG_UTIL_H__
 
@@ -25,6 +19,8 @@ bool is_usb_present(struct qpnp_qg *chip);
 bool is_dc_present(struct qpnp_qg *chip);
 bool is_input_present(struct qpnp_qg *chip);
 bool is_parallel_enabled(struct qpnp_qg *chip);
+bool is_cp_available(struct qpnp_qg *chip);
+bool is_parallel_available(struct qpnp_qg *chip);
 int qg_write_monotonic_soc(struct qpnp_qg *chip, int msoc);
 int qg_get_battery_temp(struct qpnp_qg *chip, int *batt_temp);
 int qg_get_battery_current(struct qpnp_qg *chip, int *ibat_ua);

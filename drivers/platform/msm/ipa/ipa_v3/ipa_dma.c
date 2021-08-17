@@ -1,13 +1,6 @@
-/* Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
  */
 
 
@@ -417,12 +410,12 @@ int ipa3_dma_enable(void)
 	IPADMA_FUNC_ENTRY();
 	if ((ipa3_dma_ctx == NULL) ||
 		(ipa3_dma_init_refcnt_ctrl->ref_cnt < 1)) {
-		IPAERR_RL("IPADMA isn't initialized, can't enable\n");
+		IPADMA_ERR("IPADMA isn't initialized, can't enable\n");
 		return -EINVAL;
 	}
 	mutex_lock(&ipa3_dma_ctx->enable_lock);
 	if (ipa3_dma_ctx->enable_ref_cnt > 0) {
-		IPAERR_RL("Already enabled refcnt=%d\n",
+		IPADMA_ERR("Already enabled refcnt=%d\n",
 			ipa3_dma_ctx->enable_ref_cnt);
 		ipa3_dma_ctx->enable_ref_cnt++;
 		mutex_unlock(&ipa3_dma_ctx->enable_lock);
@@ -475,26 +468,26 @@ int ipa3_dma_disable(void)
 	IPADMA_FUNC_ENTRY();
 	if ((ipa3_dma_ctx == NULL) ||
 		(ipa3_dma_init_refcnt_ctrl->ref_cnt < 1)) {
-		IPAERR_RL("IPADMA isn't initialized, can't disable\n");
+		IPADMA_ERR("IPADMA isn't initialized, can't disable\n");
 		return -EINVAL;
 	}
 	mutex_lock(&ipa3_dma_ctx->enable_lock);
 	spin_lock_irqsave(&ipa3_dma_ctx->pending_lock, flags);
 	if (ipa3_dma_ctx->enable_ref_cnt > 1) {
-		IPAERR_RL("Multiple enablement done. refcnt=%d\n",
+		IPADMA_DBG("Multiple enablement done. refcnt=%d\n",
 			ipa3_dma_ctx->enable_ref_cnt);
 		ipa3_dma_ctx->enable_ref_cnt--;
 		goto completed;
 	}
 
 	if (ipa3_dma_ctx->enable_ref_cnt == 0) {
-		IPAERR_RL("Already disabled\n");
+		IPADMA_ERR("Already disabled\n");
 		res = -EPERM;
 		goto completed;
 	}
 
 	if (ipa3_dma_work_pending()) {
-		IPAERR_RL("There is pending work, can't disable.\n");
+		IPADMA_ERR("There is pending work, can't disable.\n");
 		res = -EFAULT;
 		goto completed;
 	}
@@ -693,7 +686,7 @@ int ipa3_dma_sync_memcpy(u64 dest, u64 src, int len)
 		head_descr = list_first_entry(&cons_sys->head_desc_list,
 					struct ipa3_dma_xfer_wrapper, link);
 		/* Unexpected transfer sent from HW */
-		BUG_ON(xfer_descr != head_descr);
+		ipa_assert_on(xfer_descr != head_descr);
 	}
 	mutex_unlock(&ipa3_dma_ctx->sync_lock);
 
@@ -1193,19 +1186,13 @@ static ssize_t ipa3_dma_debugfs_reset_statistics(struct file *file,
 					size_t count,
 					loff_t *ppos)
 {
-	unsigned long missing;
 	s8 in_num = 0;
+	int ret;
 
-	if (sizeof(dbg_buff) < count + 1)
-		return -EFAULT;
+	ret = kstrtos8_from_user(ubuf, count, 0, &in_num);
+	if (ret)
+		return ret;
 
-	missing = copy_from_user(dbg_buff, ubuf, min(sizeof(dbg_buff), count));
-	if (missing)
-		return -EFAULT;
-
-	dbg_buff[count] = '\0';
-	if (kstrtos8(dbg_buff, 0, &in_num))
-		return -EFAULT;
 	switch (in_num) {
 	case 0:
 		if (ipa3_dma_work_pending())

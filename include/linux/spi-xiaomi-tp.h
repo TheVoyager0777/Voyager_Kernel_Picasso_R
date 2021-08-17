@@ -25,6 +25,7 @@
 #undef PDEBUGG
 #define PDEBUGG(fmt, args...)
 
+#define NAME_MAX_LENS 32
 /*lock@:protect this struct
  *name@:indicate who own this device
  *used@:indicate this device has it owner
@@ -34,7 +35,7 @@
  */
 struct ts_spi_info {
 	struct mutex lock;
-	const char *name;
+	char name[NAME_MAX_LENS];
 	bool used;
 	bool tmp;
 	bool init;

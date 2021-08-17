@@ -627,13 +627,13 @@ int fts_writeU8UX(u8 cmd, AddrSize addrSize, u64 address, u8 *data,
 			}
 
 			finalCmd[0] = cmd;
-			logError(1, "%s %s addrSize = %d \n", VENDOR_TAG, __func__,
+			logError(0, "%s %s: addrSize = %d \n", tag, __func__,
 				 addrSize);
 			for (i = 0; i < addrSize; i++) {
 				finalCmd[i + 1] =
 				    (u8) ((address >> ((addrSize - 1 - i) * 8))
 					  & 0xFF);
-				logError(1, "%s %s cmd[%d] = %02X \n", tag,
+				logError(1, "%s %s: cmd[%d] = %02X \n", tag,
 					 __func__, i + 1, finalCmd[i + 1]);
 			}
 
@@ -652,7 +652,7 @@ int fts_writeU8UX(u8 cmd, AddrSize addrSize, u64 address, u8 *data,
 		}
 	} else {
 		logError(1,
-			 "%s %s address size bigger than max allowed %d... ERROR %08X \n",
+			 "%s %s: address size bigger than max allowed %d... ERROR %08X \n",
 			 tag, __func__, sizeof(u64), ERROR_OP_NOT_ALLOW);
 	}
 	mutex_unlock(&rw_lock);

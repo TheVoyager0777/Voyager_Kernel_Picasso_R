@@ -1,5 +1,5 @@
-/*
- * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -184,7 +184,7 @@
 #define QSERDES_RX0_SIGDET_DEGLITCH_CNTRL		RX_OFF(0, 0x10C)
 #define QSERDES_RX0_RX_INTERFACE_MODE			RX_OFF(0, 0x11C)
 #define QSERDES_RX0_RX_MODE_00				RX_OFF(0, 0x164)
-#define QSERDES_RX0_UCDR_FO_GAIN                        RX_OFF(0, 0x08)
+#define QSERDES_RX0_UCDR_FO_GAIN			RX_OFF(0, 0x08)
 
 #define QSERDES_RX1_UCDR_SVS_SO_GAIN_HALF		RX_OFF(1, 0x24)
 #define QSERDES_RX1_UCDR_SVS_SO_GAIN_QUARTER		RX_OFF(1, 0x28)
@@ -203,6 +203,7 @@
 #define QSERDES_RX1_RX_INTERFACE_MODE			RX_OFF(1, 0x11C)
 #define QSERDES_RX1_RX_MODE_00				RX_OFF(1, 0x164)
 #define QSERDES_RX1_UCDR_FO_GAIN			RX_OFF(1, 0x8)
+
 #define UFS_PHY_RX_LINECFG_DISABLE_BIT		BIT(1)
 
 /*

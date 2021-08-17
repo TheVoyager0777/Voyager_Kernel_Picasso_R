@@ -69,14 +69,13 @@ enum pm_state {
 #define STEP_BMS_CHG_VOTER	"STEP_BMS_CHG_VOTER"
 #define BQ_TAPER_FCC_VOTER	"BQ_TAPER_FCC_VOTER"
 
-#define NON_VERIFIED_PPS_FCC_MAX		3000
+/* defined for non_verified pps charger maxium fcc */
+#define NON_VERIFIED_PPS_FCC_MAX		4800
 #define MAX_THERMAL_LEVEL			13
-#define JEITA_WARM_THR			480
-#define JEITA_COOL_THR			100
-#define JEITA_BYPASS_WARM_THR		480
-#define JEITA_BYPASS_COOL_THR		100
-
-#define PDO_MAX_NUM			7
+/* jeita related */
+#define JEITA_WARM_THR				450
+#define JEITA_COOL_NOT_ALLOW_CP_THR		100
+#define PDO_MAX_NUM				7
 /*
  * add hysteresis for warm threshold to avoid flash
  * charge and normal charge switch frequently at
@@ -86,32 +85,18 @@ enum pm_state {
 /* product related */
 #define LOW_POWER_PPS_CURR_THR			2000
 #define XIAOMI_LOW_POWER_PPS_CURR_MAX			1500
-#define XIAOMI_LOW_POWER_PPS_CURR_MAX			1500
 #define PPS_VOL_MAX			11000
 #define PPS_VOL_HYS			1000
 
-#define STEP_MV			20
+#define STEP_MV				20
 #define TAPER_VOL_HYS			80
-#define TAPER_WITH_IBUS_HYS			60
-#define TAPER_IBUS_THR			450
-
-#define BQ_TAPER_HYS_MV			30
-
-#define BQ_TAPER_DECREASE_STEP_MA			200
-
-#define MAX_BYPASS_CURRENT_MA			3000
-#define BYPASS_VBAT_ENTER_THRES			3600
-#define BYPASS_FCC_ENTER_THRES			3000
-#define BYPASS_FCC_EXIT_THRES			3200
-#define BYPASS_THERMAL_ENTER_LEVEL		9
-#define BYPASS_THERMAL_EXIT_LEVEL		14
-
-#define VALID_VBUS_THRESHOLD			4500
-
+#define TAPER_WITH_IBUS_HYS		60
+#define	TAPER_IBUS_THR			450
+#define BQ_TAPER_HYS_MV			5
+#define BQ_TAPER_DECREASE_STEP_MA	200
 struct sw_device {
 	bool charge_enabled;
 	bool charge_limited;
-	bool slowly_charging;
 };
 
 struct usbpd_pdo {
@@ -129,6 +114,7 @@ struct cp_device {
 	bool batt_pres;
 	bool vbus_pres;
 
+	/* alarm/fault status */
 	bool bat_ovp_fault;
 	bool bat_ocp_fault;
 	bool bus_ovp_fault;
@@ -164,11 +150,6 @@ struct cp_device {
 	int  bat_temp;
 	int  bus_temp;
 	int  die_temp;
-
-	int bus_error_status;
-
-	int  sc8551_charge_mode;
-	int  sc8551_bypass_charge_enable;
 };
 
 #define PM_STATE_LOG_MAX    32
@@ -199,6 +180,7 @@ struct usbpd_pm {
 	int	adapter_current;
 	int	adapter_ptf;
 	bool	adapter_omf;
+	bool	pd_verified_checked;
 	struct delayed_work pm_work;
 
 	struct notifier_block nb;
@@ -217,17 +199,15 @@ struct usbpd_pm {
 
 	/* dtsi properties */
 	int			bat_volt_max;
-	int			ffc_bat_volt_max;
 	int			bat_curr_max;
 	int			bus_volt_max;
 	int			bus_curr_max;
 	int			bus_curr_compensate;
-	bool			cp_sec_enable;
-	bool			disable_taper_fcc;
-
+	bool		cp_sec_enable;
 	/* jeita or thermal related */
 	bool			jeita_triggered;
 	bool			is_temp_out_fc2_range;
+
 };
 
 struct pdpm_config {

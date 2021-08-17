@@ -2,7 +2,6 @@
  * arch/arm64/include/asm/cpucaps.h
  *
  * Copyright (C) 2016 ARM Ltd.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -33,7 +32,7 @@
 #define ARM64_HAS_VIRT_HOST_EXTN		11
 #define ARM64_WORKAROUND_CAVIUM_27456		12
 #define ARM64_HAS_32BIT_EL0			13
-#define ARM64_HYP_OFFSET_LOW			14
+#define ARM64_HARDEN_EL2_VECTORS		14
 #define ARM64_MISMATCHED_CACHE_LINE_SIZE	15
 #define ARM64_HAS_NO_FPSIMD			16
 #define ARM64_WORKAROUND_REPEAT_TLBI		17
@@ -41,14 +40,24 @@
 #define ARM64_WORKAROUND_858921			19
 #define ARM64_WORKAROUND_CAVIUM_30115		20
 #define ARM64_HAS_DCPOP				21
+#define ARM64_SVE				22
 #define ARM64_UNMAP_KERNEL_AT_EL0		23
 #define ARM64_HARDEN_BRANCH_PREDICTOR		24
-#define ARM64_SSBD				25
-#define ARM64_MISMATCHED_CACHE_TYPE		26
-#define ARM64_SSBS				27
-#define ARM64_HW_DBM				28
-#define ARM64_WORKAROUND_1188873		29
+#define ARM64_HAS_RAS_EXTN			25
+#define ARM64_WORKAROUND_843419			26
+#define ARM64_HAS_CACHE_IDC			27
+#define ARM64_HAS_CACHE_DIC			28
+#define ARM64_HW_DBM				29
+#define ARM64_SSBD				30
+#define ARM64_MISMATCHED_CACHE_TYPE		31
+#define ARM64_HAS_STAGE2_FWB			32
+#define ARM64_WORKAROUND_1463225		33
+#define ARM64_SSBS				34
+#define ARM64_WORKAROUND_1188873		35
+#define ARM64_WORKAROUND_1542418		36
+#define ARM64_WORKAROUND_1542419		37
 
-#define ARM64_NCAPS				31
+/* kabi: reserve 38 - 62 for future cpu capabilities */
+#define ARM64_NCAPS				62
 
 #endif /* __ASM_CPUCAPS_H */

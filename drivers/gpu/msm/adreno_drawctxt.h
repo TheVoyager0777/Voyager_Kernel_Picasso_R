@@ -1,17 +1,13 @@
-/* Copyright (c) 2002,2007-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2002,2007-2019, The Linux Foundation. All rights reserved.
  */
 #ifndef __ADRENO_DRAWCTXT_H
 #define __ADRENO_DRAWCTXT_H
+
+#include <linux/types.h>
+
+#include "kgsl_device.h"
 
 struct adreno_context_type {
 	unsigned int type;
@@ -19,11 +15,11 @@ struct adreno_context_type {
 };
 
 #define ADRENO_CONTEXT_DRAWQUEUE_SIZE 128
+#define SUBMIT_RETIRE_TICKS_SIZE 7
 
 struct kgsl_device;
 struct adreno_device;
 struct kgsl_device_private;
-struct kgsl_context;
 
 /**
  * struct adreno_context - Adreno GPU draw context
@@ -46,6 +42,10 @@ struct kgsl_context;
  * @queued_timestamp: The last timestamp that was queued on this context
  * @rb: The ringbuffer in which this context submits commands.
  * @submitted_timestamp: The last timestamp that was submitted for this context
+ * @submit_retire_ticks: Array to hold command obj execution times from submit
+ *                       to retire
+ * @ticks_index: The index into submit_retire_ticks[] where the new delta will
+ *		 be written.
  * @active_node: Linkage for nodes in active_list
  * @active_time: Time when this context last seen
  */
@@ -72,6 +72,8 @@ struct adreno_context {
 	unsigned int queued_timestamp;
 	struct adreno_ringbuffer *rb;
 	unsigned int submitted_timestamp;
+	uint64_t submit_retire_ticks[SUBMIT_RETIRE_TICKS_SIZE];
+	int ticks_index;
 
 	struct list_head active_node;
 	unsigned long active_time;
@@ -102,9 +104,6 @@ enum adreno_context_priv {
 	ADRENO_CONTEXT_FENCE_LOG,
 };
 
-/* Flags for adreno_drawctxt_switch() */
-#define ADRENO_CONTEXT_SWITCH_FORCE_GPU BIT(0)
-
 struct kgsl_context *adreno_drawctxt_create(
 			struct kgsl_device_private *dev_priv,
 			uint32_t *flags);
@@ -119,8 +118,7 @@ void adreno_drawctxt_sched(struct kgsl_device *device,
 struct adreno_ringbuffer;
 int adreno_drawctxt_switch(struct adreno_device *adreno_dev,
 				struct adreno_ringbuffer *rb,
-				struct adreno_context *drawctxt,
-				unsigned int flags);
+				struct adreno_context *drawctxt);
 
 int adreno_drawctxt_wait(struct adreno_device *adreno_dev,
 		struct kgsl_context *context,
@@ -144,6 +142,4 @@ static inline const char *get_api_type_str(unsigned int type)
 	}
 	return "UNKNOWN";
 }
-
-bool adreno_drawctxt_has_secure(struct kgsl_device *device);
 #endif  /* __ADRENO_DRAWCTXT_H */

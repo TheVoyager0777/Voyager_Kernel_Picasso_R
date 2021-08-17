@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2012-2016 Synaptics Incorporated. All rights reserved.
  *
- * Copyright (c) 2018 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
  * Copyright (C) 2012 Alexandra Chin <alexandra.chin@tw.synaptics.com>
  * Copyright (C) 2012 Scott Lin <scott.lin@tw.synaptics.com>
  *
@@ -45,21 +45,6 @@
 
 #define FW_IHEX_NAME "synaptics/startup_fw_update.bin"
 #define FW_IMAGE_NAME "synaptics/startup_fw_update.img"
-/*
-*#define DO_STARTUP_FW_UPDATE
-*/
-/*
-*#ifdef DO_STARTUP_FW_UPDATE
-*#ifdef CONFIG_FB
-*#define WAIT_FOR_FB_READY
-*#define FB_READY_WAIT_MS 100
-*#define FB_READY_TIMEOUT_S 30
-*#endif
-*#endif
-*/
-/*
-*#define MAX_WRITE_SIZE 4096
-*/
 
 #define ENABLE_SYS_REFLASH false
 #define FORCE_UPDATE false
@@ -858,8 +843,6 @@ static void calculate_checksum(unsigned short *data, unsigned long len,
 	}
 
 	*result = sum2 << 16 | sum1;
-
-	return;
 }
 
 static void convert_to_little_endian(unsigned char *dest, unsigned long src)
@@ -868,8 +851,6 @@ static void convert_to_little_endian(unsigned char *dest, unsigned long src)
 	dest[1] = (unsigned char)((src >> 8) & 0xff);
 	dest[2] = (unsigned char)((src >> 16) & 0xff);
 	dest[3] = (unsigned char)((src >> 24) & 0xff);
-
-	return;
 }
 
 static unsigned int le_to_uint(const unsigned char *ptr)
@@ -1007,8 +988,6 @@ static void fwu_compare_partition_tables(void)
 		if (fwu->phyaddr.guest_code != fwu->img.phyaddr.guest_code)
 			fwu->new_partition_table = true;
 	}
-
-	return;
 }
 
 static void fwu_parse_partition_table(const unsigned char *partition_table,
@@ -1121,8 +1100,6 @@ static void fwu_parse_partition_table(const unsigned char *partition_table,
 			break;
 		};
 	}
-
-	return;
 }
 
 static void fwu_parse_image_header_10_utility(const unsigned char *image)
@@ -1156,8 +1133,6 @@ static void fwu_parse_image_header_10_utility(const unsigned char *image)
 			break;
 		};
 	}
-
-	return;
 }
 
 static void fwu_parse_image_header_10_bootloader(const unsigned char *image)
@@ -1198,8 +1173,6 @@ static void fwu_parse_image_header_10_bootloader(const unsigned char *image)
 			break;
 		};
 	}
-
-	return;
 }
 
 static void fwu_parse_image_header_10(void)
@@ -1287,8 +1260,6 @@ static void fwu_parse_image_header_10(void)
 			break;
 		}
 	}
-
-	return;
 }
 
 static void fwu_parse_image_header_05_06(void)
@@ -1366,8 +1337,6 @@ static void fwu_parse_image_header_05_06(void)
 
 	fwu->img.lockdown.size = LOCKDOWN_SIZE;
 	fwu->img.lockdown.data = image + IMAGE_AREA_OFFSET - LOCKDOWN_SIZE;
-
-	return;
 }
 
 static int fwu_parse_image_info(void)
@@ -1419,30 +1388,42 @@ static int fwu_parse_image_info(void)
 
 static int fwu_read_flash_status(void)
 {
-	int retval;
-	unsigned char status;
-	unsigned char command;
+	int retval = 0;
+	unsigned char *status = NULL;
+	unsigned char *command = NULL;
 	struct synaptics_rmi4_data *rmi4_data = fwu->rmi4_data;
+
+	status = kcalloc(1, sizeof(char), GFP_KERNEL);
+	if (!status) {
+		retval = -ENOMEM;
+		goto exit;
+	}
+
+	command = kcalloc(1, sizeof(char), GFP_KERNEL);
+	if (!command) {
+		retval = -ENOMEM;
+		goto exit;
+	}
 
 	retval = synaptics_rmi4_reg_read(rmi4_data,
 			fwu->f34_fd.data_base_addr + fwu->off.flash_status,
-			&status,
-			sizeof(status));
+			status,
+			sizeof(*status));
 	if (retval < 0) {
 		dev_err(rmi4_data->pdev->dev.parent,
 				"%s: Failed to read flash status\n",
 				__func__);
-		return retval;
+		goto exit;
 	}
 
-	fwu->in_bl_mode = status >> 7;
+	fwu->in_bl_mode = *status >> 7;
 
 	if (fwu->bl_version == BL_V5)
-		fwu->flash_status = (status >> 4) & MASK_3BIT;
+		fwu->flash_status = (*status >> 4) & MASK_3BIT;
 	else if (fwu->bl_version == BL_V6)
-		fwu->flash_status = status & MASK_3BIT;
+		fwu->flash_status = *status & MASK_3BIT;
 	else if (fwu->bl_version == BL_V7 || fwu->bl_version == BL_V8)
-		fwu->flash_status = status & MASK_5BIT;
+		fwu->flash_status = *status & MASK_5BIT;
 
 	if (fwu->write_bootloader)
 		fwu->flash_status = 0x00;
@@ -1460,26 +1441,28 @@ static int fwu_read_flash_status(void)
 
 	retval = synaptics_rmi4_reg_read(rmi4_data,
 			fwu->f34_fd.data_base_addr + fwu->off.flash_cmd,
-			&command,
-			sizeof(command));
+			command,
+			sizeof(*command));
 	if (retval < 0) {
 		dev_err(rmi4_data->pdev->dev.parent,
 				"%s: Failed to read flash command\n",
 				__func__);
-		return retval;
+		goto exit;
 	}
 
 	if (fwu->bl_version == BL_V5)
-		fwu->command = command & MASK_4BIT;
+		fwu->command = *command & MASK_4BIT;
 	else if (fwu->bl_version == BL_V6)
-		fwu->command = command & MASK_6BIT;
+		fwu->command = *command & MASK_6BIT;
 	else if (fwu->bl_version == BL_V7 || fwu->bl_version == BL_V8)
-		fwu->command = command;
+		fwu->command = *command;
 
 	if (fwu->write_bootloader)
 		fwu->command = 0x00;
-
-	return 0;
+exit:
+	kfree(status);
+	kfree(command);
+	return retval;
 }
 
 static int fwu_wait_for_idle(int timeout_ms, bool poll)
@@ -2093,9 +2076,21 @@ static int fwu_read_f34_v5v6_queries(void)
 	unsigned char count;
 	unsigned char base;
 	unsigned char offset;
-	unsigned char buf[10];
-	struct f34_v5v6_flash_properties_2 properties_2;
+	unsigned char *buf = NULL;
+	struct f34_v5v6_flash_properties_2 *properties_2 = NULL;
 	struct synaptics_rmi4_data *rmi4_data = fwu->rmi4_data;
+
+	buf = kcalloc(10, sizeof(char), GFP_KERNEL);
+	if (!buf) {
+		retval = -ENOMEM;
+		goto exit;
+	}
+
+	properties_2 = kzalloc(sizeof(*properties_2), GFP_KERNEL);
+	if (!properties_2) {
+		retval = -ENOMEM;
+		goto exit;
+	}
 
 	base = fwu->f34_fd.query_base_addr;
 
@@ -2107,7 +2102,7 @@ static int fwu_read_f34_v5v6_queries(void)
 		dev_err(rmi4_data->pdev->dev.parent,
 				"%s: Failed to read bootloader ID\n",
 				__func__);
-		return retval;
+		goto exit;
 	}
 
 	if (fwu->bl_version == BL_V5) {
@@ -2134,7 +2129,7 @@ static int fwu_read_f34_v5v6_queries(void)
 		dev_err(rmi4_data->pdev->dev.parent,
 				"%s: Failed to read block size info\n",
 				__func__);
-		return retval;
+		goto exit;
 	}
 
 	batohs(&fwu->block_size, &(buf[0]));
@@ -2155,7 +2150,7 @@ static int fwu_read_f34_v5v6_queries(void)
 		dev_err(rmi4_data->pdev->dev.parent,
 				"%s: Failed to read flash properties\n",
 				__func__);
-		return retval;
+		goto exit;
 	}
 
 	count = 4;
@@ -2177,7 +2172,7 @@ static int fwu_read_f34_v5v6_queries(void)
 		dev_err(rmi4_data->pdev->dev.parent,
 				"%s: Failed to read block count info\n",
 				__func__);
-		return retval;
+		goto exit;
 	}
 
 	batohs(&fwu->blkcount.ui_firmware, &(buf[0]));
@@ -2209,17 +2204,17 @@ static int fwu_read_f34_v5v6_queries(void)
 	if (fwu->flash_properties.has_query4) {
 		retval = synaptics_rmi4_reg_read(rmi4_data,
 				base + fwu->off.properties_2,
-				properties_2.data,
-				sizeof(properties_2.data));
+				properties_2->data,
+				sizeof(properties_2->data));
 		if (retval < 0) {
 			dev_err(rmi4_data->pdev->dev.parent,
 					"%s: Failed to read flash properties 2\n",
 					__func__);
-			return retval;
+			goto exit;
 		}
 		offset = fwu->off.properties_2 + 1;
 		count = 0;
-		if (properties_2.has_guest_code) {
+		if (properties_2->has_guest_code) {
 			retval = synaptics_rmi4_reg_read(rmi4_data,
 					base + offset + count,
 					buf,
@@ -2228,7 +2223,7 @@ static int fwu_read_f34_v5v6_queries(void)
 				dev_err(rmi4_data->pdev->dev.parent,
 						"%s: Failed to read guest code block count\n",
 						__func__);
-				return retval;
+				goto exit;
 			}
 
 			batohs(&fwu->blkcount.guest_code, &(buf[0]));
@@ -2236,7 +2231,7 @@ static int fwu_read_f34_v5v6_queries(void)
 			fwu->has_guest_code = true;
 		}
 #ifdef SYNA_TDDI
-		if (properties_2.has_force_config) {
+		if (properties_2->has_force_config) {
 			retval = synaptics_rmi4_reg_read(rmi4_data,
 					base + offset + count,
 					buf,
@@ -2245,13 +2240,13 @@ static int fwu_read_f34_v5v6_queries(void)
 				dev_err(rmi4_data->pdev->dev.parent,
 					"%s: Failed to read tddi force block count\n",
 					__func__);
-				return retval;
+				goto exit;
 			}
 			batohs(&fwu->blkcount.tddi_force_config, &(buf[0]));
 			count++;
 			fwu->has_force_config = true;
 		}
-		if (properties_2.has_lockdown_data) {
+		if (properties_2->has_lockdown_data) {
 			retval = synaptics_rmi4_reg_read(rmi4_data,
 					base + offset + count,
 					buf,
@@ -2260,13 +2255,13 @@ static int fwu_read_f34_v5v6_queries(void)
 				dev_err(rmi4_data->pdev->dev.parent,
 					"%s: Failed to read tddi lockdown block count\n",
 					__func__);
-				return retval;
+				goto exit;
 			}
 			batohs(&fwu->blkcount.tddi_lockdown_data, &(buf[0]));
 			count++;
 			fwu->has_lockdown_data = true;
 		}
-		if (properties_2.has_lcm_data) {
+		if (properties_2->has_lcm_data) {
 			retval = synaptics_rmi4_reg_read(rmi4_data,
 					base + offset + count,
 					buf,
@@ -2275,13 +2270,13 @@ static int fwu_read_f34_v5v6_queries(void)
 				dev_err(rmi4_data->pdev->dev.parent,
 					"%s: Failed to read tddi lcm block count\n",
 					__func__);
-				return retval;
+				goto exit;
 			}
 			batohs(&fwu->blkcount.tddi_lcm_data, &(buf[0]));
 			count++;
 			fwu->has_lcm_data = true;
 		}
-		if (properties_2.has_oem_data) {
+		if (properties_2->has_oem_data) {
 			retval = synaptics_rmi4_reg_read(rmi4_data,
 					base + offset + count,
 					buf,
@@ -2290,7 +2285,7 @@ static int fwu_read_f34_v5v6_queries(void)
 				dev_err(rmi4_data->pdev->dev.parent,
 					"%s: Failed to read tddi oem block count\n",
 					__func__);
-				return retval;
+				goto exit;
 			}
 			batohs(&fwu->blkcount.tddi_oem_data, &(buf[0]));
 			fwu->has_oem_data = true;
@@ -2299,8 +2294,10 @@ static int fwu_read_f34_v5v6_queries(void)
 	}
 
 	fwu->has_utility_param = false;
-
-	return 0;
+exit:
+	kfree(properties_2);
+	kfree(buf);
+	return retval;
 }
 
 static int fwu_read_f34_queries(void)
@@ -2821,7 +2818,6 @@ static int fwu_scan_pdt(void)
 	bool f01found = false;
 	bool f34found = false;
 	bool f35found = false;
-	struct synaptics_rmi4_fn_desc rmi_fd;
 	struct synaptics_rmi4_data *rmi4_data = fwu->rmi4_data;
 
 	fwu->in_ub_mode = false;
@@ -2829,38 +2825,38 @@ static int fwu_scan_pdt(void)
 	for (addr = PDT_START; addr > PDT_END; addr -= PDT_ENTRY_SIZE) {
 		retval = synaptics_rmi4_reg_read(rmi4_data,
 				addr,
-				(unsigned char *)&rmi_fd,
-				sizeof(rmi_fd));
+				(unsigned char *)&rmi4_data->rmi_fd,
+				sizeof(rmi4_data->rmi_fd));
 		if (retval < 0)
 			return retval;
 
-		if (rmi_fd.fn_number) {
+		if (rmi4_data->rmi_fd.fn_number) {
 			dev_dbg(rmi4_data->pdev->dev.parent,
 					"%s: Found F%02x\n",
-					__func__, rmi_fd.fn_number);
-			switch (rmi_fd.fn_number) {
+					__func__, rmi4_data->rmi_fd.fn_number);
+			switch (rmi4_data->rmi_fd.fn_number) {
 			case SYNAPTICS_RMI4_F01:
 				f01found = true;
 
 				rmi4_data->f01_query_base_addr =
-						rmi_fd.query_base_addr;
+					rmi4_data->rmi_fd.query_base_addr;
 				rmi4_data->f01_ctrl_base_addr =
-						rmi_fd.ctrl_base_addr;
+					rmi4_data->rmi_fd.ctrl_base_addr;
 				rmi4_data->f01_data_base_addr =
-						rmi_fd.data_base_addr;
+					rmi4_data->rmi_fd.data_base_addr;
 				rmi4_data->f01_cmd_base_addr =
-						rmi_fd.cmd_base_addr;
+					rmi4_data->rmi_fd.cmd_base_addr;
 				break;
 			case SYNAPTICS_RMI4_F34:
 				f34found = true;
 				fwu->f34_fd.query_base_addr =
-						rmi_fd.query_base_addr;
+					rmi4_data->rmi_fd.query_base_addr;
 				fwu->f34_fd.ctrl_base_addr =
-						rmi_fd.ctrl_base_addr;
+					rmi4_data->rmi_fd.ctrl_base_addr;
 				fwu->f34_fd.data_base_addr =
-						rmi_fd.data_base_addr;
+					rmi4_data->rmi_fd.data_base_addr;
 
-				switch (rmi_fd.fn_version) {
+				switch (rmi4_data->rmi_fd.fn_version) {
 				case F34_V0:
 					fwu->bl_version = BL_V5;
 					break;
@@ -2878,7 +2874,7 @@ static int fwu_scan_pdt(void)
 				}
 
 				fwu->intr_mask = 0;
-				intr_src = rmi_fd.intr_src_count;
+				intr_src = rmi4_data->rmi_fd.intr_src_count;
 				intr_off = intr_count % 8;
 				for (ii = intr_off;
 						ii < (intr_src + intr_off);
@@ -2889,20 +2885,20 @@ static int fwu_scan_pdt(void)
 			case SYNAPTICS_RMI4_F35:
 				f35found = true;
 				fwu->f35_fd.query_base_addr =
-						rmi_fd.query_base_addr;
+					rmi4_data->rmi_fd.query_base_addr;
 				fwu->f35_fd.ctrl_base_addr =
-						rmi_fd.ctrl_base_addr;
+					rmi4_data->rmi_fd.ctrl_base_addr;
 				fwu->f35_fd.data_base_addr =
-						rmi_fd.data_base_addr;
+					rmi4_data->rmi_fd.data_base_addr;
 				fwu->f35_fd.cmd_base_addr =
-						rmi_fd.cmd_base_addr;
+					rmi4_data->rmi_fd.cmd_base_addr;
 				break;
 			}
 		} else {
 			break;
 		}
 
-		intr_count += rmi_fd.intr_src_count;
+		intr_count += rmi4_data->rmi_fd.intr_src_count;
 	}
 
 	if (!f01found || !f34found) {
@@ -4983,8 +4979,6 @@ static void fwu_startup_fw_update_work(struct work_struct *work)
 #endif
 
 	synaptics_fw_updater(NULL);
-
-	return;
 }
 #endif
 
@@ -5322,9 +5316,8 @@ static ssize_t fwu_sysfs_image_size_store(struct device *dev,
 				"%s: Failed to alloc mem for image data\n",
 				__func__);
 		retval = -ENOMEM;
-	} else {
-		retval = count;
 	}
+	retval = count;
 
 	mutex_unlock(&fwu_sysfs_mutex);
 
@@ -5602,13 +5595,19 @@ static int synaptics_rmi4_fwu_init(struct synaptics_rmi4_data *rmi4_data)
 {
 	int retval;
 	unsigned char attr_count;
-	struct pdt_properties pdt_props;
+	struct pdt_properties *pdt_props = NULL;
 
 	if (fwu) {
 		dev_dbg(rmi4_data->pdev->dev.parent,
 				"%s: Handle already exists\n",
 				__func__);
 		return 0;
+	}
+
+	pdt_props = kzalloc(sizeof(*pdt_props), GFP_KERNEL);
+	if (!pdt_props) {
+		retval = -ENOMEM;
+		goto exit;
 	}
 
 	fwu = kzalloc(sizeof(*fwu), GFP_KERNEL);
@@ -5633,13 +5632,13 @@ static int synaptics_rmi4_fwu_init(struct synaptics_rmi4_data *rmi4_data)
 
 	retval = synaptics_rmi4_reg_read(rmi4_data,
 			PDT_PROPS,
-			pdt_props.data,
-			sizeof(pdt_props.data));
+			pdt_props->data,
+			sizeof(pdt_props->data));
 	if (retval < 0) {
 		dev_dbg(rmi4_data->pdev->dev.parent,
 				"%s: Failed to read PDT properties, assuming 0x00\n",
 				__func__);
-	} else if (pdt_props.has_bsr) {
+	} else if (pdt_props->has_bsr) {
 		dev_err(rmi4_data->pdev->dev.parent,
 				"%s: Reflash for LTS not currently supported\n",
 				__func__);
@@ -5731,6 +5730,7 @@ exit_free_fwu:
 	fwu = NULL;
 
 exit:
+	kfree(pdt_props);
 	return retval;
 }
 
@@ -5769,8 +5769,6 @@ static void synaptics_rmi4_fwu_remove(struct synaptics_rmi4_data *rmi4_data)
 
 exit:
 	complete(&fwu_remove_complete);
-
-	return;
 }
 
 static void synaptics_rmi4_fwu_reset(struct synaptics_rmi4_data *rmi4_data)
@@ -5823,8 +5821,6 @@ static void __exit rmi4_fw_update_module_exit(void)
 	synaptics_rmi4_new_function(&fwu_module, false);
 
 	wait_for_completion(&fwu_remove_complete);
-
-	return;
 }
 
 module_init(rmi4_fw_update_module_init);

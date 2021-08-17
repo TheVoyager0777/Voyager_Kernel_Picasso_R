@@ -1,13 +1,6 @@
-/* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -15,8 +8,10 @@
 #include <linux/slab.h>
 #include <linux/interrupt.h>
 #include <linux/err.h>
+#include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/extcon.h>
+#include <linux/extcon-provider.h>
 #include <linux/delay.h>
 #include <linux/sysfs.h>
 #include <linux/io.h>
@@ -63,6 +58,8 @@
 #define UART_ID			0x90
 #define MAX_FIFO_SIZE		14
 
+#define EUD_TCSR_ENABLE_BIT	BIT(0)
+
 struct eud_chip {
 	struct device			*dev;
 	int				eud_irq;
@@ -95,65 +92,46 @@ static int enable;
 static bool eud_ready;
 static struct platform_device *eud_private;
 
+static int check_eud_mode_mgr2(struct eud_chip *chip)
+{
+	u32 val;
+
+	val = scm_io_read(chip->eud_mode_mgr2_phys_base);
+	return val & BIT(0);
+}
+
 static void enable_eud(struct platform_device *pdev)
 {
 	struct eud_chip *priv = platform_get_drvdata(pdev);
-	struct power_supply *usb_psy = NULL;
-	union power_supply_propval pval = {0};
-	union power_supply_propval tval = {0};
 	int ret;
 
-	usb_psy = power_supply_get_by_name("usb");
-	if (!usb_psy) {
-		dev_warn(&pdev->dev, "Could not get usb power_supply\n");
-		return;
+	/* write into CSR to enable EUD */
+	writel_relaxed(BIT(0), priv->eud_reg_base + EUD_REG_CSR_EUD_EN);
+
+	/* Enable vbus, chgr & safe mode warning interrupts */
+	writel_relaxed(EUD_INT_VBUS | EUD_INT_CHGR | EUD_INT_SAFE_MODE,
+			priv->eud_reg_base + EUD_REG_INT1_EN_MASK);
+
+	/* Enable secure eud if supported */
+	if (priv->secure_eud_en && !check_eud_mode_mgr2(priv)) {
+		ret = scm_io_write(priv->eud_mode_mgr2_phys_base +
+				   EUD_REG_EUD_EN2, EUD_ENABLE_CMD);
+		if (ret)
+			dev_err(&pdev->dev,
+			"scm_io_write failed with rc:%d\n", ret);
 	}
 
-	ret = power_supply_get_property(usb_psy,
-			POWER_SUPPLY_PROP_PRESENT, &pval);
-	if (ret) {
-		dev_err(&pdev->dev, "Unable to read USB PRESENT: %x\n", ret);
-		return;
-	}
+	/* Ensure Register Writes Complete */
+	wmb();
 
-	ret = power_supply_get_property(usb_psy,
-			POWER_SUPPLY_PROP_REAL_TYPE, &tval);
-	if (ret) {
-		dev_err(&pdev->dev, "Unable to read USB TYPE: %x\n", ret);
-		return;
-	}
+	/*
+	 * Set the default cable state to usb connect and charger
+	 * enable
+	 */
+	extcon_set_state_sync(priv->extcon, EXTCON_USB, true);
+	extcon_set_state_sync(priv->extcon, EXTCON_CHG_USB_SDP, true);
 
-	if (pval.intval && (tval.intval == POWER_SUPPLY_TYPE_USB ||
-	    tval.intval == POWER_SUPPLY_TYPE_USB_CDP)) {
-		/* write into CSR to enable EUD */
-		writel_relaxed(BIT(0), priv->eud_reg_base + EUD_REG_CSR_EUD_EN);
-		/* Enable vbus, chgr & safe mode warning interrupts */
-		writel_relaxed(EUD_INT_VBUS | EUD_INT_CHGR | EUD_INT_SAFE_MODE,
-				priv->eud_reg_base + EUD_REG_INT1_EN_MASK);
-		/* Enable secure eud if supported */
-		if (priv->secure_eud_en) {
-			ret = scm_io_write(priv->eud_mode_mgr2_phys_base +
-					   EUD_REG_EUD_EN2, EUD_ENABLE_CMD);
-			if (ret)
-				dev_err(&pdev->dev,
-				"scm_io_write failed with rc:%d\n", ret);
-		}
-
-		/* Ensure Register Writes Complete */
-		wmb();
-
-		/*
-		 * Set the default cable state to usb connect and charger
-		 * enable
-		 */
-		extcon_set_state_sync(priv->extcon, EXTCON_USB, true);
-		extcon_set_state_sync(priv->extcon, EXTCON_CHG_USB_SDP, true);
-	} else {
-		dev_warn(&pdev->dev, "Connect USB cable before enabling EUD\n");
-		return;
-	}
-
-	dev_dbg(&pdev->dev, "%s: EUD Enabled!\n", __func__);
+	dev_dbg(&pdev->dev, "%s: EUD is Enabled\n", __func__);
 }
 
 static void disable_eud(struct platform_device *pdev)
@@ -163,6 +141,7 @@ static void disable_eud(struct platform_device *pdev)
 
 	/* write into CSR to disable EUD */
 	writel_relaxed(0, priv->eud_reg_base + EUD_REG_CSR_EUD_EN);
+
 	/* Disable secure eud if supported */
 	if (priv->secure_eud_en) {
 		ret = scm_io_write(priv->eud_mode_mgr2_phys_base +
@@ -425,7 +404,7 @@ static void eud_uart_rx(struct eud_chip *chip)
 
 	reg = readl_relaxed(chip->eud_reg_base + EUD_REG_COM_RX_ID);
 	if (reg != UART_ID) {
-		dev_err(chip->dev, "Rx isn't for us!\n");
+		dev_dbg(chip->dev, "Rx interrupt isn't for us\n");
 		return;
 	}
 	/* Read Rx Len & Data registers */
@@ -455,7 +434,7 @@ static void eud_uart_tx(struct eud_chip *chip)
 	writel_relaxed(UART_ID, chip->eud_reg_base + EUD_REG_COM_TX_ID);
 	reg = readl_relaxed(chip->eud_reg_base + EUD_REG_COM_TX_ID);
 	if (reg != UART_ID) {
-		dev_err(chip->dev, "Tx isn't for us!\n");
+		dev_dbg(chip->dev, "Tx interrupt isn't for us\n");
 		return;
 	}
 	/* Write to Tx Len & Data registers */
@@ -484,24 +463,24 @@ static irqreturn_t handle_eud_irq(int irq, void *data)
 	/* read status register and find out which interrupt triggered */
 	reg = readl_relaxed(chip->eud_reg_base + EUD_REG_INT_STATUS_1);
 	if (reg & EUD_INT_RX) {
-		dev_dbg(chip->dev, "EUD RX Interrupt!\n");
+		dev_dbg(chip->dev, "EUD RX Interrupt is received\n");
 		eud_uart_rx(chip);
 	} else if ((reg & EUD_INT_TX) & int_mask_en1) {
-		dev_dbg(chip->dev, "EUD TX Interrupt!\n");
+		dev_dbg(chip->dev, "EUD TX Interrupt is received\n");
 		eud_uart_tx(chip);
 	} else if (reg & EUD_INT_VBUS) {
-		dev_dbg(chip->dev, "EUD VBUS Interrupt!\n");
+		dev_dbg(chip->dev, "EUD VBUS Interrupt is received\n");
 		chip->int_status = EUD_INT_VBUS;
 		usb_attach_detach(chip);
 	} else if (reg & EUD_INT_CHGR) {
-		dev_dbg(chip->dev, "EUD CHGR Interrupt!\n");
+		dev_dbg(chip->dev, "EUD CHGR Interrupt is received\n");
 		chip->int_status = EUD_INT_CHGR;
 		chgr_enable_disable(chip);
 	} else if (reg & EUD_INT_SAFE_MODE) {
-		dev_dbg(chip->dev, "EUD SAFE MODE Interrupt!\n");
+		dev_dbg(chip->dev, "EUD SAFE MODE Interrupt is received\n");
 		pet_eud(chip);
 	} else {
-		dev_dbg(chip->dev, "Unknown/spurious EUD Interrupt!\n");
+		dev_dbg(chip->dev, "Unknown EUD Interrupt is received\n");
 		return IRQ_NONE;
 	}
 
@@ -510,7 +489,7 @@ static irqreturn_t handle_eud_irq(int irq, void *data)
 
 static int msm_eud_suspend(struct device *dev)
 {
-	struct eud_chip *chip = (struct eud_chip *)dev_get_drvdata(dev);
+	struct eud_chip *chip = dev_get_drvdata(dev);
 
 	if (chip->need_phy_clk_vote && chip->eud_ahb2phy_clk)
 		clk_disable_unprepare(chip->eud_ahb2phy_clk);
@@ -520,7 +499,7 @@ static int msm_eud_suspend(struct device *dev)
 
 static int msm_eud_resume(struct device *dev)
 {
-	struct eud_chip *chip = (struct eud_chip *)dev_get_drvdata(dev);
+	struct eud_chip *chip = dev_get_drvdata(dev);
 	int ret = 0;
 
 	if (chip->need_phy_clk_vote && chip->eud_ahb2phy_clk) {
@@ -530,7 +509,7 @@ static int msm_eud_resume(struct device *dev)
 					__func__, ret);
 	}
 
-	return 0;
+	return ret;
 }
 
 static int msm_eud_probe(struct platform_device *pdev)
@@ -539,6 +518,8 @@ static int msm_eud_probe(struct platform_device *pdev)
 	struct uart_port *port;
 	struct resource *res;
 	int ret;
+	bool eud_tcsr_check_state;
+	phys_addr_t eud_tcsr_check;
 
 	chip = devm_kzalloc(&pdev->dev, sizeof(*chip), GFP_KERNEL);
 	if (!chip) {
@@ -548,15 +529,18 @@ static int msm_eud_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, chip);
 
+	chip->dev = &pdev->dev;
 	chip->extcon = devm_extcon_dev_allocate(&pdev->dev, eud_extcon_cable);
 	if (IS_ERR(chip->extcon)) {
-		dev_err(chip->dev, "failed to allocate extcon device\n");
+		dev_err(chip->dev, "%s: failed to allocate extcon device\n",
+					__func__);
 		return PTR_ERR(chip->extcon);
 	}
 
 	ret = devm_extcon_dev_register(&pdev->dev, chip->extcon);
 	if (ret) {
-		dev_err(chip->dev, "failed to register extcon device\n");
+		dev_err(chip->dev, "%s: failed to register extcon device\n",
+					__func__);
 		return ret;
 	}
 
@@ -628,6 +612,34 @@ static int msm_eud_probe(struct platform_device *pdev)
 	port->irq = chip->eud_irq;
 	port->ops = &eud_uart_ops;
 
+	/*
+	 * Before enabling EUD, check for TCSR register
+	 * and if present, enable it.
+	 */
+	eud_tcsr_check_state = of_property_read_bool(
+		pdev->dev.of_node, "qcom,eud-tcsr-check-enable");
+
+	if (eud_tcsr_check_state) {
+		res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
+					"eud_tcsr_check_reg");
+		if (res) {
+			eud_tcsr_check = res->start;
+			ret = scm_io_write(eud_tcsr_check,
+					EUD_TCSR_ENABLE_BIT);
+			if (ret) {
+				dev_err(&pdev->dev,
+				"TCSR scm_io_write failed with rc:%d\n", ret);
+			}
+		} else {
+			dev_err(chip->dev,
+				"Failed to get resource for tcsr check!\n");
+			goto error;
+		}
+	}
+
+	if (chip->secure_eud_en && check_eud_mode_mgr2(chip))
+		enable = 1;
+
 	ret = uart_add_one_port(&eud_uart_driver, port);
 	if (!ret) {
 		dev_err(chip->dev, "failed to add uart port!\n");
@@ -670,8 +682,7 @@ static const struct of_device_id msm_eud_dt_match[] = {
 MODULE_DEVICE_TABLE(of, msm_eud_dt_match);
 
 static const struct dev_pm_ops msm_eud_dev_pm_ops = {
-	.suspend_noirq = msm_eud_suspend,
-	.resume_noirq = msm_eud_resume,
+	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(msm_eud_suspend, msm_eud_resume)
 };
 
 static struct platform_driver msm_eud_driver = {

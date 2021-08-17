@@ -1,1 +1,3 @@
-source techpack/audio/Kconfig
+menu "Tech packages"
+
+endmenu

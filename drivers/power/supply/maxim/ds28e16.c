@@ -57,14 +57,14 @@ unsigned char session_seed[32] = {
 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA};
 unsigned char S_secret[32] = {
-0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA,
-0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA, 0xAA};
+0x0C, 0x99, 0x2B, 0xD3, 0x95, 0xDB, 0xA0, 0xB4,
+0xEF, 0x07, 0xB3, 0xD8, 0x75, 0xF3, 0xC7, 0xAE,
+0xDA, 0xC4, 0x41, 0x2F, 0x48, 0x93, 0xB5, 0xD9,
+0xE1, 0xE5, 0x4B, 0x20, 0x9B, 0xF3, 0x77, 0x39};
 unsigned char challenge[32] = {0x00};
 int auth_ANON = 1;
 int auth_BDCONST = 1;
-int pagenumber = 1;
+int pagenumber = 0;
 
 // maxim define
 int tm = 1;
@@ -87,6 +87,7 @@ unsigned char mi_page0_data[16] = {0x00};
 unsigned char mi_page1_data[16] = {0x00};
 unsigned char mi_counter[16] = {0x00};
 int mi_auth_result = 0x00;
+
 
 unsigned char crc_low_first(unsigned char *ptr, unsigned char len)
 {
@@ -111,8 +112,6 @@ short Read_RomID(unsigned char *RomID)
 	unsigned char i;
 	unsigned char crc = 0x00;
 
-	ds_info("flag_mi_status = %02x, flag_mi_romid = %02x\n", flag_mi_status, flag_mi_romid);
-
 	if (flag_mi_romid == 2) {
 		memcpy(RomID, mi_romid, 8);
 		return DS_TRUE;
@@ -130,17 +129,19 @@ short Read_RomID(unsigned char *RomID)
 	for (i = 0; i < 8; i++)
 		RomID[i] = read_byte();
 
-	ds_info("RomID = %02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x\n",
+	ds_dbg("RomID = %02x,%02x,%02x,%02x,%02x,%02x,%02x,%02x\n",
 	RomID[0], RomID[1], RomID[2], RomID[3],
 	RomID[4], RomID[5], RomID[6], RomID[7]);
 
 	crc = crc_low_first(RomID, 7);
-	ds_info("crc_low_first = %02x\n", crc);
+	ds_dbg("crc_low_first = %02x\n", crc);
 
 	if (crc == RomID[7]) {
-		memcpy(mi_romid, RomID, 8);
-		if ((mi_romid[0] == FAMILY_CODE) && (mi_romid[6] == CUSTOM_ID_MSB) && ((mi_romid[5] & 0xf0) == CUSTOM_ID_LSB))
+		if (flag_mi_status == 0)
+			flag_mi_romid = 1;
+		else
 			flag_mi_romid = 2;
+		memcpy(mi_romid, RomID, 8);
 		return DS_TRUE;
 	} else {
 		ow_reset();
@@ -209,16 +210,13 @@ unsigned char *read_buf, int *read_len, int write_len)
 	buf[buf_len++] = read_byte();
 	buf[buf_len++] = read_byte();
 
-	ds_err("DS28E16_standard_cmd_flow: crc is :\n");
-	ds_err("%02x %02x \n",buf[buf_len-1], buf[buf_len]);
-
 	CRC16 = 0;
 	for (i = 0; i < buf_len; i++)
 		docrc16(buf[i]);
 
 	if (CRC16 != 0xB001) {
 		ow_reset();
-		ds_err("DS28E16_standard_cmd_flow: crc error!\n");
+		ds_dbg("DS28E16_standard_cmd_flow: crc error!\n");
 		return DS_FALSE;
 	}
 
@@ -233,15 +231,13 @@ unsigned char *read_buf, int *read_len, int write_len)
 
 	if (expected_read_len != *read_len) {
 		ow_reset();
-		ds_err("DS28E16_standard_cmd_flow: len error!\n");
+		ds_dbg("DS28E16_standard_cmd_flow: len error!\n");
 		return DS_FALSE;
 	}
 
 	buf_len = *read_len + 2;
-	for (i = 0; i < buf_len; i++) {
+	for (i = 0; i < buf_len; i++)
 		buf[i] = read_byte();
-	//	ds_err("buf[%d] = 0x%02x %s, len = %d\n", i, buf[i], buf[i], buf_len);
-	}
 
 	CRC16 = 0;
 	docrc16(*read_len);
@@ -250,12 +246,12 @@ unsigned char *read_buf, int *read_len, int write_len)
 
 	if (CRC16 != 0xB001) {
 		ow_reset();
-		ds_err("DS28E16_standard_cmd_flow: crc2 error!\n");
+		ds_dbg("DS28E16_standard_cmd_flow: crc2 error!\n");
 		return DS_FALSE;
 	}
 
 	memcpy(read_buf, buf, *read_len);
-	ds_info("DS28E16_standard_cmd_flow success!\n");
+	ds_dbg("DS28E16_standard_cmd_flow success!\n");
 	return DS_TRUE;
 }
 
@@ -381,7 +377,7 @@ int DS28E16_cmd_readMemory(int pg, unsigned char *data)
 	write_buf[write_len++] = pagenum;
 
 	ds_dbg("DS28E16_cmd_readMemory write_buf:\n");
-	ds_info("%02x %02x %02x", write_buf[0], write_buf[1], write_buf[2]);
+	ds_dbg("%02x %02x %02x", write_buf[0], write_buf[1], write_buf[2]);
 
 	if (DS28E16_standard_cmd_flow(write_buf, DELAY_DS28E16_EE_READ*tm,
 		read_buf, &read_len, write_len)) {
@@ -466,7 +462,7 @@ int DS28E16_cmd_writeMemory(int pg, unsigned char *data)
 				}
 				if (pagenum == 0x01) {
 					flag_mi_page1_data = 0;
-					memset(mi_page0_data, 0x00, 16);
+					memset(mi_page1_data, 0x00, 16);
 				}
 				if (pagenum == 0x02) {
 					flag_mi_counter = 0;
@@ -651,7 +647,7 @@ unsigned char *challenge, unsigned char *hmac)
 	memcpy(&write_buf[write_len], challenge, 32);// Challenge
 	write_len += 32;
 
-	ds_info("computeReadPageAuthen:\n");
+	ds_dbg("computeReadPageAuthen:\n");
 	ds_dbg("%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
 			write_buf[0], write_buf[1], write_buf[2], write_buf[3],
 			write_buf[4], write_buf[5], write_buf[6], write_buf[7],
@@ -666,7 +662,7 @@ unsigned char *challenge, unsigned char *hmac)
 	if (DS28E16_standard_cmd_flow(write_buf, DELAY_DS28E16_EE_WRITE, read_buf, &read_len, write_len)) {
 		last_result_byte = read_buf[0];
 		if (read_buf[0] == RESULT_SUCCESS) {
-			ds_info("hmac read_buf:\n");
+			ds_dbg("hmac read_buf:\n");
 			ds_dbg("%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
 			read_buf[0], read_buf[1], read_buf[2], read_buf[3],
 			read_buf[4], read_buf[5], read_buf[6], read_buf[7],
@@ -677,7 +673,7 @@ unsigned char *challenge, unsigned char *hmac)
 			read_buf[24], read_buf[25], read_buf[26], read_buf[27],
 			read_buf[28], read_buf[29], read_buf[30], read_buf[31],read_buf[32]);
 			memcpy(hmac, &read_buf[1], 32);
-			ds_info("hmac:\n");
+			ds_dbg("hmac:\n");
 			ds_dbg("%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
 			hmac[0], hmac[1], hmac[2], hmac[3],
 			hmac[4], hmac[5], hmac[6], hmac[7],
@@ -733,7 +729,7 @@ int pg, unsigned char *partial)
 	memcpy(&write_buf[write_len], partial, 32); // Partial Secret
 	write_len += 32;
 
-	ds_info("computeS_Secret:\n");
+	ds_dbg("computeS_Secret:\n");
 	ds_dbg("%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
 			write_buf[0], write_buf[1], write_buf[2], write_buf[3],
 			write_buf[4], write_buf[5], write_buf[6], write_buf[7],
@@ -802,7 +798,7 @@ unsigned char *Challenge, unsigned char *Secret_Seeds, unsigned char *S_Secret)
 		return ERROR_COMPUTE_MAC;
 	}
 
-	ds_info("%02x %02x %02x %02x", anon, bdconst, S_Secret_PageNum, PageNum);
+	ds_dbg("%02x %02x %02x %02x", anon, bdconst, S_Secret_PageNum, PageNum);
 
 	ds_dbg("Seeds:\n");
 	ds_dbg("%02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
@@ -935,12 +931,13 @@ unsigned char *Challenge, unsigned char *Secret_Seeds, unsigned char *S_Secret)
 		flag_mi_auth_result = 1;
 		mi_auth_result = ERROR_UNMATCH_MAC;
 		// for debug
-		ds_info("hmac is not match. result=ERROR_UNMATCH_MAC\n");
+		ds_dbg("hmac is not match. result=ERROR_UNMATCH_MAC\n");
 		flag_mi_page1_data = 0;
 		return ERROR_UNMATCH_MAC;
-	} else {
+	}
+	else {
 		flag_mi_auth_result = 1;
-		ds_info("hmac is match. result=DS_TRUE\n");
+		ds_dbg("hmac is match. result=DS_TRUE\n");
 		mi_auth_result = DS_TRUE;
 		return DS_TRUE;
 	}
@@ -956,9 +953,8 @@ static int ds28el16_Read_RomID_retry(unsigned char *RomID)
 	for (i = 0; i < GET_ROM_ID_RETRY; i++) {
 		ds_info("read rom id communication start %d...\n", i);
 		if (DS28E16_cmd_readStatus(data) == DS_TRUE) {
-			if (Read_RomID(RomID) == DS_TRUE) {
+			if (Read_RomID(RomID) == DS_TRUE)
 				return DS_TRUE;
-			}
 		}
 	}
 	return DS_FALSE;
@@ -971,13 +967,28 @@ static int ds28el16_get_page_status_retry(unsigned char *data)
 	for (i = 0; i < GET_BLOCK_STATUS_RETRY; i++) {
 		ds_info("read page status communication start... %d\n", i);
 
-		if (DS28E16_cmd_readStatus(data) == DS_TRUE) {
+		if (DS28E16_cmd_readStatus(data) == DS_TRUE)
 			return DS_TRUE;
-		}
 	}
 
 	return DS_FALSE;
 }
+
+/*
+static int ds28el16_set_page_status_retry(unsigned char page, unsigned char status)
+{
+	int i;
+
+	for (i = 0; i < SET_BLOCK_STATUS_RETRY; i++) {
+		ds_info("set page status communication start... %d\n", i);
+
+		if (DS28E16_cmd_setPageProtection(page, status) == TRUE)
+			return DS_TRUE;
+	}
+
+	return DS_FALSE;
+}
+*/
 
 static int ds28el16_get_page_data_retry(int page, unsigned char *data)
 {
@@ -987,7 +998,7 @@ static int ds28el16_get_page_data_retry(int page, unsigned char *data)
 		return DS_FALSE;
 
 	for (i = 0; i < GET_USER_MEMORY_RETRY; i++) {
-		ds_info("read page data communication start... %d\n", i);
+		ds_dbg("read page data communication start... %d\n", i);
 
 		if (DS28E16_cmd_readMemory(page, data) == DS_TRUE) {
 			ds_dbg("page number is %d\n", page);
@@ -1072,12 +1083,15 @@ static enum power_supply_property verify_props[] = {
 	POWER_SUPPLY_PROP_PAGE1_DATA,
 	POWER_SUPPLY_PROP_VERIFY_MODEL_NAME,
 	POWER_SUPPLY_PROP_CHIP_OK,
+	POWER_SUPPLY_PROP_MAXIM_BATT_CYCLE_COUNT,
 };
 
 static int verify_get_property(struct power_supply *psy, enum power_supply_property psp,
 					union power_supply_propval *val)
 {
 	int ret;
+	unsigned int cycle_count;
+	unsigned char pagedata[16] = {0x00};
 	unsigned char buf[50];
 
 	switch (psp) {
@@ -1136,6 +1150,14 @@ static int verify_get_property(struct power_supply *psy, enum power_supply_prope
 		if (ret != DS_TRUE)
 			return -EAGAIN;
 		break;
+	case POWER_SUPPLY_PROP_MAXIM_BATT_CYCLE_COUNT:
+		ret = ds28el16_get_page_data_retry(DC_PAGE, pagedata);
+		if (ret == DS_TRUE) {
+			cycle_count = (pagedata[2] << 16) + (pagedata[1] << 8)
+						+ pagedata[0];
+			val->intval = DC_INIT_VALUE - cycle_count;
+		}
+		break;
 	default:
 		ds_err("unsupported property %d\n", psp);
 		return -ENODATA;
@@ -1155,11 +1177,31 @@ static int verify_set_property(struct power_supply *psy,
 	case POWER_SUPPLY_PROP_PAGENUMBER:
 		pagenumber = val->intval;
 		break;
+/*
+	case POWER_SUPPLY_PROP_PAGEDATA:
+		memcpy(buf, val->arrayval, 16);
+		ret = DS28E16_cmd_writeMemory(pagenumber, buf);
+		if (ret != DS_TRUE)
+			return -EAGAIN;
+		break;
+	case POWER_SUPPLY_PROP_SESSION_SEED:
+		memcpy(session_seed, val->arrayval, 32);
+		break;
+	case POWER_SUPPLY_PROP_S_SECRET:
+		memcpy(S_secret, val->arrayval, 32);
+		break;
+	case POWER_SUPPLY_PROP_CHALLENGE:
+		memcpy(challenge, val->arrayval, 32);
+		break;
+*/
 	case POWER_SUPPLY_PROP_AUTH_ANON:
-		auth_ANON = val->intval;
+		auth_ANON  = val->intval;
 		break;
 	case POWER_SUPPLY_PROP_AUTH_BDCONST:
-		auth_BDCONST = val->intval;
+		auth_BDCONST   = val->intval;
+		break;
+	case POWER_SUPPLY_PROP_MAXIM_BATT_CYCLE_COUNT:
+		DS28E16_cmd_decrementCounter();
 		break;
 	default:
 		ds_err("unsupported property %d\n", prop);
@@ -1235,7 +1277,7 @@ static int ds28e16_parse_dt(struct device *dev,
 	pdata->version = 0;
 	error = of_property_read_u32(np, "maxim,version", &val);
 	if (error && (error != -EINVAL))
-		ds_err("Unable to read maxim,version node.\n");
+		ds_err("Unable to read bootloader address\n");
 	else if (error != -EINVAL)
 		pdata->version = val;
 
@@ -1644,7 +1686,7 @@ static void authentic_work(struct work_struct *work)
 	if (pval.intval != true) {
 		retry_authentic++;
 		if (retry_authentic < AUTHENTIC_COUNT_MAX) {
-			ds_log("battery authentic work begin to restart, retry = %d\n", retry_authentic);
+			ds_log("battery authentic work begin to restart.\n");
 			schedule_delayed_work(&ds28e16_data->authentic_work,
 				msecs_to_jiffies(authentic_period_ms));
 		}
@@ -1656,6 +1698,7 @@ static void authentic_work(struct work_struct *work)
 		ds_log("authentic result is %d\n", pval.intval);
 	}
 }
+
 static int ds28e16_probe(struct platform_device *pdev)
 {
 	int retval = 0;
@@ -1719,6 +1762,7 @@ static int ds28e16_probe(struct platform_device *pdev)
 	return 0;
 
 ds28e16_create_group_err:
+//sysfs_remove_groups(&ds28e16_data->dev->kobj, &(&ds_attr_group));
 ds28e16_psy_register_err:
 dev_set_drvdata(ds28e16_data->dev, NULL);
 ds28e16_parse_dt_err:

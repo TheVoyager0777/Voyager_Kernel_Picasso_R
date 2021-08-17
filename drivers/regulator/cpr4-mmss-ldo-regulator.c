@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "%s: " fmt, __func__
@@ -744,7 +736,6 @@ static struct platform_driver cpr4_mmss_regulator_driver = {
 	.driver		= {
 		.name		= "qcom,cpr4-mmss-ldo-regulator",
 		.of_match_table	= cpr4_mmss_regulator_match_table,
-		.owner		= THIS_MODULE,
 	},
 	.probe		= cpr4_mmss_regulator_probe,
 	.remove		= cpr4_mmss_regulator_remove,

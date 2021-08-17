@@ -257,18 +257,18 @@ int ath10k_htt_setup(struct ath10k_htt *htt)
 		return status;
 	}
 
-	status = htt->tx_ops->htt_send_frag_desc_bank_cfg(htt);
+	status = ath10k_htt_send_frag_desc_bank_cfg(htt);
 	if (status)
 		return status;
 
-	status = htt->tx_ops->htt_send_rx_ring_cfg(htt);
+	status = ath10k_htt_send_rx_ring_cfg(htt);
 	if (status) {
 		ath10k_warn(ar, "failed to setup rx ring: %d\n",
 			    status);
 		return status;
 	}
 
-	status = htt->tx_ops->htt_h2t_aggr_cfg_msg(htt,
+	status = ath10k_htt_h2t_aggr_cfg_msg(htt,
 					     htt->max_num_ampdu,
 					     htt->max_num_amsdu);
 	if (status) {

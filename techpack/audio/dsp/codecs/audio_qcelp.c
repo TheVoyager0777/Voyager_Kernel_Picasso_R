@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* qcelp(v13k) audio output device
  *
  * Copyright (C) 2008 Google, Inc.

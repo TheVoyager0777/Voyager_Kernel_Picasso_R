@@ -1,13 +1,6 @@
-/* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/mutex.h>
@@ -824,8 +817,6 @@ unlock_mutex:
  */
 static int ipa_ut_framework_disable(void)
 {
-	int ret = 0;
-
 	IPA_UT_DBG("Entry\n");
 
 	mutex_lock(&ipa_ut_ctx->lock);
@@ -841,7 +832,7 @@ static int ipa_ut_framework_disable(void)
 
 unlock_mutex:
 	mutex_unlock(&ipa_ut_ctx->lock);
-	return ret;
+	return 0;
 }
 
 /**
@@ -861,12 +852,12 @@ static ssize_t ipa_ut_dbgfs_enable_write(struct file *file,
 
 	IPA_UT_DBG("Entry\n");
 
-	if (sizeof(lcl_buf) < count + 1) {
+	if (count >= sizeof(lcl_buf)) {
 		IPA_UT_ERR("No enough space\n");
 		return -E2BIG;
 	}
 
-	if (copy_from_user(lcl_buf, buf, min(sizeof(lcl_buf), count))) {
+	if (copy_from_user(lcl_buf, buf, count)) {
 		IPA_UT_ERR("fail to copy buf from user space\n");
 		return -EFAULT;
 	}

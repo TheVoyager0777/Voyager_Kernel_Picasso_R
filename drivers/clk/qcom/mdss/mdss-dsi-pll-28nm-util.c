@@ -1,4 +1,5 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2018, 2021, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -108,7 +109,7 @@ int byteclk_mux_read_sel(void *context, unsigned int reg,
 	}
 
 	*val = (MDSS_PLL_REG_R(rsc->pll_base, reg) & BIT(1));
-	pr_debug("byteclk mux mode = %s", *val ? "indirect" : "direct");
+	pr_debug("byteclk mux mode = %s\n", *val ? "indirect" : "direct");
 
 	(void)mdss_pll_resource_enable(rsc, false);
 	return rc;
@@ -440,7 +441,7 @@ static unsigned long vco_get_rate(struct dsi_pll_vco_clk *vco)
 
 		vco_rate = (ref_clk * (sdm_dc_off + 1)) +
 			mult_frac(ref_clk, sdm_freq_seed, BIT(16));
-		pr_debug("vco rate = %lld", vco_rate);
+		pr_debug("vco rate = %lld\n", vco_rate);
 	}
 
 	pr_debug("returning vco rate = %lu\n", (unsigned long)vco_rate);

@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "%s: " fmt, __func__
@@ -466,16 +458,11 @@ static u64 cpr_read_efuse_row(struct cpr_regulator *cpr_vreg, u32 row_num,
 	desc.arginfo = SCM_ARGS(2);
 	efuse_bits = 0;
 
-	if (!is_scm_armv8()) {
-		rc = scm_call(SCM_SVC_FUSE, SCM_FUSE_READ,
-			&req, sizeof(req), &rsp, sizeof(rsp));
-	} else {
-		rc = scm_call2(SCM_SIP_FNID(SCM_SVC_FUSE, SCM_FUSE_READ),
-			&desc);
-		rsp.row_data[0] = desc.ret[0];
-		rsp.row_data[1] = desc.ret[1];
-		rsp.status = desc.ret[2];
-	}
+	rc = scm_call2(SCM_SIP_FNID(SCM_SVC_FUSE, SCM_FUSE_READ),
+		&desc);
+	rsp.row_data[0] = desc.ret[0];
+	rsp.row_data[1] = desc.ret[1];
+	rsp.status = desc.ret[2];
 
 	if (rc) {
 		cpr_err(cpr_vreg, "read row %d failed, err code = %d",
@@ -3392,7 +3379,7 @@ static int cpr_minimum_quot_difference_adjustment(struct platform_device *pdev,
 					+ adjust_quot;
 			cpr_info(cpr_vreg, "Corner[%d]: revised adjusted quotient = %d\n",
 					i, cpr_vreg->cpr_fuse_target_quot[i]);
-		};
+		}
 	}
 
 error:
@@ -4904,7 +4891,7 @@ static int cpr_efuse_init(struct platform_device *pdev,
 	}
 
 	cpr_vreg->efuse_addr = res->start;
-	len = res->end - res->start + 1;
+	len = resource_size(res);
 
 	cpr_info(cpr_vreg, "efuse_addr = %pa (len=0x%x)\n", &res->start, len);
 
@@ -5204,7 +5191,7 @@ static int cpr_get_cpr_ceiling(void *data, u64 *val)
 
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(cpr_ceiling_fops, cpr_get_cpr_ceiling, NULL,
+DEFINE_DEBUGFS_ATTRIBUTE(cpr_ceiling_fops, cpr_get_cpr_ceiling, NULL,
 			"%llu\n");
 
 static int cpr_get_cpr_floor(void *data, u64 *val)
@@ -5215,7 +5202,7 @@ static int cpr_get_cpr_floor(void *data, u64 *val)
 
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(cpr_floor_fops, cpr_get_cpr_floor, NULL,
+DEFINE_DEBUGFS_ATTRIBUTE(cpr_floor_fops, cpr_get_cpr_floor, NULL,
 			"%llu\n");
 
 static int cpr_get_cpr_max_ceiling(void *data, u64 *val)
@@ -5226,15 +5213,8 @@ static int cpr_get_cpr_max_ceiling(void *data, u64 *val)
 
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(cpr_max_ceiling_fops, cpr_get_cpr_max_ceiling, NULL,
+DEFINE_DEBUGFS_ATTRIBUTE(cpr_max_ceiling_fops, cpr_get_cpr_max_ceiling, NULL,
 			"%llu\n");
-
-static int cpr_debug_info_open(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-
-	return 0;
-}
 
 static ssize_t cpr_debug_info_read(struct file *file, char __user *buff,
 				size_t count, loff_t *ppos)
@@ -5254,65 +5234,65 @@ static ssize_t cpr_debug_info_read(struct file *file, char __user *buff,
 
 	fuse_corner = cpr_vreg->corner_map[cpr_vreg->corner];
 
-	len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+	len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 		"corner = %d, current_volt = %d uV\n",
 		cpr_vreg->corner, cpr_vreg->last_volt[cpr_vreg->corner]);
 	ret += len;
 
-	len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+	len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 			"fuse_corner = %d, current_volt = %d uV\n",
 			fuse_corner, cpr_vreg->last_volt[cpr_vreg->corner]);
 	ret += len;
 
 	ro_sel = cpr_vreg->cpr_fuse_ro_sel[fuse_corner];
 	gcnt = cpr_read(cpr_vreg, REG_RBCPR_GCNT_TARGET(ro_sel));
-	len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+	len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 			"rbcpr_gcnt_target (%u) = 0x%02X\n", ro_sel, gcnt);
 	ret += len;
 
 	ctl = cpr_read(cpr_vreg, REG_RBCPR_CTL);
-	len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+	len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 			"rbcpr_ctl = 0x%02X\n", ctl);
 	ret += len;
 
 	irq_status = cpr_read(cpr_vreg, REG_RBIF_IRQ_STATUS);
-	len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+	len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 			"rbcpr_irq_status = 0x%02X\n", irq_status);
 	ret += len;
 
 	reg = cpr_read(cpr_vreg, REG_RBCPR_RESULT_0);
-	len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+	len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 			"rbcpr_result_0 = 0x%02X\n", reg);
 	ret += len;
 
 	step_dn = reg & 0x01;
 	step_up = (reg >> RBCPR_RESULT0_STEP_UP_SHIFT) & 0x01;
-	len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+	len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 			"  [step_dn = %u", step_dn);
 	ret += len;
 
-	len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+	len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 			", step_up = %u", step_up);
 	ret += len;
 
 	error_steps = (reg >> RBCPR_RESULT0_ERROR_STEPS_SHIFT)
 				& RBCPR_RESULT0_ERROR_STEPS_MASK;
-	len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+	len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 			", error_steps = %u", error_steps);
 	ret += len;
 
 	error = (reg >> RBCPR_RESULT0_ERROR_SHIFT) & RBCPR_RESULT0_ERROR_MASK;
-	len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+	len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 			", error = %u", error);
 	ret += len;
 
 	error_lt0 = (reg >> RBCPR_RESULT0_ERROR_LT0_SHIFT) & 0x01;
-	len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+	len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 			", error_lt_0 = %u", error_lt0);
 	ret += len;
 
 	busy = (reg >> RBCPR_RESULT0_BUSY_SHIFT) & 0x01;
-	len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+	len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 			", busy = %u]\n", busy);
 	ret += len;
 	mutex_unlock(&cpr_vreg->cpr_mutex);
@@ -5323,16 +5303,9 @@ static ssize_t cpr_debug_info_read(struct file *file, char __user *buff,
 }
 
 static const struct file_operations cpr_debug_info_fops = {
-	.open = cpr_debug_info_open,
+	.open = simple_open,
 	.read = cpr_debug_info_read,
 };
-
-static int cpr_aging_debug_info_open(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-
-	return 0;
-}
 
 static ssize_t cpr_aging_debug_info_read(struct file *file, char __user *buff,
 				size_t count, loff_t *ppos)
@@ -5349,26 +5322,26 @@ static ssize_t cpr_aging_debug_info_read(struct file *file, char __user *buff,
 
 	mutex_lock(&cpr_vreg->cpr_mutex);
 
-	len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+	len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 			"aging_adj_volt = [");
 	ret += len;
 
 	for (i = CPR_FUSE_CORNER_MIN; i <= cpr_vreg->num_fuse_corners; i++) {
-		len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+		len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 				" %d", aging_info->voltage_adjust[i]);
 		ret += len;
 	}
 
-	len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+	len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 			" ]uV\n");
 	ret += len;
 
-	len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+	len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 			"aging_measurement_done = %s\n",
 			aging_info->cpr_aging_done ? "true" : "false");
 	ret += len;
 
-	len = snprintf(debugfs_buf + ret, PAGE_SIZE - ret,
+	len = scnprintf(debugfs_buf + ret, PAGE_SIZE - ret,
 			"aging_measurement_error = %s\n",
 			aging_info->cpr_aging_error ? "true" : "false");
 	ret += len;
@@ -5381,7 +5354,7 @@ static ssize_t cpr_aging_debug_info_read(struct file *file, char __user *buff,
 }
 
 static const struct file_operations cpr_aging_debug_info_fops = {
-	.open = cpr_aging_debug_info_open,
+	.open = simple_open,
 	.read = cpr_aging_debug_info_read,
 };
 
@@ -5744,7 +5717,6 @@ static struct platform_driver cpr_regulator_driver = {
 	.driver		= {
 		.name	= CPR_REGULATOR_DRIVER_NAME,
 		.of_match_table = cpr_regulator_match_table,
-		.owner = THIS_MODULE,
 	},
 	.probe		= cpr_regulator_probe,
 	.remove		= cpr_regulator_remove,

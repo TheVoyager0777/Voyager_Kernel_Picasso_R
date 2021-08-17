@@ -1,14 +1,5 @@
-/* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved. */
 
 #ifndef _CNSS_DEBUG_H
 #define _CNSS_DEBUG_H
@@ -19,10 +10,16 @@
 #define CNSS_IPC_LOG_PAGES		32
 
 extern void *cnss_ipc_log_context;
+extern void *cnss_ipc_log_long_context;
 
 #define cnss_ipc_log_string(_x...) do {					\
 		if (cnss_ipc_log_context)				\
 			ipc_log_string(cnss_ipc_log_context, _x);	\
+	} while (0)
+
+#define cnss_ipc_log_long_string(_x...) do {				\
+		if (cnss_ipc_log_long_context)				\
+			ipc_log_string(cnss_ipc_log_long_context, _x);	\
 	} while (0)
 
 #define cnss_pr_err(_fmt, ...) do {					\
@@ -43,6 +40,12 @@ extern void *cnss_ipc_log_context;
 #define cnss_pr_dbg(_fmt, ...) do {					\
 		printk("%scnss: " _fmt, KERN_DEBUG, ##__VA_ARGS__);	\
 		cnss_ipc_log_string("%scnss: " _fmt, "", ##__VA_ARGS__);\
+	} while (0)
+
+#define cnss_pr_vdbg(_fmt, ...) do {					\
+		printk("%scnss: " _fmt, KERN_DEBUG, ##__VA_ARGS__);	\
+		cnss_ipc_log_long_string("%scnss: " _fmt, "",		\
+					 ##__VA_ARGS__);		\
 	} while (0)
 
 #ifdef CONFIG_CNSS2_DEBUG

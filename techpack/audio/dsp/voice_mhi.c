@@ -1,14 +1,8 @@
-/*  Copyright (c) 2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2019, The Linux Foundation. All rights reserved.
  */
+
 #include <linux/dma-mapping.h>
 #include <linux/platform_device.h>
 #include <linux/of.h>
@@ -166,7 +160,6 @@ static int32_t voice_mhi_apr_callback(struct apr_client_data *data, void *priv)
 		data->payload_size, data->opcode);
 
 	switch (data->opcode) {
-
 	case APR_BASIC_RSP_RESULT:
 		if (data->payload_size < 2 * sizeof(uint32_t)) {
 			pr_err("%s: APR_BASIC_RSP_RESULT payload less than expected\n",
@@ -188,7 +181,6 @@ static int32_t voice_mhi_apr_callback(struct apr_client_data *data, void *priv)
 			break;
 		}
 		break;
-
 	case APR_RSP_ACCEPTED:
 		if (data->payload_size < sizeof(uint32_t)) {
 			pr_err("%s: APR_RSP_ACCEPTED payload less than expected\n",
@@ -200,9 +192,8 @@ static int32_t voice_mhi_apr_callback(struct apr_client_data *data, void *priv)
 			pr_debug("%s: APR_RSP_ACCEPTED for 0x%x:\n",
 				 __func__, ptr1[0]);
 		break;
-
 	case RESET_EVENTS:
-		//Should we handle here or audio notifier down?
+		/* Should we handle here or audio notifier down? */
 		if (voice_mhi_lcl.apr_mvm_handle) {
 			apr_reset(voice_mhi_lcl.apr_mvm_handle);
 			voice_mhi_lcl.apr_mvm_handle = NULL;
@@ -210,7 +201,6 @@ static int32_t voice_mhi_apr_callback(struct apr_client_data *data, void *priv)
 					VOICE_MHI_ADSP_UP);
 		}
 		break;
-
 	default:
 		pr_err("%s: Invalid opcode %d\n", __func__,
 				data->opcode);
@@ -329,7 +319,7 @@ static int voice_mhi_set_mailbox_memory_config(void)
 
 	ret = apr_send_pkt(apr_mvm, (uint32_t *) &mb_memory_config);
 	if (ret < 0) {
-		pr_err("%s: Set mailbox memory config failed ret=%d\n",
+		pr_err("%s: Set mailbox memory config failed ret = %d\n",
 				__func__, ret);
 		goto unlock;
 	}
@@ -437,7 +427,7 @@ static int voice_mhi_pcie_up_callback(struct mhi_device *voice_mhi_dev,
 static void voice_mhi_pcie_down_callback(struct mhi_device *voice_mhi_dev)
 {
 	dma_addr_t iova;
-	struct device *md;
+	struct device *md = NULL;
 
 	mutex_lock(&voice_mhi_lcl.mutex);
 
@@ -578,13 +568,16 @@ done:
 err_free:
 	dma_free_attrs(&pdev->dev, mem_size, ptr, phys_addr,
 						   DMA_ATTR_NO_KERNEL_MAPPING);
-	return 0;
+	return ret;
 
 }
 
 static int voice_mhi_remove(struct platform_device *pdev)
 {
+	if (voice_mhi_lcl.apr_mvm_handle)
+			apr_reset(voice_mhi_lcl.apr_mvm_handle);
 	mhi_driver_unregister(&voice_mhi_driver);
+	memset(&voice_mhi_lcl, 0, sizeof(voice_mhi_lcl));
 	return 0;
 }
 static const struct of_device_id voice_mhi_of_match[]  = {
@@ -598,6 +591,7 @@ static struct platform_driver voice_mhi_platform_driver = {
 		.name = "voice_mhi_audio",
 		.owner = THIS_MODULE,
 		.of_match_table = voice_mhi_of_match,
+		.suppress_bind_attrs = true,
 	}
 };
 
@@ -608,7 +602,7 @@ int __init voice_mhi_init(void)
 	memset(&voice_mhi_lcl, 0, sizeof(voice_mhi_lcl));
 	mutex_init(&voice_mhi_lcl.mutex);
 
-	//Add remaining init here
+	/* Add remaining init here */
 	voice_mhi_lcl.pcie_enabled = false;
 	voice_mhi_lcl.voice_mhi_state = VOICE_MHI_INIT;
 	voice_mhi_lcl.vote_count = 0;

@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2013, 2017-2018 The Linux Foundation. All rights reserved.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2013, 2017-2019, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -23,8 +15,8 @@
 
 #include "clk-branch.h"
 #include "clk-regmap.h"
-#include "common.h"
 #include "clk-debug.h"
+#include "common.h"
 
 static bool clk_branch_in_hwcg_mode(const struct clk_branch *br)
 {
@@ -95,17 +87,15 @@ static int clk_branch_wait(const struct clk_branch *br, bool enabling,
 	} else if (br->halt_check == BRANCH_HALT_ENABLE ||
 		   br->halt_check == BRANCH_HALT ||
 		   (enabling && voted)) {
-		int count = 500;
+		int count = 200;
 
 		while (count-- > 0) {
 			if (check_halt(br, enabling))
 				return 0;
 			udelay(1);
 		}
-
 		WARN_CLK(hw->core, name, 1, "status stuck at 'o%s'",
-						enabling ? "ff" : "n");
-
+			  enabling ? "ff" : "n");
 		return -EBUSY;
 	}
 	return 0;
@@ -362,11 +352,12 @@ static void clk_branch2_list_registers(struct seq_file *f, struct clk_hw *hw)
 	for (i = 0; i < size; i++) {
 		regmap_read(br->clkr.regmap, br->halt_reg + data[i].offset,
 					&val);
-		clock_debug_output(f, false, "%20s: 0x%.8x\n",
-							data[i].name, val);
+		clock_debug_output(f, false,
+				"%20s: 0x%.8x\n", data[i].name, val);
 	}
 
-	if (br->halt_check & BRANCH_HALT_VOTED) {
+	if ((br->halt_check & BRANCH_HALT_VOTED) &&
+			!(br->halt_check & BRANCH_VOTED)) {
 		if (rclk->enable_reg) {
 			size = ARRAY_SIZE(data1);
 			for (i = 0; i < size; i++) {
@@ -460,64 +451,6 @@ const struct clk_ops clk_branch2_hw_ctl_ops = {
 	.bus_vote = clk_debug_bus_vote,
 };
 EXPORT_SYMBOL_GPL(clk_branch2_hw_ctl_ops);
-
-static int clk_gate_toggle(struct clk_hw *hw, bool en)
-{
-	struct clk_gate2 *gt = to_clk_gate2(hw);
-	int ret = 0;
-
-	if (en) {
-		ret = clk_enable_regmap(hw);
-		if (ret)
-			return ret;
-	} else {
-		clk_disable_regmap(hw);
-	}
-
-	if (gt->udelay)
-		udelay(gt->udelay);
-
-	return ret;
-}
-
-static int clk_gate2_enable(struct clk_hw *hw)
-{
-	return clk_gate_toggle(hw, true);
-}
-
-static void clk_gate2_disable(struct clk_hw *hw)
-{
-	clk_gate_toggle(hw, false);
-}
-
-static void clk_gate2_list_registers(struct seq_file *f, struct clk_hw *hw)
-{
-	struct clk_gate2 *gt = to_clk_gate2(hw);
-	int size, i, val;
-
-	static struct clk_register_data data[] = {
-		{"EN_REG", 0x0},
-	};
-
-	size = ARRAY_SIZE(data);
-
-	for (i = 0; i < size; i++) {
-		regmap_read(gt->clkr.regmap, gt->clkr.enable_reg +
-					data[i].offset, &val);
-		clock_debug_output(f, false, "%20s: 0x%.8x\n",
-						data[i].name, val);
-	}
-}
-
-const struct clk_ops clk_gate2_ops = {
-	.enable = clk_gate2_enable,
-	.disable = clk_gate2_disable,
-	.is_enabled = clk_is_enabled_regmap,
-	.list_registers = clk_gate2_list_registers,
-	.debug_init = clk_debug_measure_add,
-	.bus_vote = clk_debug_bus_vote,
-};
-EXPORT_SYMBOL_GPL(clk_gate2_ops);
 
 const struct clk_ops clk_branch_simple_ops = {
 	.enable = clk_enable_regmap,

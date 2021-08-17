@@ -1,15 +1,5 @@
-/*
- * Copyright (c) 2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2020-2021, The Linux Foundation. All rights reserved. */
 
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
@@ -37,7 +27,6 @@ static const struct clk_ops clk_ops_vco_12nm = {
 	.round_rate = pll_vco_round_rate_12nm,
 	.prepare = pll_vco_prepare_12nm,
 	.unprepare = pll_vco_unprepare_12nm,
-	.enable = pll_vco_enable_12nm,
 };
 
 static struct regmap_bus pclk_div_regmap_bus = {
@@ -217,8 +206,8 @@ static struct clk_fixed_factor dsi0pll_post_div32 = {
 
 static struct clk_regmap_mux dsi0pll_post_div_mux = {
 	.reg = DSIPHY_PLL_VCO_CTRL,
-	.shift = 0,
-	.width = 3,
+	.shift = 4,
+	.width = 2,
 	.clkr = {
 		.hw.init = &(struct clk_init_data){
 			.name = "dsi0pll_post_div_mux",
@@ -309,8 +298,8 @@ static struct clk_fixed_factor dsi1pll_post_div32 = {
 
 static struct clk_regmap_mux dsi1pll_post_div_mux = {
 	.reg = DSIPHY_PLL_VCO_CTRL,
-	.shift = 0,
-	.width = 3,
+	.shift = 4,
+	.width = 2,
 	.clkr = {
 		.hw.init = &(struct clk_init_data){
 			.name = "dsi1pll_post_div_mux",
@@ -401,7 +390,7 @@ static struct clk_fixed_factor dsi0pll_gp_div32 = {
 
 static struct clk_regmap_mux dsi0pll_gp_div_mux = {
 	.reg = DSIPHY_PLL_CTRL,
-	.shift = 0,
+	.shift = 5,
 	.width = 3,
 	.clkr = {
 		.hw.init = &(struct clk_init_data){
@@ -493,7 +482,7 @@ static struct clk_fixed_factor dsi1pll_gp_div32 = {
 
 static struct clk_regmap_mux dsi1pll_gp_div_mux = {
 	.reg = DSIPHY_PLL_CTRL,
-	.shift = 0,
+	.shift = 5,
 	.width = 3,
 	.clkr = {
 		.hw.init = &(struct clk_init_data){
@@ -517,12 +506,11 @@ static struct clk_regmap_div dsi0pll_pclk_src = {
 	.width = 6,
 	.clkr = {
 		.hw.init = &(struct clk_init_data){
-			.name = "dsi0_phy_pll_out_dsiclk",
+			.name = "dsi0pll_pclk_src",
 			.parent_names = (const char *[]){
 					"dsi0pll_gp_div_mux"},
 			.num_parents = 1,
-			.flags = (CLK_GET_RATE_NOCACHE | CLK_SET_RATE_PARENT |
-					CLK_SET_RATE_NO_REPARENT),
+			.flags = (CLK_GET_RATE_NOCACHE | CLK_SET_RATE_PARENT),
 			.ops = &clk_regmap_div_ops,
 		},
 	},
@@ -534,12 +522,11 @@ static struct clk_regmap_div dsi1pll_pclk_src = {
 	.width = 6,
 	.clkr = {
 		.hw.init = &(struct clk_init_data){
-			.name = "dsi1_phy_pll_out_dsiclk",
+			.name = "dsi1pll_pclk_src",
 			.parent_names = (const char *[]){
 					"dsi1pll_gp_div_mux"},
 			.num_parents = 1,
-			.flags = (CLK_GET_RATE_NOCACHE | CLK_SET_RATE_PARENT |
-					CLK_SET_RATE_NO_REPARENT),
+			.flags = (CLK_GET_RATE_NOCACHE | CLK_SET_RATE_PARENT),
 			.ops = &clk_regmap_div_ops,
 		},
 	},
@@ -549,11 +536,10 @@ static struct clk_fixed_factor dsi0pll_byte_clk_src = {
 	.div = 4,
 	.mult = 1,
 	.hw.init = &(struct clk_init_data){
-		.name = "dsi0_phy_pll_out_byteclk",
+		.name = "dsi0pll_byte_clk_src",
 		.parent_names = (const char *[]){"dsi0pll_post_div_mux"},
 		.num_parents = 1,
-		.flags = (CLK_GET_RATE_NOCACHE | CLK_SET_RATE_PARENT |
-				CLK_SET_RATE_NO_REPARENT),
+		.flags = (CLK_GET_RATE_NOCACHE | CLK_SET_RATE_PARENT),
 		.ops = &clk_fixed_factor_ops,
 	},
 };
@@ -562,14 +548,14 @@ static struct clk_fixed_factor dsi1pll_byte_clk_src = {
 	.div = 4,
 	.mult = 1,
 	.hw.init = &(struct clk_init_data){
-		.name = "dsi1_phy_pll_out_byteclk",
+		.name = "dsi1pll_byte_clk_src",
 		.parent_names = (const char *[]){"dsi1pll_post_div_mux"},
 		.num_parents = 1,
-		.flags = (CLK_GET_RATE_NOCACHE | CLK_SET_RATE_PARENT |
-				CLK_SET_RATE_NO_REPARENT),
+		.flags = (CLK_GET_RATE_NOCACHE | CLK_SET_RATE_PARENT),
 		.ops = &clk_fixed_factor_ops,
 	},
 };
+
 
 static struct clk_hw *mdss_dsi_pllcc_12nm[] = {
 	[VCO_CLK_0] = &dsi0pll_vco_clk.hw,
@@ -612,14 +598,14 @@ int dsi_pll_clock_register_12nm(struct platform_device *pdev,
 				  struct mdss_pll_resources *pll_res)
 {
 	int rc = 0, ndx, i;
-	struct clk *clk = NULL;
+	struct clk *clk;
 	struct clk_onecell_data *clk_data;
 	int num_clks = ARRAY_SIZE(mdss_dsi_pllcc_12nm);
 	struct regmap *rmap;
 	struct dsi_pll_db *pdb;
 
 	if (!pdev || !pdev->dev.of_node ||
-		!pll_res || !pll_res->pll_base) {
+		!pll_res || !pll_res->pll_base || !pll_res->phy_base) {
 		pr_err("Invalid params\n");
 		return -EINVAL;
 	}
@@ -646,14 +632,12 @@ int dsi_pll_clock_register_12nm(struct platform_device *pdev,
 
 	clk_data->clks = devm_kzalloc(&pdev->dev, (num_clks *
 				sizeof(struct clk *)), GFP_KERNEL);
-	if (!clk_data->clks) {
-		devm_kfree(&pdev->dev, clk_data);
+	if (!clk_data->clks)
 		return -ENOMEM;
-	}
 	clk_data->clk_num = num_clks;
 
 	/* Establish client data */
-	if (pll_res->index == 0) {
+	if (ndx == 0) {
 		rmap = devm_regmap_init(&pdev->dev, &post_div_mux_regmap_bus,
 				pll_res, &dsi_pll_12nm_config);
 		dsi0pll_post_div_mux.clkr.regmap = rmap;
@@ -716,13 +700,10 @@ int dsi_pll_clock_register_12nm(struct platform_device *pdev,
 				of_clk_src_onecell_get, clk_data);
 	}
 	if (!rc) {
-		pr_info("Registered DSI PLL ndx=%d, clocks successfully",
-				pll_res->index);
+		pr_info("Registered DSI PLL ndx=%d,clocks successfully\n", ndx);
 
 		return rc;
 	}
 clk_register_fail:
-	devm_kfree(&pdev->dev, clk_data->clks);
-	devm_kfree(&pdev->dev, clk_data);
 	return rc;
 }

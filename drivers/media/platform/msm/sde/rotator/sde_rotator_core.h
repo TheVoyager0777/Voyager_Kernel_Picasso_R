@@ -1,14 +1,6 @@
-/* Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef SDE_ROTATOR_CORE_H
@@ -318,6 +310,28 @@ struct sde_rot_entry {
 	struct sde_rot_perf *perf;
 	bool work_assigned; /* Used when cleaning up work_distribution */
 	struct sde_rot_file_private *private;
+};
+
+/*
+ * struct sde_rot_trace_entry - structure used to pass info to trace
+ */
+struct sde_rot_trace_entry {
+	u32 wb_idx;
+	u32 flags;
+	u32 input_format;
+	u32 input_width;
+	u32 input_height;
+	u32 src_x;
+	u32 src_y;
+	u32 src_w;
+	u32 src_h;
+	u32 output_format;
+	u32 output_width;
+	u32 output_height;
+	u32 dst_x;
+	u32 dst_y;
+	u32 dst_w;
+	u32 dst_h;
 };
 
 /*

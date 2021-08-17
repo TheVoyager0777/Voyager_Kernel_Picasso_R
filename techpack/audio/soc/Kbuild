@@ -9,55 +9,77 @@ endif
 ifeq ($(KERNEL_BUILD), 1)
 	# These are configurable via Kconfig for kernel-based builds
 	# Need to explicitly configure for Android-based builds
-	AUDIO_BLD_DIR := $(shell pwd)/kernel/msm-4.14
+	AUDIO_BLD_DIR := $(shell pwd)/kernel/msm-4.19
 	AUDIO_ROOT := $(AUDIO_BLD_DIR)/techpack/audio
 endif
 
 ifeq ($(KERNEL_BUILD), 0)
-	ifeq ($(CONFIG_ARCH_SDM845), y)
-		include $(AUDIO_ROOT)/config/sdm845auto.conf
-		export
-		INCS    +=  -include $(AUDIO_ROOT)/config/sdm845autoconf.h
-	endif
-	ifeq ($(CONFIG_ARCH_SDM660), y)
-		include $(AUDIO_ROOT)/config/sdm660auto.conf
-		export
-		INCS    +=  -include $(AUDIO_ROOT)/config/sdm660autoconf.h
-	endif
-	ifeq ($(CONFIG_ARCH_SDM670), y)
-		include $(AUDIO_ROOT)/config/sdm670auto.conf
-		export
-		INCS    +=  -include $(AUDIO_ROOT)/config/sdm670autoconf.h
-	endif
-	ifeq ($(CONFIG_ARCH_SDM450), y)
-		include $(AUDIO_ROOT)/config/sdm670auto.conf
-		export
-		INCS    +=  -include $(AUDIO_ROOT)/config/sdm670autoconf.h
-	endif
 	ifeq ($(CONFIG_ARCH_SM8150), y)
-		include $(AUDIO_ROOT)/config/sm8150auto.conf
+		ifdef CONFIG_SND_SOC_SA8155
+			include $(AUDIO_ROOT)/config/sa8155auto.conf
+			export
+			INCS    +=  -include $(AUDIO_ROOT)/config/sa8155autoconf.h
+		else
+			include $(AUDIO_ROOT)/config/sm8150auto.conf
+			export
+			INCS    +=  -include $(AUDIO_ROOT)/config/sm8150autoconf.h
+		endif
+	endif
+	ifeq ($(CONFIG_ARCH_KONA), y)
+		include $(AUDIO_ROOT)/config/konaauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/konaautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_LITO), y)
+		include $(AUDIO_ROOT)/config/litoauto.conf
 		export
-		INCS    +=  -include $(AUDIO_ROOT)/config/sm8150autoconf.h
+		INCS    +=  -include $(AUDIO_ROOT)/config/litoautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_BENGAL), y)
+		include $(AUDIO_ROOT)/config/bengalauto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/bengalautoconf.h
 	endif
 	ifeq ($(CONFIG_ARCH_SM6150), y)
+		ifdef CONFIG_SND_SOC_SA6155
+			include $(AUDIO_ROOT)/config/sa6155auto.conf
+			export
+			INCS    +=  -include $(AUDIO_ROOT)/config/sa6155autoconf.h
+		else
+			include $(AUDIO_ROOT)/config/sm6150auto.conf
+			export
+			INCS    +=  -include $(AUDIO_ROOT)/config/sm6150autoconf.h
+		endif
+	endif
+	ifeq ($(CONFIG_ARCH_TRINKET), y)
 		include $(AUDIO_ROOT)/config/sm6150auto.conf
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/sm6150autoconf.h
 	endif
-	ifeq ($(CONFIG_ARCH_TRINKET), y)
-		include $(AUDIO_ROOT)/config/trinketauto.conf
-		export
-		INCS    +=  -include $(AUDIO_ROOT)/config/trinketautoconf.h
-	endif
 	ifeq ($(CONFIG_ARCH_SDMSHRIKE), y)
-		include $(AUDIO_ROOT)/config/sm8150auto.conf
-		export
-		INCS    +=  -include $(AUDIO_ROOT)/config/sm8150autoconf.h
+		ifdef CONFIG_SND_SOC_SA8155
+			include $(AUDIO_ROOT)/config/sa8155auto.conf
+			export
+			INCS    +=  -include $(AUDIO_ROOT)/config/sa8155autoconf.h
+		else
+			include $(AUDIO_ROOT)/config/sm8150auto.conf
+			export
+			INCS    +=  -include $(AUDIO_ROOT)/config/sm8150autoconf.h
+		endif
 	endif
 	ifeq ($(CONFIG_ARCH_QCS405), y)
 		include $(AUDIO_ROOT)/config/qcs405auto.conf
 		export
 		INCS    +=  -include $(AUDIO_ROOT)/config/qcs405autoconf.h
+	endif
+	ifeq ($(CONFIG_QTI_GVM), y)
+		include $(AUDIO_ROOT)/config/gvmauto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/gvmautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_SDM660), y)
+		include $(AUDIO_ROOT)/config/sdm660auto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/sdm660autoconf.h
 	endif
 endif
 
@@ -97,6 +119,11 @@ ifdef CONFIG_PINCTRL_LPI
 	PINCTRL_LPI_OBJS += pinctrl-lpi.o
 endif
 
+# for pinctrl LPI legacy driver
+ifdef CONFIG_PINCTRL_LPI_LEGACY
+	PINCTRL_LPI_OBJS += pinctrl-lpi-legacy.o
+endif
+
 # for soundwire driver
 ifdef CONFIG_SOUNDWIRE_WCD_CTRL
 	SWR_CTRL_OBJS += swr-wcd-ctrl.o
@@ -114,6 +141,11 @@ endif
 
 ifdef CONFIG_SND_EVENT
 	SND_EVENT_OBJS += snd_event.o
+endif
+
+ifdef CONFIG_WCD_SPI_AC
+	WCD_SPI_ACC_CTL_OBJS += wcd-spi-ac.o
+	WCD_SPI_ACC_CTL_OBJS += wcd_spi_ctl_v01.o
 endif
 
 LINUX_INC +=	-Iinclude/linux
@@ -164,6 +196,9 @@ pinctrl_wcd_dlkm-y := $(PINCTRL_WCD_OBJS)
 obj-$(CONFIG_PINCTRL_LPI) += pinctrl_lpi_dlkm.o
 pinctrl_lpi_dlkm-y := $(PINCTRL_LPI_OBJS)
 
+obj-$(CONFIG_PINCTRL_LPI_LEGACY) += pinctrl_lpi_dlkm.o
+pinctrl_lpi_dlkm-y := $(PINCTRL_LPI_OBJS)
+
 obj-$(CONFIG_SOUNDWIRE) += swr_dlkm.o
 swr_dlkm-y := $(SWR_OBJS)
 
@@ -173,3 +208,9 @@ snd_event_dlkm-y := $(SND_EVENT_OBJS)
 obj-$(CONFIG_SOUNDWIRE_WCD_CTRL) += swr_ctrl_dlkm.o
 obj-$(CONFIG_SOUNDWIRE_MSTR_CTRL) += swr_ctrl_dlkm.o
 swr_ctrl_dlkm-y := $(SWR_CTRL_OBJS)
+
+obj-$(CONFIG_WCD_SPI_AC) += wcd_spi_acc_ctl_dlkm.o
+wcd_spi_acc_ctl_dlkm-y := $(WCD_SPI_ACC_CTL_OBJS)
+
+# inject some build related information
+DEFINES += -DBUILD_TIMESTAMP=\"$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')\"

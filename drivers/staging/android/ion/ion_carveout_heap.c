@@ -1,17 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * drivers/staging/android/ion/ion_carveout_heap.c
  *
  * Copyright (C) 2011 Google, Inc.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
  */
 #include <linux/spinlock.h>
 #include <linux/dma-mapping.h>
@@ -127,9 +118,9 @@ static struct ion_heap_ops carveout_heap_ops = {
 	.unmap_kernel = ion_heap_unmap_kernel,
 };
 
-static struct ion_heap *__ion_carveout_heap_create(
-					struct ion_platform_heap *heap_data,
-					bool sync)
+static struct ion_heap *
+__ion_carveout_heap_create(struct ion_platform_heap *heap_data,
+			   bool sync)
 {
 	struct ion_carveout_heap *carveout_heap;
 	int ret;
@@ -186,8 +177,6 @@ struct ion_sc_entry {
 	struct list_head list;
 	struct ion_heap *heap;
 	u32 token;
-	u64 base;
-	u64 size;
 };
 
 struct ion_sc_heap {
@@ -244,39 +233,9 @@ static void ion_sc_heap_free(struct ion_buffer *buffer)
 	kfree(table);
 }
 
-static int ion_secure_carveout_pm_freeze(struct ion_heap *heap)
-{
-	long sz;
-
-	sz = atomic_long_read(&heap->total_allocated);
-	if (sz) {
-		pr_err("%s: %lx bytes won't be saved across hibernation. Aborting.",
-		       __func__, sz);
-		return -EINVAL;
-	}
-	return 0;
-}
-
-static int ion_secure_carveout_pm_restore(struct ion_heap *heap)
-{
-	struct ion_sc_heap *manager;
-	struct ion_sc_entry *child;
-
-	manager = container_of(heap, struct ion_sc_heap, heap);
-
-	list_for_each_entry(child, &manager->children, list)
-		ion_hyp_assign_from_flags(
-			child->base, child->size, child->token);
-	return 0;
-}
-
 static struct ion_heap_ops ion_sc_heap_ops = {
 	.allocate = ion_sc_heap_allocate,
 	.free = ion_sc_heap_free,
-	.pm = {
-		.freeze = ion_secure_carveout_pm_freeze,
-		.restore = ion_secure_carveout_pm_restore,
-	}
 };
 
 static int ion_sc_get_dt_token(struct ion_sc_entry *entry,
@@ -330,8 +289,6 @@ static int ion_sc_add_child(struct ion_sc_heap *manager,
 	heap_data.priv = dev;
 	heap_data.base = base;
 	heap_data.size = size;
-	entry->base = base;
-	entry->size = size;
 
 	/* This will zero memory initially */
 	entry->heap = __ion_carveout_heap_create(&heap_data, false);
@@ -367,8 +324,8 @@ static void ion_secure_carveout_heap_destroy(struct ion_heap *heap)
 	kfree(manager);
 }
 
-struct ion_heap *ion_secure_carveout_heap_create(
-			struct ion_platform_heap *heap_data)
+struct ion_heap *
+ion_secure_carveout_heap_create(struct ion_platform_heap *heap_data)
 {
 	struct device *dev = heap_data->priv;
 	int ret;

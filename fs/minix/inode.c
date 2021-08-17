@@ -125,9 +125,9 @@ static int minix_remount (struct super_block * sb, int * flags, char * data)
 
 	sync_filesystem(sb);
 	ms = sbi->s_ms;
-	if ((bool)(*flags & MS_RDONLY) == sb_rdonly(sb))
+	if ((bool)(*flags & SB_RDONLY) == sb_rdonly(sb))
 		return 0;
-	if (*flags & MS_RDONLY) {
+	if (*flags & SB_RDONLY) {
 		if (ms->s_state & MINIX_VALID_FS ||
 		    !(sbi->s_mount_state & MINIX_VALID_FS))
 			return 0;
@@ -153,23 +153,6 @@ static int minix_remount (struct super_block * sb, int * flags, char * data)
 				"running fsck is recommended\n");
 	}
 	return 0;
-}
-
-static bool minix_check_superblock(struct minix_sb_info *sbi)
-{
-	if (sbi->s_imap_blocks == 0 || sbi->s_zmap_blocks == 0)
-		return false;
-
-	/*
-	 * s_max_size must not exceed the block mapping limitation.  This check
-	 * is only needed for V1 filesystems, since V2/V3 support an extra level
-	 * of indirect blocks which places the limit well above U32_MAX.
-	 */
-	if (sbi->s_version == MINIX_V1 &&
-	    sbi->s_max_size > (7 + 512 + 512*512) * BLOCK_SIZE)
-		return false;
-
-	return true;
 }
 
 static int minix_fill_super(struct super_block *s, void *data, int silent)
@@ -250,12 +233,11 @@ static int minix_fill_super(struct super_block *s, void *data, int silent)
 	} else
 		goto out_no_fs;
 
-	if (!minix_check_superblock(sbi))
-		goto out_illegal_sb;
-
 	/*
 	 * Allocate the buffer map to keep the superblock small.
 	 */
+	if (sbi->s_imap_blocks == 0 || sbi->s_zmap_blocks == 0)
+		goto out_illegal_sb;
 	i = (sbi->s_imap_blocks + sbi->s_zmap_blocks) * sizeof(bh);
 	map = kzalloc(i, GFP_KERNEL);
 	if (!map)
@@ -489,13 +471,6 @@ static struct inode *V1_minix_iget(struct inode *inode)
 		iget_failed(inode);
 		return ERR_PTR(-EIO);
 	}
-	if (raw_inode->i_nlinks == 0) {
-		printk("MINIX-fs: deleted inode referenced: %lu\n",
-		       inode->i_ino);
-		brelse(bh);
-		iget_failed(inode);
-		return ERR_PTR(-ESTALE);
-	}
 	inode->i_mode = raw_inode->i_mode;
 	i_uid_write(inode, raw_inode->i_uid);
 	i_gid_write(inode, raw_inode->i_gid);
@@ -528,13 +503,6 @@ static struct inode *V2_minix_iget(struct inode *inode)
 	if (!raw_inode) {
 		iget_failed(inode);
 		return ERR_PTR(-EIO);
-	}
-	if (raw_inode->i_nlinks == 0) {
-		printk("MINIX-fs: deleted inode referenced: %lu\n",
-		       inode->i_ino);
-		brelse(bh);
-		iget_failed(inode);
-		return ERR_PTR(-ESTALE);
 	}
 	inode->i_mode = raw_inode->i_mode;
 	i_uid_write(inode, raw_inode->i_uid);

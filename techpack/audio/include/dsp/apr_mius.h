@@ -8,10 +8,11 @@
 #define MIUS_SET_PARAMS_SIZE			114
 #define MIUS_ULTRASOUND_MODULE_RX			0x1000A210
 #define MIUS_ULTRASOUND_MODULE_TX			0x1000A211
+
 #define MI_ULTRASOUND_OPCODE				0x0FF10208
 
 /* This need to be updated for all platforms */
-#define MIUS_PORT_ID					AFE_PORT_ID_TX_CODEC_DMA_TX_4
+#define MIUS_PORT_ID				AFE_PORT_ID_TX_CODEC_DMA_TX_4
 
 /** Sequence of MI Ultrasound module parameters */
 struct afe_mi_ultrasound_set_params_t {

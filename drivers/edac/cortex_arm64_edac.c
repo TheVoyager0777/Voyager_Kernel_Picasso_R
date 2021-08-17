@@ -1,4 +1,5 @@
-/* Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -613,7 +614,7 @@ static void arm64_erp_local_handler(void *info)
 	default:
 		edac_printk(KERN_CRIT, EDAC_CPU, "Unknown CPU Part Number in MIDR: %#04x (%#08x)\n",
 						 partnum, cpuid);
-	};
+	}
 
 	/* Acklowledge internal error in L2ECTLR */
 	spin_lock_irqsave(&l2ectlr_lock, flags2);
@@ -780,7 +781,7 @@ static void check_sbe_event(struct erp_drvdata *drv)
 	case ARM_CPU_PART_KRYO2XX_GOLD:
 		kryo2xx_gold_parse_l2merrsr(&errdata);
 	break;
-	};
+	}
 	spin_unlock_irqrestore(&local_handler_lock, flags);
 }
 
@@ -988,7 +989,6 @@ static struct platform_driver arm64_cpu_erp_driver = {
 	.probe = arm64_cpu_erp_probe,
 	.driver = {
 		.name = "arm64_cpu_cache_erp",
-		.owner = THIS_MODULE,
 		.of_match_table = of_match_ptr(arm64_cpu_erp_match_table),
 	},
 };

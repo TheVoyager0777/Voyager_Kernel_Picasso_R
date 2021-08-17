@@ -1,13 +1,6 @@
-/* Copyright (c) 2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/kernel.h>
@@ -51,7 +44,7 @@ int wcd_request_irq(struct wcd_irq_info *irq_info, int irq, const char *name,
 		return irq;
 
 	return request_threaded_irq(irq, NULL, handler,
-				    IRQF_ONESHOT | IRQF_TRIGGER_RISING,
+				    IRQF_ONESHOT | IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
 				    name, data);
 }
 EXPORT_SYMBOL(wcd_request_irq);
@@ -120,12 +113,14 @@ static struct irq_chip wcd_irq_chip = {
 };
 
 static struct lock_class_key wcd_irq_lock_class;
+static struct lock_class_key wcd_irq_lock_requested_class;
 
 static int wcd_irq_chip_map(struct irq_domain *irqd, unsigned int virq,
 			irq_hw_number_t hw)
 {
 	irq_set_chip_and_handler(virq, &wcd_irq_chip, handle_simple_irq);
-	irq_set_lockdep_class(virq, &wcd_irq_lock_class);
+	irq_set_lockdep_class(virq, &wcd_irq_lock_class,
+			&wcd_irq_lock_requested_class);
 	irq_set_nested_thread(virq, 1);
 	irq_set_noprobe(virq);
 
@@ -184,7 +179,8 @@ int wcd_irq_exit(struct wcd_irq_info *irq_info, struct irq_domain *virq)
 		return -EINVAL;
 	}
 
-	regmap_del_irq_chip(irq_find_mapping(virq, 0), irq_info->irq_chip);
+	devm_regmap_del_irq_chip(irq_info->dev, irq_find_mapping(virq, 0),
+				 irq_info->irq_chip);
 
 	return 0;
 }

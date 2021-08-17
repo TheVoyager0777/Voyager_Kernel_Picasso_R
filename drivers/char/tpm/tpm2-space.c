@@ -39,26 +39,22 @@ static void tpm2_flush_sessions(struct tpm_chip *chip, struct tpm_space *space)
 	for (i = 0; i < ARRAY_SIZE(space->session_tbl); i++) {
 		if (space->session_tbl[i])
 			tpm2_flush_context_cmd(chip, space->session_tbl[i],
-					       TPM_TRANSMIT_UNLOCKED |
-					       TPM_TRANSMIT_RAW);
+					       TPM_TRANSMIT_NESTED);
 	}
 }
 
-int tpm2_init_space(struct tpm_space *space, unsigned int buf_size)
+int tpm2_init_space(struct tpm_space *space)
 {
-	space->context_buf = kzalloc(buf_size, GFP_KERNEL);
+	space->context_buf = kzalloc(PAGE_SIZE, GFP_KERNEL);
 	if (!space->context_buf)
 		return -ENOMEM;
 
-	space->session_buf = kzalloc(buf_size, GFP_KERNEL);
+	space->session_buf = kzalloc(PAGE_SIZE, GFP_KERNEL);
 	if (space->session_buf == NULL) {
 		kfree(space->context_buf);
-		/* Prevent caller getting a dangling pointer. */
-		space->context_buf = NULL;
 		return -ENOMEM;
 	}
 
-	space->buf_size = buf_size;
 	return 0;
 }
 
@@ -88,7 +84,7 @@ static int tpm2_load_context(struct tpm_chip *chip, u8 *buf,
 	tpm_buf_append(&tbuf, &buf[*offset], body_size);
 
 	rc = tpm_transmit_cmd(chip, NULL, tbuf.data, PAGE_SIZE, 4,
-			      TPM_TRANSMIT_UNLOCKED | TPM_TRANSMIT_RAW, NULL);
+			      TPM_TRANSMIT_NESTED, NULL);
 	if (rc < 0) {
 		dev_warn(&chip->dev, "%s: failed with a system error %d\n",
 			 __func__, rc);
@@ -137,7 +133,7 @@ static int tpm2_save_context(struct tpm_chip *chip, u32 handle, u8 *buf,
 	tpm_buf_append_u32(&tbuf, handle);
 
 	rc = tpm_transmit_cmd(chip, NULL, tbuf.data, PAGE_SIZE, 0,
-			      TPM_TRANSMIT_UNLOCKED | TPM_TRANSMIT_RAW, NULL);
+			      TPM_TRANSMIT_NESTED, NULL);
 	if (rc < 0) {
 		dev_warn(&chip->dev, "%s: failed with a system error %d\n",
 			 __func__, rc);
@@ -174,8 +170,7 @@ static void tpm2_flush_space(struct tpm_chip *chip)
 	for (i = 0; i < ARRAY_SIZE(space->context_tbl); i++)
 		if (space->context_tbl[i] && ~space->context_tbl[i])
 			tpm2_flush_context_cmd(chip, space->context_tbl[i],
-					       TPM_TRANSMIT_UNLOCKED |
-					       TPM_TRANSMIT_RAW);
+					       TPM_TRANSMIT_NESTED);
 
 	tpm2_flush_sessions(chip, space);
 }
@@ -248,7 +243,7 @@ static int tpm2_map_command(struct tpm_chip *chip, u32 cc, u8 *cmd)
 	struct tpm_space *space = &chip->work_space;
 	unsigned int nr_handles;
 	u32 attrs;
-	u32 *handle;
+	__be32 *handle;
 	int i;
 
 	i = tpm2_find_cc(chip, cc);
@@ -258,7 +253,7 @@ static int tpm2_map_command(struct tpm_chip *chip, u32 cc, u8 *cmd)
 	attrs = chip->cc_attrs_tbl[i];
 	nr_handles = (attrs >> TPM2_CC_ATTR_CHANDLES) & GENMASK(2, 0);
 
-	handle = (u32 *)&cmd[TPM_HEADER_SIZE];
+	handle = (__be32 *)&cmd[TPM_HEADER_SIZE];
 	for (i = 0; i < nr_handles; i++, handle++) {
 		if ((be32_to_cpu(*handle) & 0xFF000000) == TPM2_HT_TRANSIENT) {
 			if (!tpm2_map_to_phandle(space, handle))
@@ -281,10 +276,8 @@ int tpm2_prepare_space(struct tpm_chip *chip, struct tpm_space *space, u32 cc,
 	       sizeof(space->context_tbl));
 	memcpy(&chip->work_space.session_tbl, &space->session_tbl,
 	       sizeof(space->session_tbl));
-	memcpy(chip->work_space.context_buf, space->context_buf,
-	       space->buf_size);
-	memcpy(chip->work_space.session_buf, space->session_buf,
-	       space->buf_size);
+	memcpy(chip->work_space.context_buf, space->context_buf, PAGE_SIZE);
+	memcpy(chip->work_space.session_buf, space->session_buf, PAGE_SIZE);
 
 	rc = tpm2_load_space(chip);
 	if (rc) {
@@ -384,8 +377,7 @@ static int tpm2_map_response_header(struct tpm_chip *chip, u32 cc, u8 *rsp,
 
 	return 0;
 out_no_slots:
-	tpm2_flush_context_cmd(chip, phandle,
-			       TPM_TRANSMIT_UNLOCKED | TPM_TRANSMIT_RAW);
+	tpm2_flush_context_cmd(chip, phandle, TPM_TRANSMIT_NESTED);
 	dev_warn(&chip->dev, "%s: out of slots for 0x%08X\n", __func__,
 		 phandle);
 	return -ENOMEM;
@@ -464,7 +456,7 @@ static int tpm2_save_space(struct tpm_chip *chip)
 			continue;
 
 		rc = tpm2_save_context(chip, space->context_tbl[i],
-				       space->context_buf, space->buf_size,
+				       space->context_buf, PAGE_SIZE,
 				       &offset);
 		if (rc == -ENOENT) {
 			space->context_tbl[i] = 0;
@@ -473,8 +465,7 @@ static int tpm2_save_space(struct tpm_chip *chip)
 			return rc;
 
 		tpm2_flush_context_cmd(chip, space->context_tbl[i],
-				       TPM_TRANSMIT_UNLOCKED |
-				       TPM_TRANSMIT_RAW);
+				       TPM_TRANSMIT_NESTED);
 		space->context_tbl[i] = ~0;
 	}
 
@@ -483,8 +474,9 @@ static int tpm2_save_space(struct tpm_chip *chip)
 			continue;
 
 		rc = tpm2_save_context(chip, space->session_tbl[i],
-				       space->session_buf, space->buf_size,
+				       space->session_buf, PAGE_SIZE,
 				       &offset);
+
 		if (rc == -ENOENT) {
 			/* handle error saving session, just forget it */
 			space->session_tbl[i] = 0;
@@ -530,10 +522,8 @@ int tpm2_commit_space(struct tpm_chip *chip, struct tpm_space *space,
 	       sizeof(space->context_tbl));
 	memcpy(&space->session_tbl, &chip->work_space.session_tbl,
 	       sizeof(space->session_tbl));
-	memcpy(space->context_buf, chip->work_space.context_buf,
-	       space->buf_size);
-	memcpy(space->session_buf, chip->work_space.session_buf,
-	       space->buf_size);
+	memcpy(space->context_buf, chip->work_space.context_buf, PAGE_SIZE);
+	memcpy(space->session_buf, chip->work_space.session_buf, PAGE_SIZE);
 
 	return 0;
 }

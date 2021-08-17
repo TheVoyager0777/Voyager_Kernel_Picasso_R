@@ -1,3 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2017, 2019, The Linux Foundation. All rights reserved.
+ */
 #ifndef _UAPI_COMPAT_QSEECOM_H_
 #define _UAPI_COMPAT_QSEECOM_H_
 
@@ -108,10 +112,6 @@ struct compat_qseecom_set_sb_mem_param_req {
  */
 struct compat_qseecom_qseos_version_req {
 	compat_uint_t qseos_version; /* in */
-};
-
-struct compat_qseecom_ice_data_t {
-	compat_int_t flag; /* in */
 };
 
 /*
@@ -332,9 +332,6 @@ extern long compat_qseecom_ioctl(struct file *file,
 #define COMPAT_QSEECOM_IOCTL_QUERY_CE_PIPE_INFO \
 	_IOWR(QSEECOM_IOC_MAGIC, 42, \
 				struct compat_qseecom_ce_info_req)
-
-#define COMPAT_QSEECOM_IOCTL_SET_ICE_INFO \
-	 _IOWR(QSEECOM_IOC_MAGIC, 43, struct qseecom_ice_data_t)
 
 #endif
 #endif /* _UAPI_COMPAT_QSEECOM_H_ */

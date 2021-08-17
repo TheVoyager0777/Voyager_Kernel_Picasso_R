@@ -28,8 +28,6 @@
 #include <linux/vmalloc.h>
 #include <linux/sizes.h>
 #include <linux/cma.h>
-#include <linux/msm_dma_iommu_mapping.h>
-#include <linux/dma-mapping-fast.h>
 #include <linux/of.h>
 #include <linux/of_address.h>
 
@@ -120,7 +118,7 @@ static void *
 __dma_alloc_remap(struct page *page, size_t size, gfp_t gfp, pgprot_t prot,
 		const void *caller);
 
-static void __dma_free_remap(void *cpu_addr, size_t size, bool warn);
+static void __dma_free_remap(void *cpu_addr, size_t size, bool no_warn);
 
 static inline pgprot_t __get_dma_pgprot(unsigned long attrs, pgprot_t prot,
 					bool coherent);
@@ -132,6 +130,10 @@ static void *arm_dma_remap(struct device *dev, void *cpu_addr,
 static void arm_dma_unremap(struct device *dev, void *remapped_addr,
 				size_t size);
 
+static void arm_iommu_sync_sg_for_device(struct device *dev,
+		struct scatterlist *sg, int nents, enum dma_data_direction dir);
+static void arm_iommu_sync_sg_for_cpu(struct device *dev,
+		struct scatterlist *sg, int nents, enum dma_data_direction dir);
 
 static pgprot_t __get_dma_pgprot(unsigned long attrs, pgprot_t prot,
 				 bool coherent)
@@ -143,7 +145,6 @@ static pgprot_t __get_dma_pgprot(unsigned long attrs, pgprot_t prot,
 	return prot;
 }
 
-#ifdef CONFIG_ARM_DMA_USE_IOMMU
 static bool is_dma_coherent(struct device *dev, unsigned long attrs,
 			    bool is_coherent)
 {
@@ -156,7 +157,6 @@ static bool is_dma_coherent(struct device *dev, unsigned long attrs,
 
 	return is_coherent;
 }
-#endif
 
 /**
  * arm_dma_map_page - map a portion of a page for streaming DMA
@@ -430,9 +430,9 @@ static void __dma_free_remap(void *cpu_addr, size_t size, bool no_warn)
 }
 
 #define DEFAULT_DMA_COHERENT_POOL_SIZE	SZ_256K
-static struct gen_pool *atomic_pool;
+static struct gen_pool *atomic_pool __ro_after_init;
 
-static size_t atomic_pool_size = DEFAULT_DMA_COHERENT_POOL_SIZE;
+static size_t atomic_pool_size __initdata = DEFAULT_DMA_COHERENT_POOL_SIZE;
 
 static int __init early_coherent_pool(char *p)
 {
@@ -440,21 +440,6 @@ static int __init early_coherent_pool(char *p)
 	return 0;
 }
 early_param("coherent_pool", early_coherent_pool);
-
-void __init init_dma_coherent_pool_size(unsigned long size)
-{
-	/*
-	 * Catch any attempt to set the pool size too late.
-	 */
-	BUG_ON(atomic_pool);
-
-	/*
-	 * Set architecture specific coherent pool size only if
-	 * it has not been changed by kernel command line parameter.
-	 */
-	if (atomic_pool_size == DEFAULT_DMA_COHERENT_POOL_SIZE)
-		atomic_pool_size = size;
-}
 
 /*
  * Initialise the coherent pool for atomic allocations.
@@ -491,7 +476,7 @@ static int __init atomic_pool_init(void)
 
 		gen_pool_set_algo(atomic_pool,
 				gen_pool_first_fit_order_align,
-				(void *)PAGE_SHIFT);
+				NULL);
 		pr_info("DMA: preallocated %zu KiB pool for atomic coherent allocations\n",
 		       atomic_pool_size / 1024);
 		return 0;
@@ -614,8 +599,7 @@ static void __dma_remap(struct page *page, size_t size, pgprot_t prot,
 	flush_tlb_kernel_range(start, end);
 }
 
-
-#define NO_KERNEL_MAPPING_DUMMY	0x2222
+#define NO_KERNEL_MAPPING_DUMMY		0x2222
 static void *__alloc_remap_buffer(struct device *dev, size_t size, gfp_t gfp,
 				 pgprot_t prot, struct page **ret_page,
 				 const void *caller, bool want_vaddr)
@@ -689,7 +673,7 @@ static void *__alloc_from_contiguous(struct device *dev, size_t size,
 	struct page *page;
 	void *ptr = NULL;
 
-	page = dma_alloc_from_contiguous(dev, count, order, gfp);
+	page = dma_alloc_from_contiguous(dev, count, order, gfp & __GFP_NOWARN);
 	if (!page)
 		return NULL;
 
@@ -708,8 +692,8 @@ static void *__alloc_from_contiguous(struct device *dev, size_t size,
 			kmap_flush_unused();
 			kmap_atomic_flush_unused();
 		} else {
-			ptr = __dma_alloc_remap(page, size, GFP_KERNEL, prot,
-						caller);
+			ptr = __dma_alloc_remap(page, size, GFP_KERNEL,
+					prot, caller);
 			if (!ptr) {
 				dma_release_from_contiguous(dev, page, count);
 				return NULL;
@@ -898,7 +882,7 @@ static void *__dma_alloc(struct device *dev, size_t size, dma_addr_t *handle,
 		kfree(buf);
 	}
 
-	return  addr;
+	return addr;
 }
 
 /*
@@ -925,8 +909,8 @@ static int __arm_dma_mmap(struct device *dev, struct vm_area_struct *vma,
 		 void *cpu_addr, dma_addr_t dma_addr, size_t size,
 		 unsigned long attrs)
 {
-	int ret;
-	unsigned long nr_vma_pages = (vma->vm_end - vma->vm_start) >> PAGE_SHIFT;
+	int ret = -ENXIO;
+	unsigned long nr_vma_pages = vma_pages(vma);
 	unsigned long nr_pages = PAGE_ALIGN(size) >> PAGE_SHIFT;
 	unsigned long pfn = dma_to_pfn(dev, dma_addr);
 	unsigned long off = vma->vm_pgoff;
@@ -970,7 +954,7 @@ static void arm_dma_unremap(struct device *dev, void *remapped_addr,
 
 	area = find_vm_area(remapped_addr);
 	if (!area || (area->flags & flags) != flags) {
-		WARN(1, "trying to free invalid coherent area: %p\n",
+		WARN(1, "trying to free invalid coherent area: %pK\n",
 			remapped_addr);
 		return;
 	}
@@ -1283,14 +1267,10 @@ int arm_dma_supported(struct device *dev, u64 mask)
 	return __dma_supported(dev, mask, false);
 }
 
-#define PREALLOC_DMA_DEBUG_ENTRIES	4096
-
-static int __init dma_debug_do_init(void)
+static const struct dma_map_ops *arm_get_dma_map_ops(bool coherent)
 {
-	dma_debug_init(PREALLOC_DMA_DEBUG_ENTRIES);
-	return 0;
+	return coherent ? &arm_coherent_dma_ops : &arm_dma_ops;
 }
-core_initcall(dma_debug_do_init);
 
 #ifdef CONFIG_ARM_DMA_USE_IOMMU
 
@@ -1394,8 +1374,7 @@ static inline void __free_iova(struct dma_iommu_mapping *mapping,
 
 	start = (addr - bitmap_base) >>	PAGE_SHIFT;
 
-	if ((addr + size - 1 > addr) &&
-		(addr + size - 1 > bitmap_base + mapping_size - 1)) {
+	if (addr + size > bitmap_base + mapping_size) {
 		/*
 		 * The address range to be freed reaches into the iova
 		 * range of the next bitmap. This should not happen as
@@ -1436,7 +1415,8 @@ static struct page **__iommu_alloc_buffer(struct device *dev, size_t size,
 		unsigned long order = get_order(size);
 		struct page *page;
 
-		page = dma_alloc_from_contiguous(dev, count, order, gfp);
+		page = dma_alloc_from_contiguous(dev, count, order,
+						 gfp & __GFP_NOWARN);
 		if (!page)
 			goto error;
 
@@ -1798,7 +1778,8 @@ void __arm_iommu_free_attrs(struct device *dev, size_t size, void *cpu_addr,
 void arm_iommu_free_attrs(struct device *dev, size_t size,
 		    void *cpu_addr, dma_addr_t handle, unsigned long attrs)
 {
-	__arm_iommu_free_attrs(dev, size, cpu_addr, handle, attrs, NORMAL);
+	__arm_iommu_free_attrs(dev, size, cpu_addr, handle, attrs,
+				is_dma_coherent(dev, attrs, NORMAL));
 }
 
 void arm_coherent_iommu_free_attrs(struct device *dev, size_t size,
@@ -1999,6 +1980,9 @@ int arm_iommu_map_sg(struct device *dev, struct scatterlist *sg,
 		current_offset += s->length;
 	}
 
+	if ((attrs & DMA_ATTR_SKIP_CPU_SYNC) == 0)
+		arm_iommu_sync_sg_for_device(dev, sg, nents, dir);
+
 	return nents;
 }
 
@@ -2054,6 +2038,9 @@ void arm_iommu_unmap_sg(struct device *dev, struct scatterlist *sg, int nents,
 	unsigned int total_length = sg_dma_len(sg);
 	dma_addr_t iova = sg_dma_address(sg);
 
+	if ((attrs & DMA_ATTR_SKIP_CPU_SYNC) == 0)
+		arm_iommu_sync_sg_for_cpu(dev, sg, nents, dir);
+
 	total_length = PAGE_ALIGN((iova & ~PAGE_MASK) + total_length);
 	iova &= PAGE_MASK;
 
@@ -2068,8 +2055,8 @@ void arm_iommu_unmap_sg(struct device *dev, struct scatterlist *sg, int nents,
  * @nents: number of buffers to map (returned from dma_map_sg)
  * @dir: DMA transfer direction (same as was passed to dma_map_sg)
  */
-void arm_iommu_sync_sg_for_cpu(struct device *dev, struct scatterlist *sg,
-			int nents, enum dma_data_direction dir)
+static void arm_iommu_sync_sg_for_cpu(struct device *dev,
+		struct scatterlist *sg, int nents, enum dma_data_direction dir)
 {
 	struct scatterlist *s;
 	int i;
@@ -2092,8 +2079,8 @@ void arm_iommu_sync_sg_for_cpu(struct device *dev, struct scatterlist *sg,
  * @nents: number of buffers to map (returned from dma_map_sg)
  * @dir: DMA transfer direction (same as was passed to dma_map_sg)
  */
-void arm_iommu_sync_sg_for_device(struct device *dev, struct scatterlist *sg,
-			int nents, enum dma_data_direction dir)
+static void arm_iommu_sync_sg_for_device(struct device *dev,
+		struct scatterlist *sg, int nents, enum dma_data_direction dir)
 {
 	struct scatterlist *s;
 	int i;
@@ -2346,6 +2333,7 @@ const struct dma_map_ops iommu_coherent_ops = {
 };
 
 /**
+ * DEPRECATED
  * arm_iommu_create_mapping
  * @bus: pointer to the bus holding the client device (for IOMMU calls)
  * @base: start address of the valid IO address space
@@ -2355,86 +2343,73 @@ const struct dma_map_ops iommu_coherent_ops = {
  * IO address ranges, which is required to perform memory allocation and
  * mapping with IOMMU aware functions.
  *
- * Clients may use iommu_domain_set_attr() to set additional flags prior
- * to calling arm_iommu_attach_device() to complete initialization.
+ * The client device need to be attached to the mapping with
+ * arm_iommu_attach_device function.
  */
 struct dma_iommu_mapping *
 arm_iommu_create_mapping(struct bus_type *bus, dma_addr_t base, u64 size)
 {
 	unsigned int bits = size >> PAGE_SHIFT;
+	unsigned int bitmap_size = BITS_TO_LONGS(bits) * sizeof(long);
 	struct dma_iommu_mapping *mapping;
-
-	if (!bits)
-		return ERR_PTR(-EINVAL);
-
-	mapping = kzalloc(sizeof(struct dma_iommu_mapping), GFP_KERNEL);
-	if (!mapping)
-		return ERR_PTR(-ENOMEM);
-
-	mapping->base = base;
-	mapping->bits = bits;
-
-	mapping->domain = iommu_domain_alloc(bus);
-	if (!mapping->domain)
-		goto err_domain_alloc;
-
-	mapping->init = false;
-	return mapping;
-
-err_domain_alloc:
-	kfree(mapping);
-	return ERR_PTR(-ENOMEM);
-}
-EXPORT_SYMBOL(arm_iommu_create_mapping);
-
-static int
-iommu_init_mapping(struct device *dev, struct dma_iommu_mapping *mapping)
-{
-	unsigned int bitmap_size = BITS_TO_LONGS(mapping->bits) * sizeof(long);
 	int extensions = 1;
 	int err = -ENOMEM;
 
+	/* currently only 32-bit DMA address space is supported */
+	if (size > DMA_BIT_MASK(32) + 1)
+		return ERR_PTR(-ERANGE);
+
 	if (!bitmap_size)
-		return -EINVAL;
+		return ERR_PTR(-EINVAL);
 
 	if (bitmap_size > PAGE_SIZE) {
 		extensions = bitmap_size / PAGE_SIZE;
 		bitmap_size = PAGE_SIZE;
 	}
 
-	mapping->bitmap_size = bitmap_size;
-	mapping->bitmaps = kzalloc(extensions * sizeof(unsigned long *),
-			GFP_KERNEL);
+	mapping = kzalloc(sizeof(struct dma_iommu_mapping), GFP_KERNEL);
+	if (!mapping)
+		goto err;
 
+	mapping->bitmap_size = bitmap_size;
+	mapping->bitmaps = kcalloc(extensions, sizeof(unsigned long *),
+				   GFP_KERNEL);
 	if (!mapping->bitmaps)
-		return -ENOMEM;
+		goto err2;
 
 	mapping->bitmaps[0] = kzalloc(bitmap_size, GFP_KERNEL);
 	if (!mapping->bitmaps[0])
-		goto err;
+		goto err3;
 
 	mapping->nr_bitmaps = 1;
 	mapping->extensions = extensions;
+	mapping->base = base;
+	mapping->bits = BITS_PER_BYTE * bitmap_size;
 
 	spin_lock_init(&mapping->lock);
-	mapping->ops = &iommu_ops;
-	return 0;
-err:
-	kfree(mapping->bitmaps);
-	return err;
-}
 
-static void iommu_release_mapping(struct kref *kref)
+	mapping->domain = iommu_domain_alloc(bus);
+	if (!mapping->domain)
+		goto err4;
+
+	kref_init(&mapping->kref);
+	return mapping;
+err4:
+	kfree(mapping->bitmaps[0]);
+err3:
+	kfree(mapping->bitmaps);
+err2:
+	kfree(mapping);
+err:
+	return ERR_PTR(err);
+}
+EXPORT_SYMBOL_GPL(arm_iommu_create_mapping);
+
+static void release_iommu_mapping(struct kref *kref)
 {
 	int i;
-	int is_fast = 0;
-
 	struct dma_iommu_mapping *mapping =
 		container_of(kref, struct dma_iommu_mapping, kref);
-
-	iommu_domain_get_attr(mapping->domain, DOMAIN_ATTR_FAST, &is_fast);
-	if (is_fast)
-		fast_smmu_release_mapping(kref);
 
 	iommu_domain_free(mapping->domain);
 	for (i = 0; i < mapping->nr_bitmaps; i++)
@@ -2461,103 +2436,34 @@ static int extend_iommu_mapping(struct dma_iommu_mapping *mapping)
 	return 0;
 }
 
-/*
- * arm_iommu_release_mapping
- * @mapping: allocted via arm_iommu_create_mapping()
- *
- * Frees all resources associated with the iommu mapping.
- * The device associated with this mapping must be in the 'detached' state
+/**
+ * DEPRECATED
  */
 void arm_iommu_release_mapping(struct dma_iommu_mapping *mapping)
 {
-	int is_fast = 0;
-	void (*release)(struct kref *kref);
-
-	if (!mapping)
-		return;
-
-	if (!mapping->init) {
-		iommu_domain_free(mapping->domain);
-		kfree(mapping);
-		return;
-	}
-
-	iommu_domain_get_attr(mapping->domain, DOMAIN_ATTR_FAST, &is_fast);
-
-	if (is_fast)
-		release = fast_smmu_release_mapping;
-	else
-		release = iommu_release_mapping;
-
-	kref_put(&mapping->kref, release);
+	if (mapping)
+		kref_put(&mapping->kref, release_iommu_mapping);
 }
 EXPORT_SYMBOL_GPL(arm_iommu_release_mapping);
-
-static int arm_iommu_init_mapping(struct device *dev,
-			    struct dma_iommu_mapping *mapping)
-{
-	int err = -EINVAL;
-	u64 size = mapping->bits << PAGE_SHIFT;
-	int is_fast = 0;
-
-	if (mapping->init)
-		return 0;
-
-	/* currently only 32-bit DMA address space is supported */
-	if (size > DMA_BIT_MASK(32) + 1) {
-		dev_err(dev, "dma mask %llx too small\n", dma_get_mask(dev));
-		return -ERANGE;
-	}
-
-	iommu_domain_get_attr(mapping->domain, DOMAIN_ATTR_FAST, &is_fast);
-
-	if (is_fast)
-		err = fast_smmu_init_mapping(dev, mapping);
-	else
-		err = iommu_init_mapping(dev, mapping);
-	if (!err) {
-		kref_init(&mapping->kref);
-		mapping->init = true;
-	}
-	return err;
-}
-
 
 static int __arm_iommu_attach_device(struct device *dev,
 				     struct dma_iommu_mapping *mapping)
 {
 	int err;
 
-	err = iommu_attach_group(mapping->domain, dev->iommu_group);
+	err = iommu_attach_device(mapping->domain, dev);
 	if (err)
 		return err;
 
+	kref_get(&mapping->kref);
 	to_dma_iommu_mapping(dev) = mapping;
 
 	pr_debug("Attached IOMMU controller to %s device.\n", dev_name(dev));
 	return 0;
 }
 
-static void __arm_iommu_detach_device(struct device *dev)
-{
-	struct dma_iommu_mapping *mapping;
-
-	mapping = to_dma_iommu_mapping(dev);
-	if (!mapping) {
-		dev_warn(dev, "Not attached\n");
-		return;
-	}
-
-	if (msm_dma_unmap_all_for_dev(dev))
-		dev_warn(dev, "IOMMU detach with outstanding mappings\n");
-
-	iommu_detach_device(mapping->domain, dev);
-	to_dma_iommu_mapping(dev) = NULL;
-
-	pr_debug("Detached IOMMU controller from %s device.\n", dev_name(dev));
-}
-
 /**
+ * DEPRECATED
  * arm_iommu_attach_device
  * @dev: valid struct device pointer
  * @mapping: io address space mapping structure (returned from
@@ -2574,38 +2480,18 @@ int arm_iommu_attach_device(struct device *dev,
 			    struct dma_iommu_mapping *mapping)
 {
 	int err;
-	int s1_bypass = 0;
-	struct iommu_group *group = dev->iommu_group;
-
-	if (!group) {
-		dev_err(dev, "No iommu associated with device\n");
-		return -EINVAL;
-	}
-
-	if (iommu_get_domain_for_dev(dev)) {
-		dev_err(dev, "Device already attached to other iommu_domain\n");
-		return -EINVAL;
-	}
 
 	err = __arm_iommu_attach_device(dev, mapping);
 	if (err)
 		return err;
 
-	err = arm_iommu_init_mapping(dev, mapping);
-	if (err) {
-		__arm_iommu_detach_device(dev);
-		return err;
-	}
-
-	iommu_domain_get_attr(mapping->domain, DOMAIN_ATTR_S1_BYPASS,
-			&s1_bypass);
-	if (!s1_bypass)
-		set_dma_ops(dev, mapping->ops);
+	set_dma_ops(dev, &iommu_ops);
 	return 0;
 }
 EXPORT_SYMBOL_GPL(arm_iommu_attach_device);
 
 /**
+ * DEPRECATED
  * arm_iommu_detach_device
  * @dev: valid struct device pointer
  *
@@ -2615,7 +2501,6 @@ EXPORT_SYMBOL_GPL(arm_iommu_attach_device);
 void arm_iommu_detach_device(struct device *dev)
 {
 	struct dma_iommu_mapping *mapping;
-	int s1_bypass = 0;
 
 	mapping = to_dma_iommu_mapping(dev);
 	if (!mapping) {
@@ -2623,70 +2508,229 @@ void arm_iommu_detach_device(struct device *dev)
 		return;
 	}
 
-	__arm_iommu_detach_device(dev);
-
-	iommu_domain_get_attr(mapping->domain, DOMAIN_ATTR_S1_BYPASS,
-			      &s1_bypass);
-	if (!s1_bypass)
-		set_dma_ops(dev, NULL);
+	iommu_detach_device(mapping->domain, dev);
+	kref_put(&mapping->kref, release_iommu_mapping);
+	to_dma_iommu_mapping(dev) = NULL;
+	set_dma_ops(dev, arm_get_dma_map_ops(dev->archdata.dma_coherent));
 
 	pr_debug("Detached IOMMU controller from %s device.\n", dev_name(dev));
 }
 EXPORT_SYMBOL_GPL(arm_iommu_detach_device);
 
+/*
 static const struct dma_map_ops *arm_get_iommu_dma_map_ops(bool coherent)
 {
 	return coherent ? &iommu_coherent_ops : &iommu_ops;
+}
+*/
+
+static void arm_iommu_dma_release_mapping(struct kref *kref)
+{
+	int i;
+	int is_fast = 0;
+	int s1_bypass = 0;
+	struct dma_iommu_mapping *mapping =
+			container_of(kref, struct dma_iommu_mapping, kref);
+
+	if (!mapping)
+		return;
+
+	iommu_domain_get_attr(mapping->domain, DOMAIN_ATTR_FAST, &is_fast);
+	iommu_domain_get_attr(mapping->domain, DOMAIN_ATTR_S1_BYPASS,
+			&s1_bypass);
+
+	if (is_fast) {
+		fast_smmu_put_dma_cookie(mapping->domain);
+	} else if (!s1_bypass) {
+		for (i = 0; i < mapping->nr_bitmaps; i++)
+			kfree(mapping->bitmaps[i]);
+		kfree(mapping->bitmaps);
+	}
+
+	kfree(mapping);
+}
+
+static int
+iommu_init_mapping(struct device *dev, struct dma_iommu_mapping *mapping)
+{
+	unsigned int bitmap_size = BITS_TO_LONGS(mapping->bits) * sizeof(long);
+	int extensions = 1;
+	int err = -ENOMEM;
+
+	if (!bitmap_size)
+		return -EINVAL;
+
+	if (bitmap_size > PAGE_SIZE) {
+		extensions = bitmap_size / PAGE_SIZE;
+		bitmap_size = PAGE_SIZE;
+	}
+
+	mapping->bitmap_size = bitmap_size;
+	mapping->bitmaps = kcalloc(extensions, sizeof(unsigned long *),
+				   GFP_KERNEL);
+	if (!mapping->bitmaps)
+		goto err;
+
+	mapping->bitmaps[0] = kzalloc(bitmap_size, GFP_KERNEL);
+	if (!mapping->bitmaps[0])
+		goto err2;
+
+	mapping->nr_bitmaps = 1;
+	mapping->extensions = extensions;
+	mapping->bits = BITS_PER_BYTE * bitmap_size;
+	mapping->ops = &iommu_ops;
+
+	spin_lock_init(&mapping->lock);
+	return 0;
+err2:
+	kfree(mapping->bitmaps);
+err:
+	return err;
+}
+
+struct dma_iommu_mapping *
+arm_iommu_dma_init_mapping(struct device *dev, dma_addr_t base, u64 size,
+		struct iommu_domain *domain)
+{
+	unsigned int bits = size >> PAGE_SHIFT;
+	struct dma_iommu_mapping *mapping;
+	int err = 0;
+	int is_fast = 0;
+	int s1_bypass = 0;
+
+	if (!bits)
+		return ERR_PTR(-EINVAL);
+
+	/* currently only 32-bit DMA address space is supported */
+	if (size > DMA_BIT_MASK(32) + 1)
+		return ERR_PTR(-ERANGE);
+
+	mapping = kzalloc(sizeof(struct dma_iommu_mapping), GFP_KERNEL);
+	if (!mapping)
+		return ERR_PTR(-ENOMEM);
+
+	mapping->base = base;
+	mapping->bits = bits;
+	mapping->domain = domain;
+
+	iommu_domain_get_attr(domain, DOMAIN_ATTR_FAST, &is_fast);
+	iommu_domain_get_attr(domain, DOMAIN_ATTR_S1_BYPASS, &s1_bypass);
+
+	if (is_fast)
+		err = fast_smmu_init_mapping(dev, mapping);
+	else if (s1_bypass)
+		mapping->ops = arm_get_dma_map_ops(dev->archdata.dma_coherent);
+	else
+		err = iommu_init_mapping(dev, mapping);
+
+	if (err) {
+		kfree(mapping);
+		return ERR_PTR(err);
+	}
+
+	kref_init(&mapping->kref);
+	return mapping;
+}
+
+/*
+ * Checks for "qcom,iommu-dma-addr-pool" property.
+ * If not present, leaves dma_addr and dma_size unmodified.
+ */
+static void arm_iommu_get_dma_window(struct device *dev, u64 *dma_addr,
+					u64 *dma_size)
+{
+	struct device_node *np;
+	int naddr, nsize, len;
+	const __be32 *ranges;
+
+	if (!dev->of_node)
+		return;
+
+	np = of_parse_phandle(dev->of_node, "qcom,iommu-group", 0);
+	if (!np)
+		np = dev->of_node;
+
+	ranges = of_get_property(np, "qcom,iommu-dma-addr-pool", &len);
+	if (!ranges)
+		return;
+
+	len /= sizeof(u32);
+	naddr = of_n_addr_cells(np);
+	nsize = of_n_size_cells(np);
+	if (len < naddr + nsize) {
+		dev_err(dev, "Invalid length for qcom,iommu-dma-addr-pool, expected %d cells\n",
+			naddr + nsize);
+		return;
+	}
+	if (naddr == 0 || nsize == 0) {
+		dev_err(dev, "Invalid #address-cells %d or #size-cells %d\n",
+			naddr, nsize);
+		return;
+	}
+
+	*dma_addr = of_read_number(ranges, naddr);
+	*dma_size = of_read_number(ranges + naddr, nsize);
 }
 
 static bool arm_setup_iommu_dma_ops(struct device *dev, u64 dma_base, u64 size,
 				    const struct iommu_ops *iommu)
 {
-	struct dma_iommu_mapping *mapping;
+	struct iommu_group *group;
 	struct iommu_domain *domain;
+	struct dma_iommu_mapping *mapping;
 
 	if (!iommu)
 		return false;
 
-	/*
-	 * Adding this to not to attach to smmu device by default as any way
-	 * clients call the arm_iommu_create_mapping() in their use cases.
-	 */
-	domain = iommu_get_domain_for_dev(dev);
+	group = dev->iommu_group;
+	if (!group)
+		return false;
 
+	domain = iommu_get_domain_for_dev(dev);
 	if (!domain)
 		return false;
 
-	if (domain->type == IOMMU_DOMAIN_DMA) {
-		mapping = arm_iommu_create_mapping(dev->bus, dma_base, size);
-		if (IS_ERR(mapping)) {
-			pr_warn("Failed to create %llu-byte IOMMU mapping for device %s\n",
-				size, dev_name(dev));
-			return false;
-		}
+	arm_iommu_get_dma_window(dev, &dma_base, &size);
 
-		if (__arm_iommu_attach_device(dev, mapping)) {
-			pr_warn("Failed to attached device %s to IOMMU_mapping\n",
-				dev_name(dev));
-			arm_iommu_release_mapping(mapping);
-			return false;
-		}
+	/* Allow iommu-debug to call arch_setup_dma_ops to reconfigure itself */
+	if (domain->type != IOMMU_DOMAIN_DMA &&
+	    !of_device_is_compatible(dev->of_node, "iommu-debug-test")) {
+		dev_err(dev, "Invalid iommu domain type!\n");
+		return false;
 	}
+
+	mapping = arm_iommu_dma_init_mapping(dev, dma_base, size, domain);
+	if (IS_ERR(mapping)) {
+		pr_warn("Failed to initialize %llu-byte IOMMU mapping for device %s\n",
+				size, dev_name(dev));
+		return false;
+	}
+
+	to_dma_iommu_mapping(dev) = mapping;
 
 	return true;
 }
 
 static void arm_teardown_iommu_dma_ops(struct device *dev)
 {
-	struct dma_iommu_mapping *mapping = to_dma_iommu_mapping(dev);
+	struct dma_iommu_mapping *mapping;
+	int s1_bypass = 0;
 
+	mapping = to_dma_iommu_mapping(dev);
 	if (!mapping)
 		return;
 
-	arm_iommu_detach_device(dev);
-	arm_iommu_release_mapping(mapping);
-}
+	iommu_domain_get_attr(mapping->domain, DOMAIN_ATTR_S1_BYPASS,
+			&s1_bypass);
 
+	kref_put(&mapping->kref, arm_iommu_dma_release_mapping);
+	to_dma_iommu_mapping(dev) = NULL;
+
+	/* Let arch_setup_dma_ops() start again from scratch upon re-probe */
+	if (!s1_bypass)
+		set_dma_ops(dev, NULL);
+
+}
 #else
 
 static bool arm_setup_iommu_dma_ops(struct device *dev, u64 dma_base, u64 size,
@@ -2701,15 +2745,11 @@ static void arm_teardown_iommu_dma_ops(struct device *dev) { }
 
 #endif	/* CONFIG_ARM_DMA_USE_IOMMU */
 
-static const struct dma_map_ops *arm_get_dma_map_ops(bool coherent)
-{
-	return coherent ? &arm_coherent_dma_ops : &arm_dma_ops;
-}
-
 void arch_setup_dma_ops(struct device *dev, u64 dma_base, u64 size,
 			const struct iommu_ops *iommu, bool coherent)
 {
 	const struct dma_map_ops *dma_ops;
+	struct dma_iommu_mapping *mapping;
 
 	dev->archdata.dma_coherent = coherent;
 
@@ -2722,11 +2762,10 @@ void arch_setup_dma_ops(struct device *dev, u64 dma_base, u64 size,
 		return;
 
 	if (arm_setup_iommu_dma_ops(dev, dma_base, size, iommu)) {
-		dma_ops = arm_get_iommu_dma_map_ops(coherent);
-		dev->archdata.dma_ops_setup = true;
+		mapping = to_dma_iommu_mapping(dev);
+		dma_ops = mapping->ops;
 	} else {
 		dma_ops = arm_get_dma_map_ops(coherent);
-		dev->archdata.dma_ops_setup = false;
 	}
 
 	set_dma_ops(dev, dma_ops);
@@ -2737,8 +2776,9 @@ void arch_setup_dma_ops(struct device *dev, u64 dma_base, u64 size,
 		dev->dma_ops = xen_dma_ops;
 	}
 #endif
+	dev->archdata.dma_ops_setup = true;
 }
-EXPORT_SYMBOL(arch_setup_dma_ops);
+EXPORT_SYMBOL_GPL(arch_setup_dma_ops);
 
 void arch_teardown_dma_ops(struct device *dev)
 {

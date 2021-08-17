@@ -1,4 +1,5 @@
-/* Copyright (c) 2012-2016, 2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2016, 2018, 2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -232,7 +233,7 @@ static unsigned long msm_vpe_queue_buffer_info(struct vpe_device *vpe_dev,
 		vpe_dev->domain_num, 0, SZ_4K, 0,
 		&buff->map_info.phy_addr,
 		&buff->map_info.len, 0, 0)) {
-		pr_err("%s: cannot map address", __func__);
+		pr_err("%s: cannot map address\n", __func__);
 		goto err_detachment;
 	}
 
@@ -1059,7 +1060,7 @@ static int vpe_update_scale_coef(struct vpe_device *vpe_dev, uint32_t *p)
 	offset = *p;
 
 	if (offset > VPE_SCALE_COEFF_MAX_N-VPE_SCALE_COEFF_NUM) {
-		pr_err("%s: invalid offset %d passed in", __func__, offset);
+		pr_err("%s: invalid offset %d passed in\n", __func__, offset);
 		return -EINVAL;
 	}
 
@@ -1255,7 +1256,7 @@ static long msm_vpe_subdev_ioctl(struct v4l2_subdev *sd,
 
 		VPE_DBG("VIDIOC_MSM_VPE_TRANSACTION_SETUP\n");
 		if (sizeof(*cfg) != ioctl_ptr->len) {
-			pr_err("%s: size mismatch cmd=%d, len=%zu, expected=%zu",
+			pr_err("%s: size mismatch cmd=%d, len=%zu, expected=%zu\n",
 				__func__, cmd, ioctl_ptr->len,
 				sizeof(*cfg));
 			rc = -EINVAL;
@@ -1671,7 +1672,6 @@ static struct platform_driver vpe_driver = {
 	.remove = vpe_device_remove,
 	.driver = {
 		.name = MSM_VPE_DRV_NAME,
-		.owner = THIS_MODULE,
 	},
 };
 

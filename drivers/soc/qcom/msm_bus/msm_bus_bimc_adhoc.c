@@ -1,13 +1,6 @@
-/* Copyright (c) 2016, 2018-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2016, 2018-2019, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "AXI: BIMC: %s(): " fmt, __func__
@@ -434,10 +427,10 @@ static int msm_bus_bimc_limit_mport(struct msm_bus_node_device_type *info,
 	if ((enable_lim == THROTTLE_ON) && lim_bw) {
 		mode =  BIMC_QOS_MODE_LIMITER;
 
-		qmode.rl.qhealth[0].limit_commands = 1;
-		qmode.rl.qhealth[1].limit_commands = 0;
-		qmode.rl.qhealth[2].limit_commands = 0;
-		qmode.rl.qhealth[3].limit_commands = 0;
+		qmode.rl.qhealth[0].limit_commands = true;
+		qmode.rl.qhealth[1].limit_commands = false;
+		qmode.rl.qhealth[2].limit_commands = false;
+		qmode.rl.qhealth[3].limit_commands = false;
 		for (i = 0; i < NUM_HEALTH_LEVEL; i++) {
 			qmode.rl.qhealth[i].prio_level =
 					info->node_info->qos_params.prio_lvl;
@@ -512,10 +505,10 @@ static int msm_bus_bimc_qos_init(struct msm_bus_node_device_type *info,
 		}
 		break;
 	case BIMC_QOS_MODE_LIMITER:
-		qmode.rl.qhealth[0].limit_commands = 1;
-		qmode.rl.qhealth[1].limit_commands = 0;
-		qmode.rl.qhealth[2].limit_commands = 0;
-		qmode.rl.qhealth[3].limit_commands = 0;
+		qmode.rl.qhealth[0].limit_commands = true;
+		qmode.rl.qhealth[1].limit_commands = false;
+		qmode.rl.qhealth[2].limit_commands = false;
+		qmode.rl.qhealth[3].limit_commands = false;
 		for (i = 0; i < NUM_HEALTH_LEVEL; i++) {
 			qmode.rl.qhealth[i].prio_level =
 				info->node_info->qos_params.prio_lvl;
@@ -574,10 +567,10 @@ static int msm_bus_bimc_set_bw(struct msm_bus_node_device_type *dev,
 		 * Fixed/0/0.
 		 */
 		if (bw) {
-			qmode.rl.qhealth[0].limit_commands = 1;
-			qmode.rl.qhealth[1].limit_commands = 0;
-			qmode.rl.qhealth[2].limit_commands = 0;
-			qmode.rl.qhealth[3].limit_commands = 0;
+			qmode.rl.qhealth[0].limit_commands = true;
+			qmode.rl.qhealth[1].limit_commands = false;
+			qmode.rl.qhealth[2].limit_commands = false;
+			qmode.rl.qhealth[3].limit_commands = false;
 			mode = info->qos_params.mode;
 		} else {
 			mode =	BIMC_QOS_MODE_FIXED;

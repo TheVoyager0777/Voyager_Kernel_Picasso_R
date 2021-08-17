@@ -1,13 +1,7 @@
-/* Copyright (c) 2010-2014, 2016-2020 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2010-2014, 2016-2020 The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/kernel.h>
@@ -371,7 +365,8 @@ int apr_send_pkt(void *handle, uint32_t *buf)
 	unsigned long flags;
 
 	if (!handle || !buf) {
-		pr_err("APR: Wrong parameters\n");
+		pr_err("APR: Wrong parameters for %s\n",
+				!handle ? "handle" : "buf");
 		return -EINVAL;
 	}
 	if (svc->need_reset) {
@@ -430,7 +425,6 @@ int apr_send_pkt(void *handle, uint32_t *buf)
 		if (rc == -ECONNRESET) {
 			pr_err_ratelimited("%s: Received reset error from tal\n",
 					__func__);
-			apr_set_q6_state(APR_SUBSYS_DOWN);
 			rc = -ENETRESET;
 		}
 	}
@@ -1244,6 +1238,7 @@ static struct platform_driver apr_driver = {
 		.name = "audio_apr",
 		.owner = THIS_MODULE,
 		.of_match_table = apr_machine_of_match,
+		.suppress_bind_attrs = true,
 	}
 };
 

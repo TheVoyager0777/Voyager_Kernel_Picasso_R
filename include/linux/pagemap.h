@@ -16,6 +16,8 @@
 #include <linux/hardirq.h> /* for in_interrupt() */
 #include <linux/hugetlb_inline.h>
 
+struct pagevec;
+
 /*
  * Bits in mapping->flags.
  */
@@ -49,10 +51,7 @@ static inline void mapping_set_error(struct address_space *mapping, int error)
 		return;
 
 	/* Record in wb_err for checkers using errseq_t based tracking */
-	__filemap_set_wb_err(mapping, error);
-
-	/* Record it in superblock */
-	errseq_set(&mapping->host->i_sb->s_wb_err, error);
+	filemap_set_wb_err(mapping, error);
 
 	/* Record it in flags for now, for legacy callers */
 	if (error == -ENOSPC)
@@ -119,7 +118,7 @@ static inline void mapping_set_gfp_mask(struct address_space *m, gfp_t mask)
 	m->gfp_mask = mask;
 }
 
-void release_pages(struct page **pages, int nr, bool cold);
+void release_pages(struct page **pages, int nr);
 
 /*
  * speculatively take a reference to a page.
@@ -145,7 +144,7 @@ void release_pages(struct page **pages, int nr, bool cold);
  * 3. check the page is still in pagecache (if no, goto 1)
  *
  * Remove-side that cares about stability of _refcount (eg. reclaim) has the
- * following (with tree_lock held for write):
+ * following (with the i_pages lock held):
  * A. atomically check refcount is correct and set it to 0 (atomic_cmpxchg)
  * B. remove page from pagecache
  * C. free the page
@@ -158,7 +157,7 @@ void release_pages(struct page **pages, int nr, bool cold);
  *
  * It is possible that between 1 and 2, the page is removed then the exact same
  * page is inserted into the same position in pagecache. That's OK: the
- * old find_get_page using tree_lock could equally have run before or after
+ * old find_get_page using a lock could equally have run before or after
  * such a re-insertion, depending on order that locks are granted.
  *
  * Lookups racing against pagecache insertion isn't a big problem: either 1
@@ -235,18 +234,12 @@ static inline struct page *page_cache_alloc(struct address_space *x)
 	return __page_cache_alloc(mapping_gfp_mask(x));
 }
 
-static inline struct page *page_cache_alloc_cold(struct address_space *x)
-{
-	return __page_cache_alloc(mapping_gfp_mask(x)|__GFP_COLD);
-}
-
 static inline gfp_t readahead_gfp_mask(struct address_space *x)
 {
-	return mapping_gfp_mask(x) |
-				  __GFP_COLD | __GFP_NORETRY | __GFP_NOWARN;
+	return mapping_gfp_mask(x) | __GFP_NORETRY | __GFP_NOWARN;
 }
 
-typedef int filler_t(struct file *, struct page *);
+typedef int filler_t(void *, struct page *);
 
 pgoff_t page_cache_next_hole(struct address_space *mapping,
 			     pgoff_t index, unsigned long max_scan);
@@ -406,8 +399,7 @@ extern int read_cache_pages(struct address_space *mapping,
 static inline struct page *read_mapping_page(struct address_space *mapping,
 				pgoff_t index, void *data)
 {
-	filler_t *filler = mapping->a_ops->readpage;
-	return read_cache_page(mapping, index, filler, data);
+	return read_cache_page(mapping, index, NULL, data);
 }
 
 /*
@@ -469,9 +461,9 @@ static inline pgoff_t linear_page_index(struct vm_area_struct *vma,
 	return pgoff;
 }
 
-extern void __lock_page(struct page *page);
-extern int __lock_page_killable(struct page *page);
-extern int __lock_page_or_retry(struct page *page, struct mm_struct *mm,
+extern void __sched __lock_page(struct page *page);
+extern int __sched __lock_page_killable(struct page *page);
+extern int __sched __lock_page_or_retry(struct page *page, struct mm_struct *mm,
 				unsigned int flags);
 extern void unlock_page(struct page *page);
 
@@ -484,7 +476,7 @@ static inline int trylock_page(struct page *page)
 /*
  * lock_page may only be called if we have the page's inode pinned.
  */
-static inline void lock_page(struct page *page)
+static inline __sched void lock_page(struct page *page)
 {
 	might_sleep();
 	if (!trylock_page(page))
@@ -496,7 +488,7 @@ static inline void lock_page(struct page *page)
  * signals.  It returns 0 if it locked the page and -EINTR if it was
  * killed while waiting.
  */
-static inline int lock_page_killable(struct page *page)
+static inline __sched int lock_page_killable(struct page *page)
 {
 	might_sleep();
 	if (!trylock_page(page))
@@ -511,8 +503,9 @@ static inline int lock_page_killable(struct page *page)
  * Return value and mmap_sem implications depend on flags; see
  * __lock_page_or_retry().
  */
-static inline int lock_page_or_retry(struct page *page, struct mm_struct *mm,
-				     unsigned int flags)
+static inline __sched int lock_page_or_retry(struct page *page,
+					     struct mm_struct *mm,
+					     unsigned int flags)
 {
 	might_sleep();
 	return trylock_page(page) || __lock_page_or_retry(page, mm, flags);
@@ -522,8 +515,8 @@ static inline int lock_page_or_retry(struct page *page, struct mm_struct *mm,
  * This is exported only for wait_on_page_locked/wait_on_page_writeback, etc.,
  * and should not be used directly.
  */
-extern void wait_on_page_bit(struct page *page, int bit_nr);
-extern int wait_on_page_bit_killable(struct page *page, int bit_nr);
+extern void __sched wait_on_page_bit(struct page *page, int bit_nr);
+extern int __sched wait_on_page_bit_killable(struct page *page, int bit_nr);
 
 /* 
  * Wait for a page to be unlocked.
@@ -532,23 +525,25 @@ extern int wait_on_page_bit_killable(struct page *page, int bit_nr);
  * ie with increased "page->count" so that the page won't
  * go away during the wait..
  */
-static inline void wait_on_page_locked(struct page *page)
+static inline __sched void wait_on_page_locked(struct page *page)
 {
 	if (PageLocked(page))
 		wait_on_page_bit(compound_head(page), PG_locked);
 }
 
-static inline int wait_on_page_locked_killable(struct page *page)
+static inline __sched int wait_on_page_locked_killable(struct page *page)
 {
 	if (!PageLocked(page))
 		return 0;
 	return wait_on_page_bit_killable(compound_head(page), PG_locked);
 }
 
+extern void put_and_wait_on_page_locked(struct page *page);
+
 /* 
  * Wait for a page to complete writeback
  */
-static inline void wait_on_page_writeback(struct page *page)
+static inline __sched void wait_on_page_writeback(struct page *page)
 {
 	if (PageWriteback(page))
 		wait_on_page_bit(page, PG_writeback);
@@ -628,6 +623,8 @@ int add_to_page_cache_lru(struct page *page, struct address_space *mapping,
 extern void delete_from_page_cache(struct page *page);
 extern void __delete_from_page_cache(struct page *page, void *shadow);
 int replace_page_cache_page(struct page *old, struct page *new, gfp_t gfp_mask);
+void delete_from_page_cache_batch(struct address_space *mapping,
+				  struct pagevec *pvec);
 
 /*
  * Like add_to_page_cache_locked, but used to add newly allocated pages:

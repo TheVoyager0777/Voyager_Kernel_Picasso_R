@@ -1,7 +1,6 @@
 config SUSPEND
 	bool "Suspend to RAM and standby"
 	depends on ARCH_SUSPEND_POSSIBLE
-	select RTC_LIB
 	default y
 	---help---
 	  Allow the system to enter sleep states in which main memory is
@@ -76,33 +75,6 @@ config HIBERNATION
 	  will get corrupted in a nasty way.
 
 	  For more information take a look at <file:Documentation/power/swsusp.txt>.
-
-config HIBERNATION_IMAGE_REUSE
-	bool "Reuse hibernation image"
-	depends on HIBERNATION
-	---help---
-	  By default this hibernation image is erased after either a
-	  successful or unsuccessful hibernation restore sequeunce. Since
-	  filesystem contents on disk are not part of the hibernation
-	  image, failure to create a new hibernation image every boot can
-	  lead to filesystem corruption.
-
-	  Conversely, if the usecase can guarantee that the filesystem is
-	  not ever modified, the same hibernation image can be reused. This
-	  prevents creating additional hibernation images unncesarily.
-
-	  For more details, refer to the description of CONFIG_HIBERNATION
-	  for booting without resuming.
-
-config HIBERNATION_SKIP_CRC
-	bool "Skip LZO image CRC check"
-	default n
-	depends on HIBERNATION
-	---help---
-	  Some filesystem devices may have hw based integrity checks. In this
-	  scenario, repeating the integrity check in software is unnecessary
-	  and wasteful. This config option has no effect if uncompressed
-	  hibernation images are used.
 
 config ARCH_SAVE_PAGE_KEYS
 	bool
@@ -213,15 +185,6 @@ config PM_SLEEP_DEBUG
 	def_bool y
 	depends on PM_DEBUG && PM_SLEEP
 
-config PM_SLEEP_MONITOR
-	bool "Linux kernel suspend/resume process monitor"
-	depends on PM_SLEEP
-	---help---
-	This option will enable suspend/resume monitor to prevent device
-	stuck during suspend/resume process. Suspend timeout handler will
-	dump disk sleep task at first round timeout and trigger kernel panic
-	at second round timeout. The default timer for each round is 30 seconds.
-
 config DPM_WATCHDOG
 	bool "Device suspend/resume watchdog"
 	depends on PM_DEBUG && PSTORE && EXPERT
@@ -297,20 +260,6 @@ config APM_EMULATION
 	  anything, try disabling/enabling this option (or disabling/enabling
 	  APM in your BIOS).
 
-config PM_OPP
-	bool
-	select SRCU
-	---help---
-	  SOCs have a standard set of tuples consisting of frequency and
-	  voltage pairs that the device will support per voltage domain. This
-	  is called Operating Performance Point or OPP. The actual definitions
-	  of OPP varies over silicon within the same family of devices.
-
-	  OPP layer organizes the data internally using device pointers
-	  representing individual voltage domains and provides SOC
-	  implementations a ready to use framework to manage OPPs.
-	  For more information, read <file:Documentation/power/opp.txt>
-
 config PM_CLK
 	def_bool y
 	depends on PM && HAVE_CLK
@@ -349,3 +298,18 @@ config PM_GENERIC_DOMAINS_OF
 
 config CPU_PM
 	bool
+
+config ENERGY_MODEL
+	bool "Energy Model for CPUs"
+	depends on SMP
+	depends on CPU_FREQ
+	default n
+	help
+	  Several subsystems (thermal and/or the task scheduler for example)
+	  can leverage information about the energy consumed by CPUs to make
+	  smarter decisions. This config option enables the framework from
+	  which subsystems can access the energy models.
+
+	  The exact usage of the energy model is subsystem-dependent.
+
+	  If in doubt, say N.

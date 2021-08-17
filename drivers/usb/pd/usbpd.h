@@ -1,14 +1,7 @@
-/* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
  * Copyright (C) 2021 XiaoMi, Inc.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #ifndef _USBPD_H
@@ -71,7 +64,6 @@ struct pd_phy_params {
 	enum power_role power_role;
 	u8		frame_filter_val;
 };
-
 
 struct usbpd_pdo {
 	bool pps;
@@ -136,13 +128,11 @@ enum uvdm_state {
 	USBPD_UVDM_REMOVE_COMPENSATION,
 	USBPD_UVDM_CONNECT,
 	USBPD_UVDM_NAN_ACK,
-	USBPD_UVDM_SINK_CAPACITY,
 };
 
 #define USB_PD_MI_SVID			0x2717
 #define USBPD_UVDM_SS_LEN		4
 #define USBPD_UVDM_VERIFIED_LEN		1
-#define USBPD_UVDM_CAPACITY_LEN		1
 
 #define VDM_HDR(svid, cmd0, cmd1) \
        (((svid) << 16) | (0 << 15) | ((cmd0) << 8) \
@@ -160,12 +150,5 @@ struct usbpd_vdm_data {
 	unsigned long s_secert[USBPD_UVDM_SS_LEN];
 	unsigned long digest[USBPD_UVDM_SS_LEN];
 };
-
-#define USBPD_WEAK_PPS_POWER		18000000
-#define USBPD_WAKK_PPS_CURR_LIMIT	1500000
-#define USBPD_MIPHONE_POWER		(5000 * 1500)
-
-#define USBPD_SEND_CAPACITY_DELAY	1300
-#define USBPD_SWAP_INTERCHG_DELAY	400
 
 #endif /* _USBPD_H */

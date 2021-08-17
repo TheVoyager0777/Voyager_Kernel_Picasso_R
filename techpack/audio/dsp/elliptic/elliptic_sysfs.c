@@ -143,18 +143,18 @@ static ssize_t calibration_show_core(struct device *dev,
 	if (pretty) {
 		if (caldata[0] == 0xDE &&
 			caldata[1] == 0xAD) {
-			length += snprintf(buf + length, PAGE_SIZE - length, 
+			length += snprintf(buf + length, PAGE_SIZE - length,
 								"Calibration Data: not loaded");
 		} else {
-			length += snprintf(buf + length, PAGE_SIZE - length, 
+			length += snprintf(buf + length, PAGE_SIZE - length,
 								"Calibration Data: ");
 			for (i = 0; i < calibration_obj->size; ++i)
-				length += snprintf(buf + length, PAGE_SIZE - length, 
+				length += snprintf(buf + length, PAGE_SIZE - length,
 								"0x%02x ", caldata[i]);
 		}
 	} else {
 		for (i = 0; i < calibration_obj->size; ++i)
-			length += snprintf(buf + length, PAGE_SIZE - length, 
+			length += snprintf(buf + length, PAGE_SIZE - length,
 								"0x%02x ", caldata[i]);
 	}
 	length += snprintf(buf + length, PAGE_SIZE - length, "\n\n");
@@ -421,7 +421,7 @@ static ssize_t branch_show_core(struct device *dev,
 		EL_PRINT_E("branch_obj->size > PAGE_SIZE");
 		return -EINVAL;
 	}
-	if (pretty){
+	if (pretty) {
 		length = snprintf(buf, PAGE_SIZE - 1, "Branch: %s\n",
 			(const char *)(branch_obj->buffer));
 	} else {
@@ -455,7 +455,7 @@ static ssize_t tag_show_core(struct device *dev,
 		EL_PRINT_E("tag_obj->size > PAGE_SIZE");
 		return -EINVAL;
 	}
-	if (pretty){
+	if (pretty) {
 		length = snprintf(buf, PAGE_SIZE - 1, "Tag: %s\n",
 			(const char *)(tag_obj->buffer));
 	} else {
@@ -474,7 +474,7 @@ static ssize_t tag_show(struct device *dev,
 
 static ssize_t cache_show(char *buf, int pretty)
 {
-	struct elliptic_system_configuration_parameters_cache *cache = 
+	struct elliptic_system_configuration_parameters_cache *cache =
 				&elliptic_system_configuration_cache;
 
 	int length;
@@ -508,7 +508,6 @@ static ssize_t opmode_show(struct device *dev,
 
 	struct elliptic_system_configuration_parameters_cache *cache =
 				&elliptic_system_configuration_cache;
-	length =0;
 
 	length += snprintf(buf + length, PAGE_SIZE - 1, "%d\n",
 							cache->operation_mode);
@@ -523,7 +522,6 @@ static ssize_t opmode_flags_show(struct device *dev,
 	ssize_t result;
 	struct elliptic_system_configuration_parameters_cache *cache =
 				&elliptic_system_configuration_cache;
-	length =0;
 
 	length += snprintf(buf + length, PAGE_SIZE - 1, "%d\n",
 							cache->operation_mode_flags);

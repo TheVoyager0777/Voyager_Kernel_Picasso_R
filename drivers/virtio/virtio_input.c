@@ -369,7 +369,6 @@ static int virtinput_restore(struct virtio_device *vdev)
 #endif
 
 static unsigned int features[] = {
-	VIRTIO_F_VERSION_1,
 	/* none */
 };
 static struct virtio_device_id id_table[] = {

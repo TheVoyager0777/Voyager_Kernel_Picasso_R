@@ -1,4 +1,5 @@
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2018, 2020 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -823,8 +824,8 @@ static int32_t msm_vfe32_cfg_io_format(struct vfe_device *vfe_dev,
 
 	bpp = msm_isp_get_bit_per_pixel(io_format);
 	if (bpp < 0) {
-		pr_err("%s:%d invalid io_format %d bpp %d", __func__, __LINE__,
-			io_format, bpp);
+		pr_err("%s:%d invalid io_format %d bpp %d\n", __func__,
+			__LINE__, io_format, bpp);
 		return -EINVAL;
 	}
 
@@ -839,7 +840,7 @@ static int32_t msm_vfe32_cfg_io_format(struct vfe_device *vfe_dev,
 		bpp_reg = 1 << 1;
 		break;
 	default:
-		pr_err("%s:%d invalid bpp %d", __func__, __LINE__, bpp);
+		pr_err("%s:%d invalid bpp %d\n", __func__, __LINE__, bpp);
 		return -EINVAL;
 	}
 

@@ -1,30 +1,21 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
  * RMNET configuration engine
  *
  */
 
 #include <net/sock.h>
-#include <net/addrconf.h>
 #include <linux/module.h>
 #include <linux/netlink.h>
 #include <linux/netdevice.h>
-#include <linux/inetdevice.h>
 #include "rmnet_config.h"
 #include "rmnet_handlers.h"
 #include "rmnet_vnd.h"
 #include "rmnet_private.h"
 #include "rmnet_map.h"
 #include "rmnet_descriptor.h"
+#include "rmnet_genl.h"
 #include <soc/qcom/rmnet_qmi.h>
 #include <soc/qcom/qmi_rmnet.h>
 
@@ -105,15 +96,23 @@ static int rmnet_unregister_real_device(struct net_device *real_dev,
 	return 0;
 }
 
-static int rmnet_register_real_device(struct net_device *real_dev)
+static int rmnet_register_real_device(struct net_device *real_dev,
+				      struct netlink_ext_ack *extack)
 {
 	struct rmnet_port *port;
 	int rc, entry;
 
 	ASSERT_RTNL();
 
-	if (rmnet_is_real_dev_registered(real_dev))
+	if (rmnet_is_real_dev_registered(real_dev)) {
+		port = rmnet_get_port_rtnl(real_dev);
+		if (port->rmnet_mode != RMNET_EPMODE_VND) {
+			NL_SET_ERR_MSG_MOD(extack, "bridge device already exists");
+			return -EINVAL;
+		}
+
 		return 0;
+	}
 
 	port = kzalloc(sizeof(*port), GFP_ATOMIC);
 	if (!port)
@@ -180,14 +179,6 @@ static int rmnet_newlink(struct net *src_net, struct net_device *dev,
 	int err = 0;
 	u16 mux_id;
 
-	data_format = RMNET_INGRESS_FORMAT_IP_ROUTE |
-		      RMNET_EGRESS_FORMAT_IP_ROUTE;
-
-	if (!tb[IFLA_LINK]) {
-		NL_SET_ERR_MSG_MOD(extack, "link not specified");
-		return -EINVAL;
-	}
-
 	real_dev = __dev_get_by_index(src_net, nla_get_u32(tb[IFLA_LINK]));
 	if (!real_dev || !dev)
 		return -ENODEV;
@@ -201,7 +192,7 @@ static int rmnet_newlink(struct net *src_net, struct net_device *dev,
 
 	mux_id = nla_get_u16(data[IFLA_RMNET_MUX_ID]);
 
-	err = rmnet_register_real_device(real_dev);
+	err = rmnet_register_real_device(real_dev, extack);
 	if (err)
 		goto err0;
 
@@ -384,10 +375,13 @@ static int rmnet_changelink(struct net_device *dev, struct nlattr *tb[],
 	struct rmnet_port *port;
 	u16 mux_id;
 
+	if (!dev)
+		return -ENODEV;
+
 	real_dev = __dev_get_by_index(dev_net(dev),
 				      nla_get_u32(tb[IFLA_LINK]));
 
-	if (!real_dev || !dev || !rmnet_is_real_dev_registered(real_dev))
+	if (!real_dev || !rmnet_is_real_dev_registered(real_dev))
 		return -ENODEV;
 
 	port = rmnet_get_port_rtnl(real_dev);
@@ -520,7 +514,8 @@ struct rmnet_endpoint *rmnet_get_endpoint(struct rmnet_port *port, u8 mux_id)
 EXPORT_SYMBOL(rmnet_get_endpoint);
 
 int rmnet_add_bridge(struct net_device *rmnet_dev,
-		     struct net_device *slave_dev)
+		     struct net_device *slave_dev,
+		     struct netlink_ext_ack *extack)
 {
 	struct rmnet_priv *priv = netdev_priv(rmnet_dev);
 	struct net_device *real_dev = priv->real_dev;
@@ -538,7 +533,7 @@ int rmnet_add_bridge(struct net_device *rmnet_dev,
 	if (rmnet_is_real_dev_registered(slave_dev))
 		return -EBUSY;
 
-	err = rmnet_register_real_device(slave_dev);
+	err = rmnet_register_real_device(slave_dev, extack);
 	if (err)
 		return -EBUSY;
 
@@ -583,9 +578,12 @@ EXPORT_SYMBOL(rmnet_get_qmi_pt);
 
 void *rmnet_get_qos_pt(struct net_device *dev)
 {
-	if (dev)
-		return rcu_dereference(
-			((struct rmnet_priv *)netdev_priv(dev))->qos_info);
+	struct rmnet_priv *priv;
+
+	if (dev) {
+		priv = netdev_priv(dev);
+		return rcu_dereference(priv->qos_info);
+	}
 
 	return NULL;
 }
@@ -749,132 +747,6 @@ EXPORT_SYMBOL(rmnet_get_dlmarker_info);
 
 #endif
 
-struct rmnet_endpoint *rmnet_get_ip6_route_endpoint(struct rmnet_port *port,
-						    struct in6_addr *addr)
-{
-	struct rmnet_endpoint *ep, *tmp = NULL;
-
-	hlist_for_each_entry_rcu(ep, &port->muxed_ep[0], hlnode) {
-		if (!memcmp(&ep->in6addr, addr, sizeof(struct in6_addr)))
-			return ep;
-
-		tmp = ep;
-	}
-
-	return tmp;
-}
-
-struct rmnet_endpoint *rmnet_get_ip4_route_endpoint(struct rmnet_port *port,
-						    __be32 *ifa_address)
-{
-	struct rmnet_endpoint *ep, *tmp = NULL;
-
-	hlist_for_each_entry_rcu(ep, &port->muxed_ep[0], hlnode) {
-		if (!memcmp(&ep->ifa_address, ifa_address, sizeof(__be32)))
-			return ep;
-
-		tmp = ep;
-	}
-
-	return tmp;
-}
-
-static int rmnet_addr6_event(struct notifier_block *unused,
-			     unsigned long event, void *ptr)
-{
-	struct inet6_ifaddr *if6 = (struct inet6_ifaddr *)ptr;
-	struct net_device *dev = (struct net_device *)if6->idev->dev;
-	struct rmnet_endpoint *ep;
-	struct net_device *real_dev;
-	struct rmnet_priv *priv;
-	struct rmnet_port *port;
-
-	if (!netif_is_rmnet(dev))
-		return NOTIFY_OK;
-
-	priv = netdev_priv(dev);
-	real_dev = priv->real_dev;
-	port = rmnet_get_port_rtnl(real_dev);
-
-	if (!port || port->data_format & ~(RMNET_INGRESS_FORMAT_IP_ROUTE |
-					  RMNET_EGRESS_FORMAT_IP_ROUTE))
-		return NOTIFY_OK;
-
-	switch (event) {
-	case NETDEV_UP:
-		ep = kzalloc(sizeof(*ep), GFP_ATOMIC);
-		if (!ep)
-			return NOTIFY_OK;
-
-		memcpy(&ep->in6addr, &if6->addr, sizeof(struct in6_addr));
-		ep->egress_dev = dev;
-
-		hlist_add_head_rcu(&ep->hlnode, &port->muxed_ep[0]);
-		break;
-	case NETDEV_DOWN:
-		ep = rmnet_get_ip6_route_endpoint(port, &if6->addr);
-		if (!ep)
-			return NOTIFY_OK;
-
-		hlist_del_init_rcu(&ep->hlnode);
-		kfree(ep);
-	}
-
-	return NOTIFY_OK;
-}
-
-static int rmnet_addr4_event(struct notifier_block *unused,
-			     unsigned long event, void *ptr)
-{
-	struct in_ifaddr *if4 = (struct in_ifaddr *)ptr;
-	struct net_device *dev = (struct net_device *)if4->ifa_dev->dev;
-	struct rmnet_endpoint *ep;
-	struct net_device *real_dev;
-	struct rmnet_priv *priv;
-	struct rmnet_port *port;
-
-	if (!netif_is_rmnet(dev))
-		return NOTIFY_OK;
-
-	priv = netdev_priv(dev);
-	real_dev = priv->real_dev;
-	port = rmnet_get_port_rtnl(real_dev);
-
-	if (!port || port->data_format & ~(RMNET_INGRESS_FORMAT_IP_ROUTE |
-					  RMNET_EGRESS_FORMAT_IP_ROUTE))
-		return NOTIFY_OK;
-
-	switch (event) {
-	case NETDEV_UP:
-		ep = kzalloc(sizeof(*ep), GFP_ATOMIC);
-		if (!ep)
-			return NOTIFY_OK;
-
-		memcpy(&ep->ifa_address, &if4->ifa_address, sizeof(__be32));
-		ep->egress_dev = dev;
-
-		hlist_add_head_rcu(&ep->hlnode, &port->muxed_ep[0]);
-		break;
-	case NETDEV_DOWN:
-		ep = rmnet_get_ip4_route_endpoint(port, &if4->ifa_address);
-		if (!ep)
-			return NOTIFY_OK;
-
-		hlist_del_init_rcu(&ep->hlnode);
-		kfree(ep);
-	}
-
-	return NOTIFY_OK;
-}
-
-static struct notifier_block rmnet_addr6_notifier_block __read_mostly = {
-	.notifier_call = rmnet_addr6_event,
-};
-
-static struct notifier_block rmnet_addr4_notifier_block __read_mostly = {
-	.notifier_call = rmnet_addr4_event,
-};
-
 /* Startup/Shutdown */
 
 static int __init rmnet_init(void)
@@ -886,36 +758,20 @@ static int __init rmnet_init(void)
 		return rc;
 
 	rc = rtnl_link_register(&rmnet_link_ops);
-	if (rc != 0)
-		goto err0;
+	if (rc != 0) {
+		unregister_netdevice_notifier(&rmnet_dev_notifier);
+		return rc;
+	}
+	rmnet_core_genl_init();
 
-	rc = register_inet6addr_notifier(&rmnet_addr6_notifier_block);
-	if (rc != 0)
-		goto err1;
-
-	rc = register_inetaddr_notifier(&rmnet_addr4_notifier_block);
-	if (rc != 0)
-		goto err2;
-
-	return 0;
-
-err2:
-	unregister_inet6addr_notifier(&rmnet_addr6_notifier_block);
-
-err1:
-	rtnl_link_unregister(&rmnet_link_ops);
-
-err0:
-	unregister_netdevice_notifier(&rmnet_dev_notifier);
 	return rc;
 }
 
 static void __exit rmnet_exit(void)
 {
-	unregister_inetaddr_notifier(&rmnet_addr4_notifier_block);
-	unregister_inet6addr_notifier(&rmnet_addr6_notifier_block);
 	unregister_netdevice_notifier(&rmnet_dev_notifier);
 	rtnl_link_unregister(&rmnet_link_ops);
+	rmnet_core_genl_deinit();
 }
 
 module_init(rmnet_init)

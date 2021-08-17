@@ -1148,11 +1148,8 @@ static int dsi_runtime_get(struct platform_device *dsidev)
 	DSSDBG("dsi_runtime_get\n");
 
 	r = pm_runtime_get_sync(&dsi->pdev->dev);
-	if (WARN_ON(r < 0)) {
-		pm_runtime_put_sync(&dsi->pdev->dev);
-		return r;
-	}
-	return 0;
+	WARN_ON(r < 0);
+	return r < 0 ? r : 0;
 }
 
 static void dsi_runtime_put(struct platform_device *dsidev)
@@ -3991,7 +3988,7 @@ static void dsi_update_screen_dispc(struct platform_device *dsidev)
 }
 
 #ifdef DSI_CATCH_MISSING_TE
-static void dsi_te_timeout(unsigned long arg)
+static void dsi_te_timeout(struct timer_list *unused)
 {
 	DSSERR("TE not received for 250ms!\n");
 }
@@ -5301,9 +5298,7 @@ static int dsi_bind(struct device *dev, struct device *master, void *data)
 			     dsi_framedone_timeout_work_callback);
 
 #ifdef DSI_CATCH_MISSING_TE
-	init_timer(&dsi->te_timer);
-	dsi->te_timer.function = dsi_te_timeout;
-	dsi->te_timer.data = 0;
+	timer_setup(&dsi->te_timer, dsi_te_timeout, 0);
 #endif
 
 	res = platform_get_resource_byname(dsidev, IORESOURCE_MEM, "proto");

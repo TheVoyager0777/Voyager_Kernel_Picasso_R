@@ -664,7 +664,6 @@ int elliptic_calibration_param_put(
 
 	switch (mc->shift) {
 	case ELLIPTIC_CALIBRATION_STATE:
-	pr_err("[ELUS] %s: calibration_state=%d", __func__, ucontrol->value.integer.value[0]);
 		elliptic_system_configuration_cache.calibration_state =
 			ucontrol->value.integer.value[0];
 
@@ -674,7 +673,6 @@ int elliptic_calibration_param_put(
 		break;
 
 	case ELLIPTIC_CALIBRATION_PROFILE:
-	pr_err("[ELUS] %s: calibration_profile=%d", __func__, ucontrol->value.integer.value[0]);
 		elliptic_system_configuration_cache.calibration_profile =
 			ucontrol->value.integer.value[0];
 
@@ -684,7 +682,6 @@ int elliptic_calibration_param_put(
 		break;
 
 	case ELLIPTIC_ULTRASOUND_GAIN:
-	pr_err("[ELUS] %s: calibration_gain=%d", __func__, ucontrol->value.integer.value[0]);
 		elliptic_system_configuration_cache.ultrasound_gain =
 			ucontrol->value.integer.value[0];
 		param.type = ESCPT_ULTRASOUND_GAIN;
@@ -762,8 +759,8 @@ int elliptic_system_configuration_param_get(
 			elliptic_system_configuration_cache.engine_suspend;
 		break;
 	case ELLIPTIC_SYSTEM_CONFIGURATION_REPORT_NONE:
-		break;
-	case ELLIPTIC_SYSTEM_CONFIGURATION_INPUT_ENABLED:
+		break;	
+    case ELLIPTIC_SYSTEM_CONFIGURATION_INPUT_ENABLED:
 		ucontrol->value.integer.value[0] =
 			elliptic_system_configuration_cache.input_enabled;
 		break;
@@ -1224,8 +1221,8 @@ static const struct snd_kcontrol_new ultrasound_filter_mixer_controls[] = {
 	1,
 	0,
 	elliptic_system_configuration_param_get,
-	elliptic_system_configuration_param_put),
-	SOC_SINGLE_EXT("Ultrasound Input",
+	elliptic_system_configuration_param_put),	
+    SOC_SINGLE_EXT("Ultrasound Input",
 	ELLIPTIC_SYSTEM_CONFIGURATION,
 	ELLIPTIC_SYSTEM_CONFIGURATION_INPUT_ENABLED,
 	1,
@@ -1298,14 +1295,14 @@ static const struct snd_kcontrol_new ultrasound_filter_mixer_controls[] = {
 
 
 
-unsigned int elliptic_add_platform_controls(void *platform)
+unsigned int elliptic_add_component_controls(void *component)
 {
 	const unsigned int num_controls =
 		ARRAY_SIZE(ultrasound_filter_mixer_controls);
 
-	if (platform != NULL) {
-		snd_soc_add_platform_controls(
-			(struct snd_soc_platform *)platform,
+	if (component != NULL) {
+		snd_soc_add_component_controls(
+			(struct snd_soc_component *)component,
 			ultrasound_filter_mixer_controls,
 			num_controls);
 	} else {
@@ -1314,7 +1311,7 @@ unsigned int elliptic_add_platform_controls(void *platform)
 
 	return num_controls;
 }
-EXPORT_SYMBOL(elliptic_add_platform_controls);
+EXPORT_SYMBOL(elliptic_add_component_controls);
 
 int elliptic_trigger_version_msg(void)
 {

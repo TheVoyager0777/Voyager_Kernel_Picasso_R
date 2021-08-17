@@ -1,13 +1,6 @@
-/* Copyright (c) 2016-2017, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2016-2017, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -42,7 +35,8 @@ static void dummy_source_disable(struct coresight_device *csdev,
 	dev_info(drvdata->dev, "Dummy source disabled\n");
 }
 
-static int dummy_sink_enable(struct coresight_device *csdev, u32 mode, void *data)
+static int dummy_sink_enable(struct coresight_device *csdev, u32 mode,
+			     void *data)
 {
 	struct dummy_drvdata *drvdata = dev_get_drvdata(csdev->dev.parent);
 
@@ -152,7 +146,6 @@ static struct platform_driver dummy_driver = {
 	.remove	= dummy_remove,
 	.driver	= {
 		.name   = "coresight-dummy",
-		.owner	= THIS_MODULE,
 		.of_match_table = dummy_match,
 	},
 };

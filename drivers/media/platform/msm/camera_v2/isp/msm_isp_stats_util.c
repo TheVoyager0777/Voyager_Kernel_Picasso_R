@@ -1,4 +1,5 @@
-/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -92,7 +93,7 @@ static int msm_isp_stats_cfg_ping_pong_address(
 
 	if (stats_idx >= vfe_dev->hw_info->stats_hw_info->num_stats_type ||
 		stats_idx >= MSM_ISP_STATS_MAX) {
-		pr_err("%s Invalid stats index %d", __func__, stats_idx);
+		pr_err("%s Invalid stats index %d\n", __func__, stats_idx);
 		return -EINVAL;
 	}
 	stats_pingpong_offset =
@@ -497,7 +498,7 @@ int msm_isp_request_stats_stream(struct vfe_device *vfe_dev, void *arg)
 					stream_req_cmd->stats_type);
 
 	if (stats_idx >= vfe_dev->hw_info->stats_hw_info->num_stats_type) {
-		pr_err("%s Invalid stats index %d", __func__, stats_idx);
+		pr_err("%s Invalid stats index %d\n", __func__, stats_idx);
 		return -EINVAL;
 	}
 
@@ -534,7 +535,7 @@ int msm_isp_release_stats_stream(struct vfe_device *vfe_dev, void *arg)
 	int k;
 
 	if (stats_idx >= vfe_dev->hw_info->stats_hw_info->num_stats_type) {
-		pr_err("%s Invalid stats index %d", __func__, stats_idx);
+		pr_err("%s Invalid stats index %d\n", __func__, stats_idx);
 		return -EINVAL;
 	}
 
@@ -871,7 +872,7 @@ static int msm_isp_stats_update_cgc_override(struct vfe_device *vfe_dev,
 		idx = STATS_IDX(stream_cfg_cmd->stream_handle[i]);
 
 		if (idx >= vfe_dev->hw_info->stats_hw_info->num_stats_type) {
-			pr_err("%s Invalid stats index %d", __func__, idx);
+			pr_err("%s Invalid stats index %d\n", __func__, idx);
 			return -EINVAL;
 		}
 		stream_info =  msm_isp_get_stats_stream_common_data(vfe_dev,
@@ -1006,7 +1007,7 @@ static int msm_isp_check_stream_cfg_cmd(struct vfe_device *vfe_dev,
 		idx = STATS_IDX(stream_cfg_cmd->stream_handle[i]);
 
 		if (idx >= vfe_dev->hw_info->stats_hw_info->num_stats_type) {
-			pr_err("%s Invalid stats index %d", __func__, idx);
+			pr_err("%s Invalid stats index %d\n", __func__, idx);
 			return -EINVAL;
 		}
 		stream_info = msm_isp_get_stats_stream_common_data(
@@ -1292,7 +1293,7 @@ int msm_isp_update_stats_stream(struct vfe_device *vfe_dev, void *arg)
 		/*check array reference bounds*/
 		if (STATS_IDX(update_info->stream_handle)
 			>= vfe_dev->hw_info->stats_hw_info->num_stats_type) {
-			pr_err("%s: stats idx %d out of bound!", __func__,
+			pr_err("%s: stats idx %d out of bound!\n", __func__,
 			STATS_IDX(update_info->stream_handle));
 			return -EINVAL;
 		}

@@ -1,13 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/kernel.h>
@@ -162,6 +154,7 @@ static struct irq_chip aqt_irq_chip = {
 };
 
 static struct lock_class_key aqt_irq_lock_class;
+static struct lock_class_key aqt_irq_lock_requested_class;
 
 static int aqt_irq_map(struct irq_domain *irqd, unsigned int virq,
 			irq_hw_number_t hw)
@@ -170,7 +163,8 @@ static int aqt_irq_map(struct irq_domain *irqd, unsigned int virq,
 
 	irq_set_chip_data(virq, data);
 	irq_set_chip_and_handler(virq, &aqt_irq_chip, handle_simple_irq);
-	irq_set_lockdep_class(virq, &aqt_irq_lock_class);
+	irq_set_lockdep_class(virq, &aqt_irq_lock_class,
+			      &aqt_irq_lock_requested_class);
 	irq_set_nested_thread(virq, 1);
 	irq_set_noprobe(virq);
 

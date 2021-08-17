@@ -1,13 +1,7 @@
-/* Copyright (c) 2016-2017, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2016-2017, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 #ifndef MSM_DIGITAL_CDC_H
 #define MSM_DIGITAL_CDC_H
@@ -39,9 +33,10 @@ struct tx_mute_work {
 };
 
 struct msm_dig_priv {
-	struct snd_soc_codec *codec;
+	struct snd_soc_component *component;
 	u32 comp_enabled[MSM89XX_RX_MAX];
-	int (*codec_hph_comp_gpio)(bool enable, struct snd_soc_codec *codec);
+	int (*codec_hph_comp_gpio)(bool enable,
+					struct snd_soc_component *component);
 	s32 dmic_1_2_clk_cnt;
 	s32 dmic_3_4_clk_cnt;
 	bool dec_active[NUM_DECIMATORS];
@@ -94,21 +89,21 @@ enum {
 #if IS_ENABLED(CONFIG_SND_SOC_DIGITAL_CDC)
 extern void msm_dig_cdc_hph_comp_cb(
 		int (*codec_hph_comp_gpio)(
-			bool enable, struct snd_soc_codec *codec),
-		struct snd_soc_codec *codec);
+			bool enable, struct snd_soc_component *component),
+		struct snd_soc_component *component);
 int msm_dig_codec_info_create_codec_entry(struct snd_info_entry *codec_root,
-					  struct snd_soc_codec *codec);
+					  struct snd_soc_component *component);
 #else /* CONFIG_SND_SOC_DIGITAL_CDC */
 static inline void msm_dig_cdc_hph_comp_cb(
 		int (*codec_hph_comp_gpio)(
-			bool enable, struct snd_soc_codec *codec),
-		struct snd_soc_codec *codec)
+			bool enable, struct snd_soc_component *component),
+		struct snd_soc_component *component)
 {
 
 }
 static inline int msm_dig_codec_info_create_codec_entry(
 				struct snd_info_entry *codec_root,
-				struct snd_soc_codec *codec)
+				struct snd_soc_component *component)
 {
 	return 0;
 }

@@ -27,7 +27,7 @@ static int ice_check_fuse_setting(struct crypto_vops_qti_entry *ice_entry)
 	minor = (ice_entry->ice_hw_version & ICE_CORE_MINOR_REV_MASK) >>
 			ICE_CORE_MINOR_REV;
 
-	/* Check fuse setting is not supported on ICE 3.2 onwards */
+	//Check fuse setting is not supported on ICE 3.2 onwards
 	if ((major == 0x03) && (minor >= 0x02))
 		return 0;
 	regval = ice_readl(ice_entry, ICE_REGS_FUSE_SETTING);
@@ -463,7 +463,7 @@ int crypto_qti_derive_raw_secret(const u8 *wrapped_key,
 
 	if (wrapped_key_size > 64)
 		err = crypto_qti_tz_raw_secret(wrapped_key, wrapped_key_size,
-				secret, secret_size);
+					       secret, secret_size);
 	else
 		memcpy(secret, wrapped_key, secret_size);
 

@@ -1,4 +1,5 @@
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2018, 2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -65,7 +66,7 @@ static int32_t msm_sensor_driver_cmd(struct msm_sensor_init_t *s_init,
 
 	/* Validate input parameters */
 	if (!s_init || !cfg) {
-		pr_err("failed: s_init %pK cfg %pK", s_init, cfg);
+		pr_err("failed: s_init %pK cfg %pK\n", s_init, cfg);
 		return -EINVAL;
 	}
 
@@ -78,7 +79,7 @@ static int32_t msm_sensor_driver_cmd(struct msm_sensor_init_t *s_init,
 			cfg->entity_name);
 		mutex_unlock(&s_init->imutex);
 		if (rc < 0)
-			pr_err_ratelimited("%s failed (non-fatal) rc %d",
+			pr_err_ratelimited("%s failed (non-fatal) rc %d\n",
 				__func__, rc);
 		break;
 
@@ -92,7 +93,7 @@ static int32_t msm_sensor_driver_cmd(struct msm_sensor_init_t *s_init,
 		break;
 
 	default:
-		pr_err("default");
+		pr_err("default\n");
 		break;
 	}
 
@@ -109,7 +110,7 @@ static long msm_sensor_init_subdev_ioctl(struct v4l2_subdev *sd,
 
 	/* Validate input parameters */
 	if (!s_init) {
-		pr_err("failed: s_init %pK", s_init);
+		pr_err("failed: s_init %pK\n", s_init);
 		return -EINVAL;
 	}
 
@@ -142,11 +143,11 @@ static long msm_sensor_init_subdev_do_ioctl(
 		memset(&sensor_init_data, 0, sizeof(sensor_init_data));
 		sensor_init_data.cfgtype = u32->cfgtype;
 		sensor_init_data.cfg.setting =
-			(__force void *)compat_ptr(u32->cfg.setting);
+			(void *)compat_ptr(u32->cfg.setting);
 		cmd = VIDIOC_MSM_SENSOR_INIT_CFG;
 		rc = msm_sensor_init_subdev_ioctl(sd, cmd, &sensor_init_data);
 		if (rc < 0) {
-			pr_err_ratelimited("%s:%d VIDIOC_MSM_SENSOR_INIT_CFG failed (non-fatal)",
+			pr_err_ratelimited("%s:%d VIDIOC_MSM_SENSOR_INIT_CFG failed (non-fatal)\n",
 				__func__, __LINE__);
 			return rc;
 		}

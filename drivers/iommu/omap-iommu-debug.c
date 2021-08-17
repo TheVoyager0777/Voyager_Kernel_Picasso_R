@@ -101,11 +101,8 @@ static ssize_t debug_read_regs(struct file *file, char __user *userbuf,
 	mutex_lock(&iommu_debug_lock);
 
 	bytes = omap_iommu_dump_ctx(obj, p, count);
-	if (bytes < 0)
-		goto err;
 	bytes = simple_read_from_buffer(userbuf, count, ppos, buf, bytes);
 
-err:
 	mutex_unlock(&iommu_debug_lock);
 	kfree(buf);
 
@@ -277,8 +274,8 @@ void omap_iommu_debugfs_add(struct omap_iommu *obj)
 	if (!obj->debug_dir)
 		return;
 
-	d = debugfs_create_u8("nr_tlb_entries", 0400, obj->debug_dir,
-			      (u8 *)&obj->nr_tlb_entries);
+	d = debugfs_create_u32("nr_tlb_entries", 0400, obj->debug_dir,
+			       &obj->nr_tlb_entries);
 	if (!d)
 		return;
 

@@ -1,15 +1,5 @@
-/* Copyright (c) 2012-2018, 2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- */
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Copyright (c) 2012-2018, 2020, The Linux Foundation. All rights reserved. */
 
 #ifndef MDSS_H
 #define MDSS_H
@@ -29,6 +19,7 @@
 #include <linux/dma-direction.h>
 #include <soc/qcom/cx_ipeak.h>
 #include <linux/dma-buf.h>
+#include <linux/iommu.h>
 
 #include "mdss_panel.h"
 
@@ -231,7 +222,7 @@ struct reg_bus_client {
 
 struct mdss_smmu_client {
 	struct mdss_smmu_intf base;
-	struct dma_iommu_mapping *mmu_mapping;
+	struct iommu_domain	*domain;
 	struct dss_module_power mp;
 	struct reg_bus_client *reg_bus_clt;
 	bool domain_attached;
@@ -512,7 +503,6 @@ struct mdss_data_type {
 	u32 min_prefill_lines; /* this changes within different chipsets */
 	u32 props;
 
-	bool twm_en;
 	int handoff_pending;
 	bool idle_pc;
 	struct mdss_perf_tune perf_tune;

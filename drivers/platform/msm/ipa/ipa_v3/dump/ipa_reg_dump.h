@@ -1,13 +1,6 @@
-/* Copyright (c) 2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2019, The Linux Foundation. All rights reserved.
  */
 #if !defined(_IPA_REG_DUMP_H_)
 #define _IPA_REG_DUMP_H_
@@ -15,7 +8,7 @@
 #include <linux/types.h>
 #include <linux/string.h>
 
-#include "ipa_i.h"
+#include "../ipa_i.h"
 
 #include "ipa_pkt_cntxt.h"
 #include "ipa_hw_common_ex.h"
@@ -85,18 +78,29 @@
 #define HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_CSR     (0x3A)
 #define HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_SDMA_0  (0x3C)
 #define HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_SDMA_1  (0x3D)
+#define HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_IE_2    (0x1D)
+#define HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_CSR_1   (0x3E)
+#define HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_CSR_2   (0x3F)
+#define HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_MCS_5   (0x40)
+#define HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_IC_5    (0x41)
+#define HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_CSR_3   (0x42)
+#define HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_TLV_0   (0x43)
+#define HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_REE_8   (0x44)
 
 #define IPA_DEBUG_TESTBUS_DEF_EXTERNAL           50
 #define IPA_DEBUG_TESTBUS_DEF_INTERNAL           6
-
-#define IPA_REG_SAVE_BYTES_PER_CHNL_SHRAM        8
 
 #define IPA_REG_SAVE_GSI_NUM_EE                  3
 
 #define IPA_REG_SAVE_NUM_EXTRA_ENDP_REGS         22
 
+#define IPA_GSI_OFFSET_WORDS_SCRATCH4            6
+#define IPA_GSI_OFFSET_WORDS_SCRATCH5            7
+
 #define IPA_DEBUG_TESTBUS_RSRC_TYPE_CNT_BIT_MASK 0x7E000
 #define IPA_DEBUG_TESTBUS_RSRC_TYPE_CNT_SHIFT    13
+
+#define IPA_REG_SAVE_HWP_GSI_EE                  2
 
 /*
  * A structure used to map a source address to destination address...
@@ -113,6 +117,11 @@ struct map_src_dst_addr_s {
  */
 #define GEN_SCALER_REG_OFST(reg_name) \
 	(HWIO_ ## reg_name ## _ADDR)
+/*
+ * A macro designed to generate the rmsk associated with reg_name
+ */
+#define GEN_SCALER_REG_RMSK(reg_name) \
+	(HWIO_ ## reg_name ## _RMSK)
 
 /*
  * A macro to generate the names of vector registers that reside in
@@ -175,6 +184,13 @@ struct map_src_dst_addr_s {
 	HWIO_ ## reg_name ## _OUT(val)
 
 /*
+ * Similar to the above, but with val masked by the register's rmsk...
+ */
+#define IPA_MASKED_WRITE_SCALER_REG(reg_name, val) \
+	out_dword(GEN_SCALER_REG_OFST(reg_name), \
+			  (GEN_SCALER_REG_RMSK(reg_name) & val))
+
+/*
  * A macro to generate the access to vector registers that reside in
  * the *hwio.h files (said files contain the manifest constants for
  * the registers' offsets in the register memory map). More
@@ -212,6 +228,15 @@ struct map_src_dst_addr_s {
 	 IPA_DEBUG_TESTBUS_RSRC_TYPE_CNT_SHIFT)
 
 /*
+ * Macro to get rsrc cnt of specific rsrc type and rsrc grp from test
+ * bus collected data
+ */
+#define IPA_DEBUG_TESTBUS_GET_RSRC_TYPE_CNT(rsrc_type, rsrc_grp) \
+	IPA_DEBUG_TESTBUS_DATA_GET_RSRC_CNT_BITS_FROM_DEBUG_DATA( \
+		ipa_reg_save.ipa.testbus->ep_rsrc[rsrc_type].entry_ep \
+		[rsrc_grp].testbus_data.value)
+
+/*
  * Macro to pluck the gsi version from ram.
  */
 #define IPA_REG_SAVE_GSI_VER(reg_name, var_name)	\
@@ -232,58 +257,6 @@ struct map_src_dst_addr_s {
 #define IPA_REG_SAVE_CFG_ENTRY_GSI_FIFO(reg_name, var_name, index) \
 	{ GEN_SCALER_REG_OFST(reg_name), \
 		(u32 *)&ipa_reg_save.ipa.gsi_fifo_status[index].var_name }
-
-/*
- * Macro to define a particular register cfg entry for all pipe
- * indexed register
- */
-#define IPA_REG_SAVE_CFG_ENTRY_PIPE_ENDP(reg_name, var_name) \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 0), \
-		(u32 *)&ipa_reg_save.ipa.pipes[0].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 1), \
-		(u32 *)&ipa_reg_save.ipa.pipes[1].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 2), \
-		(u32 *)&ipa_reg_save.ipa.pipes[2].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 3), \
-		(u32 *)&ipa_reg_save.ipa.pipes[3].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 4), \
-		(u32 *)&ipa_reg_save.ipa.pipes[4].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 5), \
-		(u32 *)&ipa_reg_save.ipa.pipes[5].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 6), \
-		(u32 *)&ipa_reg_save.ipa.pipes[6].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 7), \
-		(u32 *)&ipa_reg_save.ipa.pipes[7].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 8), \
-		(u32 *)&ipa_reg_save.ipa.pipes[8].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 9), \
-		(u32 *)&ipa_reg_save.ipa.pipes[9].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 10), \
-		(u32 *)&ipa_reg_save.ipa.pipes[10].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 11), \
-		(u32 *)&ipa_reg_save.ipa.pipes[11].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 12), \
-		(u32 *)&ipa_reg_save.ipa.pipes[12].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 13), \
-		(u32 *)&ipa_reg_save.ipa.pipes[13].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 14), \
-		(u32 *)&ipa_reg_save.ipa.pipes[14].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 15), \
-		(u32 *)&ipa_reg_save.ipa.pipes[15].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 16), \
-		(u32 *)&ipa_reg_save.ipa.pipes[16].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 17), \
-		(u32 *)&ipa_reg_save.ipa.pipes[17].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 18), \
-		(u32 *)&ipa_reg_save.ipa.pipes[18].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 19), \
-		(u32 *)&ipa_reg_save.ipa.pipes[19].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 20), \
-		(u32 *)&ipa_reg_save.ipa.pipes[20].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 21), \
-		(u32 *)&ipa_reg_save.ipa.pipes[21].endp.var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, 22), \
-		(u32 *)&ipa_reg_save.ipa.pipes[22].endp.var_name }
 
 /*
  * Macro to define a particular register cfg entry for all pipe
@@ -349,8 +322,9 @@ struct map_src_dst_addr_s {
 		(u32 *)&ipa_reg_save.gsi.gen_ee[IPA_HW_A7_EE].var_name }, \
 	{ GEN_1xVECTOR_REG_OFST(reg_name, IPA_HW_Q6_EE), \
 		(u32 *)&ipa_reg_save.gsi.gen_ee[IPA_HW_Q6_EE].var_name }, \
-	{ GEN_1xVECTOR_REG_OFST(reg_name, IPA_HW_UC_EE), \
-		(u32 *)&ipa_reg_save.gsi.gen_ee[IPA_HW_UC_EE].var_name }
+	{ GEN_1xVECTOR_REG_OFST(reg_name, IPA_REG_SAVE_HWP_GSI_EE), \
+		(u32 *)&ipa_reg_save.gsi.gen_ee[IPA_REG_SAVE_HWP_GSI_EE].\
+			var_name }
 
 /*
  * Macro to define a particular register cfg entry for all GSI EE
@@ -387,14 +361,20 @@ struct map_src_dst_addr_s {
 		(u32 *)&ipa_reg_save.gsi.ch_cntxt.a7[13].var_name }, \
 	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_A7_EE, 14), \
 		(u32 *)&ipa_reg_save.gsi.ch_cntxt.a7[14].var_name }, \
-	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_UC_EE, 0),	\
+	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_A7_EE, 15), \
+		(u32 *)&ipa_reg_save.gsi.ch_cntxt.a7[15].var_name }, \
+	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_A7_EE, 16), \
+		(u32 *)&ipa_reg_save.gsi.ch_cntxt.a7[16].var_name }, \
+	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_A7_EE, 17), \
+		(u32 *)&ipa_reg_save.gsi.ch_cntxt.a7[17].var_name }, \
+	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_A7_EE, 18), \
+		(u32 *)&ipa_reg_save.gsi.ch_cntxt.a7[18].var_name }, \
+	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_A7_EE, 19), \
+		(u32 *)&ipa_reg_save.gsi.ch_cntxt.a7[19].var_name }, \
+	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_REG_SAVE_HWP_GSI_EE, 1),	\
 		(u32 *)&ipa_reg_save.gsi.ch_cntxt.uc[0].var_name }, \
-	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_UC_EE, 1), \
-		(u32 *)&ipa_reg_save.gsi.ch_cntxt.uc[1].var_name }, \
-	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_UC_EE, 2),	\
-		(u32 *)&ipa_reg_save.gsi.ch_cntxt.uc[2].var_name }, \
-	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_UC_EE, 3), \
-		(u32 *)&ipa_reg_save.gsi.ch_cntxt.uc[3].var_name }
+	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_REG_SAVE_HWP_GSI_EE, 3), \
+		(u32 *)&ipa_reg_save.gsi.ch_cntxt.uc[1].var_name }
 
 #define IPA_REG_SAVE_CFG_ENTRY_GSI_EVT_CNTXT(reg_name, var_name) \
 	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_A7_EE, 0), \
@@ -421,7 +401,21 @@ struct map_src_dst_addr_s {
 		(u32 *)&ipa_reg_save.gsi.evt_cntxt.a7[10].var_name }, \
 	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_A7_EE, 11), \
 		(u32 *)&ipa_reg_save.gsi.evt_cntxt.a7[11].var_name }, \
-	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_UC_EE, 0), \
+	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_A7_EE, 12), \
+		(u32 *)&ipa_reg_save.gsi.evt_cntxt.a7[12].var_name }, \
+	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_A7_EE, 13), \
+		(u32 *)&ipa_reg_save.gsi.evt_cntxt.a7[13].var_name }, \
+	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_A7_EE, 14), \
+		(u32 *)&ipa_reg_save.gsi.evt_cntxt.a7[14].var_name }, \
+	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_A7_EE, 15), \
+		(u32 *)&ipa_reg_save.gsi.evt_cntxt.a7[15].var_name }, \
+	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_A7_EE, 16), \
+		(u32 *)&ipa_reg_save.gsi.evt_cntxt.a7[16].var_name }, \
+	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_A7_EE, 17), \
+		(u32 *)&ipa_reg_save.gsi.evt_cntxt.a7[17].var_name }, \
+	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_HW_A7_EE, 18), \
+		(u32 *)&ipa_reg_save.gsi.evt_cntxt.a7[18].var_name }, \
+	{ GEN_2xVECTOR_REG_OFST(reg_name, IPA_REG_SAVE_HWP_GSI_EE, 1), \
 		(u32 *)&ipa_reg_save.gsi.evt_cntxt.uc[0].var_name }
 
 /*
@@ -438,13 +432,22 @@ struct map_src_dst_addr_s {
 	{ GEN_1xVECTOR_REG_OFST(reg_name, 3), \
 		(u32 *)&ipa_reg_save.gsi.debug.gsi_qsb_debug.var_name[3] }
 
+#define IPA_REG_SAVE_RX_SPLT_CMDQ(reg_name, var_name) \
+	{ GEN_1xVECTOR_REG_OFST(reg_name, 0), \
+		(u32 *)&ipa_reg_save.ipa.dbg.var_name[0]}, \
+	{ GEN_1xVECTOR_REG_OFST(reg_name, 1), \
+		(u32 *)&ipa_reg_save.ipa.dbg.var_name[1]}, \
+	{ GEN_1xVECTOR_REG_OFST(reg_name, 2), \
+		(u32 *)&ipa_reg_save.ipa.dbg.var_name[2]}, \
+	{ GEN_1xVECTOR_REG_OFST(reg_name, 3), \
+		(u32 *)&ipa_reg_save.ipa.dbg.var_name[3]}
+
 /*
  * IPA HW Platform Type
  */
 enum ipa_hw_ee_e {
 	IPA_HW_A7_EE  = 0, /* A7's execution environment */
 	IPA_HW_Q6_EE  = 1, /* Q6's execution environment */
-	IPA_HW_UC_EE  = 2, /* UC's execution environment */
 	IPA_HW_HWP_EE = 3, /* HWP's execution environment */
 	IPA_HW_EE_MAX,     /* Max EE to support */
 };
@@ -456,8 +459,6 @@ enum ipa_hw_ee_e {
 struct ipa_gen_regs_s {
 	struct ipa_hwio_def_ipa_state_s
 	  ipa_state;
-	struct ipa_hwio_def_ipa_gsi_conf_s
-	  ipa_gsi_conf;
 	struct ipa_hwio_def_ipa_state_rx_active_s
 	  ipa_state_rx_active;
 	struct ipa_hwio_def_ipa_state_tx_wrapper_s
@@ -470,8 +471,10 @@ struct ipa_gen_regs_s {
 	  ipa_state_aggr_active;
 	struct ipa_hwio_def_ipa_state_dfetcher_s
 	  ipa_state_dfetcher;
-	struct ipa_hwio_def_ipa_state_fetcher_mask_s
-	  ipa_state_fetcher_mask;
+	struct ipa_hwio_def_ipa_state_fetcher_mask_0_s
+	  ipa_state_fetcher_mask_0;
+	struct ipa_hwio_def_ipa_state_fetcher_mask_1_s
+	  ipa_state_fetcher_mask_1;
 	struct ipa_hwio_def_ipa_state_gsi_aos_s
 	  ipa_state_gsi_aos;
 	struct ipa_hwio_def_ipa_state_gsi_if_s
@@ -480,8 +483,6 @@ struct ipa_gen_regs_s {
 	  ipa_state_gsi_skip;
 	struct ipa_hwio_def_ipa_state_gsi_tlv_s
 	  ipa_state_gsi_tlv;
-	struct ipa_hwio_def_ipa_tag_timer_s
-	  ipa_tag_timer;
 	struct ipa_hwio_def_ipa_dpl_timer_lsb_s
 	  ipa_dpl_timer_lsb;
 	struct ipa_hwio_def_ipa_dpl_timer_msb_s
@@ -528,8 +529,6 @@ struct ipa_gen_regs_s {
 	  ipa_ipv4_route_init_values;
 	struct ipa_hwio_def_ipa_ipv6_route_init_values_s
 	  ipa_ipv6_route_init_values;
-	struct ipa_hwio_def_ipa_bcr_s
-	  ipa_bcr;
 	struct ipa_hwio_def_ipa_bam_activated_ports_s
 	  ipa_bam_activated_ports;
 	struct ipa_hwio_def_ipa_tx_commander_cmdq_status_s
@@ -552,6 +551,32 @@ struct ipa_gen_regs_s {
 	  ipa_rsrc_grp_cfg;
 	struct ipa_hwio_def_ipa_comp_cfg_s
 	  ipa_comp_cfg;
+	struct ipa_hwio_def_ipa_state_dpl_fifo_s
+	  ipa_state_dpl_fifo;
+	struct ipa_hwio_def_ipa_pipeline_disable_s
+	  ipa_pipeline_disable;
+	struct ipa_hwio_def_ipa_state_nlo_aggr_s
+	  ipa_state_nlo_aggr;
+	struct ipa_hwio_def_ipa_nlo_pp_cfg1_s
+	  ipa_nlo_pp_cfg1;
+	struct ipa_hwio_def_ipa_nlo_pp_cfg2_s
+	  ipa_nlo_pp_cfg2;
+	struct ipa_hwio_def_ipa_nlo_pp_ack_limit_cfg_s
+	  ipa_nlo_pp_ack_limit_cfg;
+	struct ipa_hwio_def_ipa_nlo_pp_data_limit_cfg_s
+	  ipa_nlo_pp_data_limit_cfg;
+	struct ipa_hwio_def_ipa_nlo_min_dsm_cfg_s
+	  ipa_nlo_min_dsm_cfg;
+	struct ipa_hwio_def_ipa_nlo_vp_flush_req_s
+	  ipa_nlo_vp_flush_req;
+	struct ipa_hwio_def_ipa_nlo_vp_flush_cookie_s
+	  ipa_nlo_vp_flush_cookie;
+	struct ipa_hwio_def_ipa_nlo_vp_flush_ack_s
+	  ipa_nlo_vp_flush_ack;
+	struct ipa_hwio_def_ipa_nlo_vp_dsm_open_s
+	  ipa_nlo_vp_dsm_open;
+	struct ipa_hwio_def_ipa_nlo_vp_qbap_open_s
+	  ipa_nlo_vp_qbap_open;
 };
 
 /*
@@ -618,8 +643,6 @@ struct ipa_reg_save_pipe_endp_s {
 	  ipa_endp_gsi_cfg_aos_n;
 	struct ipa_hwio_def_ipa_endp_gsi_cfg1_n_s
 	  ipa_endp_gsi_cfg1_n;
-	struct ipa_hwio_def_ipa_endp_gsi_cfg2_n_s
-	  ipa_endp_gsi_cfg2_n;
 	struct ipa_hwio_def_ipa_endp_filter_router_hsh_cfg_n_s
 	  ipa_endp_filter_router_hsh_cfg_n;
 };
@@ -662,9 +685,17 @@ struct ipa_reg_save_hwp_s {
  * IPA TESTBUS entry struct
  */
 struct ipa_reg_save_ipa_testbus_entry_s {
-	union ipa_hwio_def_ipa_debug_data_sel_u testbus_sel;
+	union ipa_hwio_def_ipa_testbus_sel_u testbus_sel;
 	union ipa_hwio_def_ipa_debug_data_u testbus_data;
 };
+
+/* IPA TESTBUS global struct */
+struct ipa_reg_save_ipa_testbus_global_s {
+	struct ipa_reg_save_ipa_testbus_entry_s
+	global[IPA_TESTBUS_SEL_INTERNAL_MAX + 1]
+	[IPA_TESTBUS_SEL_EXTERNAL_MAX + 1];
+};
+
 /* IPA TESTBUS per EP struct */
 struct ipa_reg_save_ipa_testbus_ep_s {
 	struct ipa_reg_save_ipa_testbus_entry_s
@@ -672,10 +703,19 @@ struct ipa_reg_save_ipa_testbus_ep_s {
 	[IPA_TESTBUS_SEL_EXTERNAL_MAX + 1];
 };
 
+/* IPA TESTBUS per EP struct */
+struct ipa_reg_save_ipa_testbus_ep_rsrc_s {
+	struct ipa_reg_save_ipa_testbus_entry_s
+	  entry_ep[IPA_DEBUG_TESTBUS_RSRC_NUM_GRP];
+};
+
 /* IPA TESTBUS save data struct */
 struct ipa_reg_save_ipa_testbus_s {
+	struct ipa_reg_save_ipa_testbus_global_s global;
 	struct ipa_reg_save_ipa_testbus_ep_s
 	  ep[IPA_TESTBUS_SEL_EP_MAX + 1];
+	struct ipa_reg_save_ipa_testbus_ep_rsrc_s
+	  ep_rsrc[IPA_DEBUG_TESTBUS_RSRC_NUM_EP];
 };
 
 /*
@@ -686,42 +726,36 @@ struct ipa_reg_save_dbg_s {
 	  ipa_debug_data;
 	struct ipa_hwio_def_ipa_step_mode_status_s
 	  ipa_step_mode_status;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_0_cmd_s
-	  ipa_rx_splt_cmdq_0_cmd;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_0_data_rd_0_s
-	  ipa_rx_splt_cmdq_0_data_rd_0;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_0_data_rd_1_s
-	  ipa_rx_splt_cmdq_0_data_rd_1;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_0_data_rd_2_s
-	  ipa_rx_splt_cmdq_0_data_rd_2;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_0_data_rd_3_s
-	  ipa_rx_splt_cmdq_0_data_rd_3;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_0_status_s
-	  ipa_rx_splt_cmdq_0_status;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_1_cmd_s
-	  ipa_rx_splt_cmdq_1_cmd;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_1_data_rd_0_s
-	  ipa_rx_splt_cmdq_1_data_rd_0;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_1_data_rd_1_s
-	  ipa_rx_splt_cmdq_1_data_rd_1;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_1_data_rd_2_s
-	  ipa_rx_splt_cmdq_1_data_rd_2;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_1_data_rd_3_s
-	  ipa_rx_splt_cmdq_1_data_rd_3;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_1_status_s
-	  ipa_rx_splt_cmdq_1_status;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_2_cmd_s
-	  ipa_rx_splt_cmdq_2_cmd;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_2_data_rd_0_s
-	  ipa_rx_splt_cmdq_2_data_rd_0;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_2_data_rd_1_s
-	  ipa_rx_splt_cmdq_2_data_rd_1;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_2_data_rd_2_s
-	  ipa_rx_splt_cmdq_2_data_rd_2;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_2_data_rd_3_s
-	  ipa_rx_splt_cmdq_2_data_rd_3;
-	struct ipa_hwio_def_ipa_rx_splt_cmdq_2_status_s
-	  ipa_rx_splt_cmdq_2_status;
+	struct ipa_hwio_def_ipa_step_mode_breakpoints_s
+	  ipa_step_mode_breakpoints;
+	struct ipa_hwio_def_ipa_rx_splt_cmdq_cmd_n_s
+	  ipa_rx_splt_cmdq_cmd_n[IPA_RX_SPLT_CMDQ_MAX];
+	struct ipa_hwio_def_ipa_rx_splt_cmdq_cfg_n_s
+	 ipa_rx_splt_cmdq_cfg_n[IPA_RX_SPLT_CMDQ_MAX];
+	struct ipa_hwio_def_ipa_rx_splt_cmdq_data_wr_0_n_s
+	  ipa_rx_splt_cmdq_data_wr_0_n[IPA_RX_SPLT_CMDQ_MAX];
+	struct ipa_hwio_def_ipa_rx_splt_cmdq_data_wr_1_n_s
+	  ipa_rx_splt_cmdq_data_wr_1_n[IPA_RX_SPLT_CMDQ_MAX];
+	struct ipa_hwio_def_ipa_rx_splt_cmdq_data_wr_2_n_s
+	  ipa_rx_splt_cmdq_data_wr_2_n[IPA_RX_SPLT_CMDQ_MAX];
+	struct ipa_hwio_def_ipa_rx_splt_cmdq_data_wr_3_n_s
+	  ipa_rx_splt_cmdq_data_wr_3_n[IPA_RX_SPLT_CMDQ_MAX];
+	struct ipa_hwio_def_ipa_rx_splt_cmdq_data_rd_0_n_s
+	  ipa_rx_splt_cmdq_data_rd_0_n[IPA_RX_SPLT_CMDQ_MAX];
+	struct ipa_hwio_def_ipa_rx_splt_cmdq_data_rd_1_n_s
+	  ipa_rx_splt_cmdq_data_rd_1_n[IPA_RX_SPLT_CMDQ_MAX];
+	struct ipa_hwio_def_ipa_rx_splt_cmdq_data_rd_2_n_s
+	  ipa_rx_splt_cmdq_data_rd_2_n[IPA_RX_SPLT_CMDQ_MAX];
+	struct ipa_hwio_def_ipa_rx_splt_cmdq_data_rd_3_n_s
+	  ipa_rx_splt_cmdq_data_rd_3_n[IPA_RX_SPLT_CMDQ_MAX];
+	struct ipa_hwio_def_ipa_rx_splt_cmdq_status_n_s
+	  ipa_rx_splt_cmdq_status_n[IPA_RX_SPLT_CMDQ_MAX];
+
+	union ipa_hwio_def_ipa_rx_hps_cmdq_cfg_wr_u
+		ipa_rx_hps_cmdq_cfg_wr;
+	union ipa_hwio_def_ipa_rx_hps_cmdq_cfg_rd_u
+		ipa_rx_hps_cmdq_cfg_rd;
+
 	struct ipa_hwio_def_ipa_rx_hps_cmdq_cmd_s
 	  ipa_rx_hps_cmdq_cmd;
 	union ipa_hwio_def_ipa_rx_hps_cmdq_data_rd_0_u
@@ -755,11 +789,7 @@ struct ipa_reg_save_dbg_s {
 	union ipa_hwio_def_ipa_hps_dps_cmdq_status_u
 		ipa_hps_dps_cmdq_status_arr[IPA_TESTBUS_SEL_EP_MAX + 1];
 	struct ipa_hwio_def_ipa_hps_dps_cmdq_status_empty_s
-		ipa_hps_dps_cmdq_status_empty;
-	union ipa_hwio_def_ipa_rx_hps_cmdq_cfg_wr_u
-		ipa_rx_hps_cmdq_cfg_wr;
-	union ipa_hwio_def_ipa_rx_hps_cmdq_cfg_rd_u
-		ipa_rx_hps_cmdq_cfg_rd;
+	  ipa_hps_dps_cmdq_status_empty;
 
 	struct ipa_hwio_def_ipa_dps_tx_cmdq_cmd_s
 	  ipa_dps_tx_cmdq_cmd;
@@ -824,6 +854,8 @@ struct ipa_reg_save_src_rsrc_grp_s {
 	  ipa_src_rsrc_grp_01_rsrc_type_n;
 	struct ipa_hwio_def_ipa_src_rsrc_grp_23_rsrc_type_n_s
 	  ipa_src_rsrc_grp_23_rsrc_type_n;
+	struct ipa_hwio_def_ipa_src_rsrc_grp_45_rsrc_type_n_s
+	  ipa_src_rsrc_grp_45_rsrc_type_n;
 };
 
 /* Source Resource Group IPA register save data struct */
@@ -832,18 +864,24 @@ struct ipa_reg_save_dst_rsrc_grp_s {
 	  ipa_dst_rsrc_grp_01_rsrc_type_n;
 	struct ipa_hwio_def_ipa_dst_rsrc_grp_23_rsrc_type_n_s
 	  ipa_dst_rsrc_grp_23_rsrc_type_n;
+	struct ipa_hwio_def_ipa_dst_rsrc_grp_45_rsrc_type_n_s
+	  ipa_dst_rsrc_grp_45_rsrc_type_n;
 };
 
 /* Source Resource Group Count IPA register save data struct */
 struct ipa_reg_save_src_rsrc_cnt_s {
 	struct ipa_hwio_def_ipa_src_rsrc_grp_0123_rsrc_type_cnt_n_s
 	  ipa_src_rsrc_grp_0123_rsrc_type_cnt_n;
+	struct ipa_hwio_def_ipa_src_rsrc_grp_4567_rsrc_type_cnt_n_s
+	  ipa_src_rsrc_grp_4567_rsrc_type_cnt_n;
 };
 
 /* Destination Resource Group Count IPA register save data struct */
 struct ipa_reg_save_dst_rsrc_cnt_s {
 	struct ipa_hwio_def_ipa_dst_rsrc_grp_0123_rsrc_type_cnt_n_s
 	  ipa_dst_rsrc_grp_0123_rsrc_type_cnt_n;
+	struct ipa_hwio_def_ipa_dst_rsrc_grp_4567_rsrc_type_cnt_n_s
+	  ipa_dst_rsrc_grp_4567_rsrc_type_cnt_n;
 };
 
 /* GSI General register save data struct */
@@ -888,13 +926,18 @@ struct ipa_reg_save_gsi_gen_ee_s {
 	  ee_n_cntxt_scratch_0;
 	struct gsi_hwio_def_ee_n_cntxt_scratch_1_s
 	  ee_n_cntxt_scratch_1;
+	struct gsi_hwio_def_ee_n_cntxt_intset_s
+	  ee_n_cntxt_intset;
+	struct gsi_hwio_def_ee_n_cntxt_msi_base_lsb_s
+	  ee_n_cntxt_msi_base_lsb;
+	struct gsi_hwio_def_ee_n_cntxt_msi_base_msb_s
+	  ee_n_cntxt_msi_base_msb;
 };
 
 /* GSI QSB debug register save data struct */
 struct ipa_reg_save_gsi_qsb_debug_s {
-	struct
-	  gsi_hwio_def_gsi_debug_qsb_log_last_misc_idn_s
-		qsb_log_last_misc[GSI_HW_QSB_LOG_MISC_MAX];
+	struct gsi_hwio_def_gsi_debug_qsb_log_last_misc_idn_s
+	  qsb_log_last_misc[GSI_HW_QSB_LOG_MISC_MAX];
 };
 
 static u32 ipa_reg_save_gsi_ch_test_bus_selector_array[] = {
@@ -941,6 +984,14 @@ static u32 ipa_reg_save_gsi_ch_test_bus_selector_array[] = {
 	HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_CSR,
 	HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_SDMA_0,
 	HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_SDMA_1,
+	HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_IE_2,
+	HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_CSR_1,
+	HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_CSR_2,
+	HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_MCS_5,
+	HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_IC_5,
+	HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_CSR_3,
+	HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_TLV_0,
+	HWIO_GSI_DEBUG_TEST_BUS_SELECTOR_REE_8,
 };
 
 /*
@@ -1032,7 +1083,7 @@ struct ipa_reg_save_gsi_debug_s {
 	  ipa_gsi_top_gsi_debug_pc_for_debug;
 	struct ipa_hwio_def_ipa_gsi_top_gsi_debug_qsb_log_err_trns_id_s
 	  ipa_gsi_top_gsi_debug_qsb_log_err_trns_id;
-	struct ipa_reg_save_gsi_qsb_debug_s		gsi_qsb_debug;
+	struct ipa_reg_save_gsi_qsb_debug_s	gsi_qsb_debug;
 	struct ipa_reg_save_gsi_test_bus_s		gsi_test_bus;
 	struct ipa_reg_save_gsi_mcs_regs_s		gsi_mcs_regs;
 	struct ipa_reg_save_gsi_debug_cnt_s		gsi_cnt_regs;
@@ -1080,8 +1131,8 @@ struct ipa_reg_save_gsi_ch_cntxt_per_ep_s {
 	  ee_n_gsi_ch_k_scratch_2;
 	struct gsi_hwio_def_ee_n_gsi_ch_k_scratch_3_s
 	  ee_n_gsi_ch_k_scratch_3;
-	struct gsi_hwio_def_gsi_debug_ee_n_ch_k_vp_table_s
-	  gsi_debug_ee_n_ch_k_vp_table;
+	struct gsi_hwio_def_gsi_map_ee_n_ch_k_vp_table_s
+	  gsi_map_ee_n_ch_k_vp_table;
 	struct ipa_reg_save_gsi_mcs_channel_scratch_regs_s mcs_channel_scratch;
 };
 
@@ -1125,11 +1176,12 @@ struct ipa_reg_save_gsi_evt_cntxt_per_ep_s {
 
 /* GSI FIFO status register save data struct */
 struct ipa_reg_save_gsi_fifo_status_s {
-	union ipa_hwio_def_ipa_gsi_fifo_status_ctrl_u	gsi_fifo_status_ctrl;
-	union ipa_hwio_def_ipa_gsi_tlv_fifo_status_u	gsi_tlv_fifo_status;
-	union ipa_hwio_def_ipa_gsi_tlv_pub_fifo_status_u
-							gsi_tlv_pub_fifo_status;
-	union ipa_hwio_def_ipa_gsi_aos_fifo_status_u	gsi_aos_fifo_status;
+	union ipa_hwio_def_ipa_gsi_fifo_status_ctrl_u
+		gsi_fifo_status_ctrl;
+	union ipa_hwio_def_ipa_gsi_tlv_fifo_status_u
+		gsi_tlv_fifo_status;
+	union ipa_hwio_def_ipa_gsi_aos_fifo_status_u
+		gsi_aos_fifo_status;
 };
 
 /* GSI Channel Context register save top level data struct */
@@ -1150,20 +1202,32 @@ struct ipa_reg_save_gsi_evt_cntxt_s {
 
 /* Top level IPA register save data struct */
 struct ipa_regs_save_hierarchy_s {
-	struct ipa_gen_regs_s			gen;
-	struct ipa_reg_save_gen_ee_s	gen_ee[IPA_HW_EE_MAX];
-	struct ipa_reg_save_hwp_s		hwp;
-	struct ipa_reg_save_dbg_s		dbg;
-	struct ipa_reg_save_ipa_testbus_s	*testbus;
-	struct ipa_reg_save_pipe_s		pipes[IPA_HW_PIPE_ID_MAX];
+	struct ipa_gen_regs_s
+		gen;
+	struct ipa_reg_save_gen_ee_s
+		gen_ee[IPA_HW_EE_MAX];
+	struct ipa_reg_save_hwp_s
+		hwp;
+	struct ipa_reg_save_dbg_s
+		dbg;
+	struct ipa_reg_save_ipa_testbus_s
+		*testbus;
+	struct ipa_reg_save_pipe_s
+		pipes[IPA_HW_PIPE_ID_MAX];
 	struct ipa_reg_save_src_rsrc_grp_s
-	  src_rsrc_grp[IPA_HW_SRC_RSRP_TYPE_MAX];
+		src_rsrc_grp[IPA_HW_SRC_RSRP_TYPE_MAX];
 	struct ipa_reg_save_dst_rsrc_grp_s
-	  dst_rsrc_grp[IPA_HW_DST_RSRP_TYPE_MAX];
+		dst_rsrc_grp[IPA_HW_DST_RSRP_TYPE_MAX];
 	struct ipa_reg_save_src_rsrc_cnt_s
-	  src_rsrc_cnt[IPA_HW_SRC_RSRP_TYPE_MAX];
+		src_rsrc_cnt[IPA_HW_SRC_RSRP_TYPE_MAX];
 	struct ipa_reg_save_dst_rsrc_cnt_s
-	  dst_rsrc_cnt[IPA_HW_DST_RSRP_TYPE_MAX];
+		dst_rsrc_cnt[IPA_HW_DST_RSRP_TYPE_MAX];
+	u32 *ipa_iu_ptr;
+	u32 *ipa_sram_ptr;
+	u32 *ipa_mbox_ptr;
+	u32 *ipa_hram_ptr;
+	u32 *ipa_seq_ptr;
+	u32 *ipa_gsi_ptr;
 };
 
 /* Top level GSI register save data struct */
@@ -1209,7 +1273,9 @@ struct ipa_reg_save_rsrc_cnts_s {
 	struct ipa_reg_save_rsrc_cnts_per_grp_s ddr;
 };
 
-/* Top level IPA and GSI registers save data struct */
+/*
+ * Top level IPA and GSI registers save data struct
+ */
 struct regs_save_hierarchy_s {
 	struct ipa_regs_save_hierarchy_s
 		ipa;

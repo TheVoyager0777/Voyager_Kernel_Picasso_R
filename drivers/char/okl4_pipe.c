@@ -434,8 +434,7 @@ okl4_pipe_close(struct inode *inode, struct file *filp)
 		okl4_pipe_control(pipe->pipe_tx_kcap,
 				OKL4_PIPE_CONTROL_OP_RESET);
 
-		if (pipe->rx_buf)
-			kfree(pipe->rx_buf);
+		kfree(pipe->rx_buf);
 		pipe->rx_buf = NULL;
 		pipe->rx_buf_count = 0;
 	}
@@ -518,7 +517,8 @@ okl4_pipe_probe(struct platform_device *pdev)
 	}
 	pipe->rx_irq = irq->start;
 
-	pipe->write_buf = kmalloc(sizeof(pipe->write_buf), GFP_KERNEL);
+	pipe->write_buf = kmalloc(sizeof(struct okl4_pipe_data_buffer *),
+                                                        GFP_KERNEL);
 	if (!pipe->write_buf) {
 		dev_err(&pdev->dev, "cannot allocate write buffer\n");
 		err = -ENOMEM;
@@ -621,7 +621,6 @@ static struct platform_driver okl4_pipe_driver = {
 	.remove		= __devexit_p(okl4_pipe_remove),
 	.driver = {
 		.name = DRIVER_NAME,
-		.owner = THIS_MODULE,
 		.of_match_table = okl4_pipe_match,
 	},
 };

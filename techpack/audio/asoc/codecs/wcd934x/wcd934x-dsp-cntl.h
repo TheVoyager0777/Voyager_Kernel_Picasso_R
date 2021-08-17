@@ -1,14 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #ifndef __WCD934X_DSP_CNTL_H__
@@ -25,9 +17,9 @@ enum cdc_ssr_event {
 
 struct wcd_dsp_cdc_cb {
 	/* Callback to enable codec clock */
-	int (*cdc_clk_en)(struct snd_soc_codec *, bool);
+	int (*cdc_clk_en)(struct snd_soc_component *component, bool enable);
 	/* Callback to vote and unvote for SVS2 mode */
-	void (*cdc_vote_svs)(struct snd_soc_codec *, bool);
+	void (*cdc_vote_svs)(struct snd_soc_component *component, bool enable);
 };
 
 struct wcd_dsp_irq_info {
@@ -69,7 +61,7 @@ struct wdsp_ssr_entry {
 
 struct wcd_dsp_cntl {
 	/* Handle to codec */
-	struct snd_soc_codec *codec;
+	struct snd_soc_component *component;
 
 	/* Clk rate of the codec clock */
 	u32 clk_rate;
@@ -117,7 +109,7 @@ struct wcd_dsp_cntl {
 #endif
 };
 
-void wcd_dsp_cntl_init(struct snd_soc_codec *codec,
+void wcd_dsp_cntl_init(struct snd_soc_component *component,
 		       struct wcd_dsp_params *params,
 		       struct wcd_dsp_cntl **cntl);
 void wcd_dsp_cntl_deinit(struct wcd_dsp_cntl **cntl);

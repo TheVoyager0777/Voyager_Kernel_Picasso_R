@@ -1,4 +1,5 @@
-/* Copyright (c) 2016, 2017-2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2016, 2017-2018, 2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -31,11 +32,11 @@
 
 #ifdef MSM_CAMERA_TZ_I2C_VERBOSE
 	#define CDBG(fmt, args...) \
-		pr_info(CONFIG_MSM_SEC_CCI_TA_NAME "::%s:%d - " fmt, \
+		pr_info(CONFIG_MSM_SEC_CCI_TA_NAME "::%s:%d -\n" fmt, \
 		__func__, __LINE__, ##args)
 #else /* MSM_CAMERA_TZ_I2C_VERBOSE */
 	#define CDBG(fmt, args...) \
-		pr_debug("%s:%d - " fmt,  __func__, __LINE__, ##args)
+		pr_debug("%s:%d -\n" fmt,  __func__, __LINE__, ##args)
 #endif /* MSM_CAMERA_TZ_I2C_VERBOSE */
 
 #pragma pack(push, msm_camera_tz_i2c, 1)

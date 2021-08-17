@@ -6,15 +6,16 @@ config TOUCHSCREEN_ST_FTS_V521
 
 	  If unsure, say N.
 
-	  To compile this driver as a module, choose M here: the
+	  To compile this driver as a module, choose M here:
 
 config FTS_FOD_AREA_REPORT
 	tristate "FTS FOD area report"
 	depends on TOUCHSCREEN_ST_FTS_V521
+	default y
 	help
-          Say Y here to enable  fod area report functionality.
+      Say Y here to enable  fod area report functionality.
 
-          If unsure, say N.
+      If unsure, say N.
 
 config TOUCHSCREEN_ST_DEBUG_FS
 	tristate "St core driver module"

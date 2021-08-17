@@ -1,15 +1,5 @@
-/*
- * Copyright (c) 2014, 2017, The Linux Foundation. All rights reserved.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+/* SPDX-License-Identifier: GPL-2.0 */
+/* Copyright (c) 2014, 2017-2018, The Linux Foundation. All rights reserved. */
 
 #ifndef __QCOM_CLK_REGMAP_H__
 #define __QCOM_CLK_REGMAP_H__
@@ -22,6 +12,7 @@ struct regmap;
 /**
  * struct clk_regmap - regmap supporting clock
  * @hw:		handle between common and hardware-specific interfaces
+ * @dependent_hw: dependent clocks clock hw
  * @regmap:	regmap to use for regmap helpers and/or by providers
  * @enable_reg: register when using regmap enable/disable ops
  * @enable_mask: mask when using regmap enable/disable ops
@@ -30,6 +21,7 @@ struct regmap;
  */
 struct clk_regmap {
 	struct clk_hw hw;
+	struct clk_hw *dependent_hw;
 	struct regmap *regmap;
 	unsigned int enable_reg;
 	unsigned int enable_mask;

@@ -1,7 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * FTS Capacitive touch screen controller (FingerTipS)
  *
- * Copyright (C) 2016-2018, STMicroelectronics Limited.
+ * Copyright (C) 2016-2019, STMicroelectronics Limited.
  * Authors: AMG(Analog Mems Group) <marco.cali@st.com>
  *
  *
@@ -23,6 +24,7 @@
 
 /*#include <linux/wakelock.h>*/
 #include <linux/pm_wakeup.h>
+#include <linux/input/touch_event_notify.h>
 
 #include "fts_lib/ftsSoftware.h"
 #include "fts_lib/ftsHardware.h"
@@ -38,7 +40,7 @@
 #define FTS_TS_DRV_NAME      "fts"
 #define FTS_TS_DRV_VERSION   "4.2.14" /* version */
 
-#define SCRIPTLESS /*allow to work in scriptless mode with the GUI*/
+/*#define SCRIPTLESS*/ /*allow to work in scriptless mode with the GUI*/
 #ifdef SCRIPTLESS
 #define SCRIPTLESS_DEBUG
 /**
@@ -65,7 +67,7 @@
 
 
 /**** FEATURES USED IN THE IC ***/
-#define PHONE_KEY /*enable the keys*/
+/* #define PHONE_KEY enable the keys */
 
 #define PHONE_GESTURE /*allow to use the gestures*/
 #ifdef PHONE_GESTURE
@@ -194,6 +196,7 @@ struct fts_i2c_platform_data {
 	int reset_gpio;
 	const char *pwr_reg_name;
 	const char *bus_reg_name;
+	bool pwr_on_suspend;
 };
 
 /*
@@ -204,8 +207,10 @@ struct fts_ts_info;
 /*
  * Dispatch event handler
  */
-typedef void (*event_dispatch_handler_t)
-		(struct fts_ts_info *info, unsigned char *data);
+struct event_dispatch_handler_t {
+	void (*handler)(struct fts_ts_info *info, unsigned char *data);
+};
+
 /*
  * struct fts_ts_info - FTS capacitive touch screen device information
  * @dev:                  Pointer to the structure device
@@ -252,7 +257,7 @@ struct fts_ts_info {
 	struct pinctrl_state *pinctrl_state_suspend;
 	struct pinctrl_state *pinctrl_state_release;
 
-	event_dispatch_handler_t *event_dispatch_table;
+	struct event_dispatch_handler_t *event_dispatch_table;
 
 	struct attribute_group    attrs;
 
@@ -290,24 +295,38 @@ struct fts_ts_info {
 
 	struct notifier_block notifier;
 	bool sensor_sleep;
-	struct wakeup_source wakeup_source;
+	struct wakeup_source *wakeup_source;
 
 	/* input lock */
 	struct mutex input_report_mutex;
 
 	/*switches for features*/
-	int gesture_enabled;
-	int glove_enabled;
-	int charger_enabled;
-	int stylus_enabled;
-	int vr_enabled;
-	int cover_enabled;
-	int edge_rej_enabled;
-	int corner_rej_enabled;
-	int edge_palm_rej_enabled;
+	unsigned int gesture_enabled;
+	unsigned int glove_enabled;
+	unsigned int charger_enabled;
+	unsigned int stylus_enabled;
+	unsigned int vr_enabled;
+	unsigned int cover_enabled;
+	unsigned int edge_rej_enabled;
+	unsigned int corner_rej_enabled;
+	unsigned int edge_palm_rej_enabled;
 
 	uint8_t *i2c_data;
 	uint8_t i2c_data_len;
+
+	struct device *aoi_cmd_dev;
+	bool aoi_notify_enabled;
+	bool aoi_wake_on_suspend;
+
+	unsigned long event_mask;
+	unsigned long finger_pressed;
+	struct touch_event event[FIFO_DEPTH];
+
+	/* aoi region */
+	int aoi_left;
+	int aoi_top;
+	int aoi_bottom;
+	int aoi_right;
 };
 
 extern struct chipInfo ftsInfo;
@@ -320,12 +339,14 @@ int fts_chip_powercycle2(struct fts_ts_info *info, unsigned long sleep);
 extern int input_register_notifier_client(struct notifier_block *nb);
 extern int input_unregister_notifier_client(struct notifier_block *nb);
 
+extern struct attribute_group aoi_cmd_attr_group;
+
 #ifdef SCRIPTLESS
-extern struct attribute_group	i2c_cmd_attr_group;
+extern struct attribute_group i2c_cmd_attr_group;
 #endif
 
 #ifdef DRIVER_TEST
-extern struct attribute_group	test_cmd_attr_group;
+extern struct attribute_group test_cmd_attr_group;
 #endif
 
 

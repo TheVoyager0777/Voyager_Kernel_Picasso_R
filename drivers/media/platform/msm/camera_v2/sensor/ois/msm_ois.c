@@ -1,4 +1,5 @@
-/* Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2014-2018, 2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -10,7 +11,7 @@
  * GNU General Public License for more details.
  */
 
-#define pr_fmt(fmt) "%s:%d " fmt, __func__, __LINE__
+#define pr_fmt(fmt) "%s:%d\n"fmt, __func__, __LINE__
 
 #include <linux/module.h>
 #include <linux/firmware.h>
@@ -366,7 +367,7 @@ static int32_t msm_ois_power_down(struct msm_ois_ctrl_t *o_ctrl)
 						o_ctrl->pinctrl_info
 							.gpio_state_suspend);
 					if (rc < 0)
-						pr_err("ERR:%s:%d cannot set pin to suspend state: %d",
+						pr_err("ERR:%s:%d cannot set pin to suspend state: %d\n",
 							__func__, __LINE__, rc);
 					devm_pinctrl_put(
 						o_ctrl->pinctrl_info.pinctrl);
@@ -749,7 +750,7 @@ static int32_t msm_ois_power_up(struct msm_ois_ctrl_t *o_ctrl)
 					o_ctrl->pinctrl_info.pinctrl,
 					o_ctrl->pinctrl_info.gpio_state_active);
 				if (rc < 0)
-					pr_err("ERR:%s:%d cannot set pin to active state: %d",
+					pr_err("ERR:%s:%d cannot set pin to active state: %d\n",
 						__func__, __LINE__, rc);
 			}
 
@@ -884,14 +885,13 @@ static long msm_ois_subdev_do_ioctl(
 				u32->cfg.set_info.ois_params.i2c_data_type;
 			ois_data.cfg.set_info.ois_params.settings =
 				compat_ptr(u32->cfg.set_info.ois_params
-				.settings);
+					.settings);
 			parg = &ois_data;
 			break;
 		case CFG_OIS_I2C_WRITE_SEQ_TABLE:
 			if (copy_from_user(&settings32,
-				(void __user *)compat_ptr(u32->cfg.settings),
-				sizeof(
-				struct msm_camera_i2c_seq_reg_setting32))) {
+			(void __user *)compat_ptr(u32->cfg.settings),
+			sizeof(struct msm_camera_i2c_seq_reg_setting32))) {
 				pr_err("copy_from_user failed\n");
 				return -EFAULT;
 			}
@@ -900,21 +900,11 @@ static long msm_ois_subdev_do_ioctl(
 			settings.delay = settings32.delay;
 			settings.size = settings32.size;
 
-			settings.reg_setting =
-				kzalloc(
-				sizeof(struct msm_camera_i2c_seq_reg_array),
-				GFP_KERNEL);
-			if (!settings.reg_setting)
-				return -ENOMEM;
-			if (copy_from_user(settings.reg_setting,
-				(void __user *)
+			settings.reg_setting = memdup_user((void __user *)
 				compat_ptr(settings32.reg_setting),
-				sizeof(struct msm_camera_i2c_seq_reg_array))) {
-				kfree(settings.reg_setting);
-				pr_err("%s:%d failed\n", __func__, __LINE__);
-				return -EFAULT;
-			}
-
+				sizeof(struct msm_camera_i2c_seq_reg_array));
+			if (IS_ERR(settings.reg_setting))
+				return PTR_ERR(settings.reg_setting);
 			ois_data.cfg.settings = &settings;
 			parg = &ois_data;
 			break;
@@ -924,7 +914,8 @@ static long msm_ois_subdev_do_ioctl(
 		}
 		break;
 	case VIDIOC_MSM_OIS_CFG:
-		pr_err("%s: invalid cmd 0x%x received\n", __func__, cmd);
+		pr_err("%s: invalid cmd 0x%x received\n", __func__,
+				cmd);
 		return -EINVAL;
 	}
 	rc = msm_ois_subdev_ioctl(sd, cmd, parg);
@@ -1068,7 +1059,6 @@ static struct i2c_driver msm_ois_i2c_driver = {
 	.remove = __exit_p(msm_ois_i2c_remove),
 	.driver = {
 		.name = "qcom,ois",
-		.owner = THIS_MODULE,
 		.of_match_table = msm_ois_i2c_dt_match,
 	},
 };
@@ -1084,7 +1074,6 @@ static struct platform_driver msm_ois_platform_driver = {
 	.probe = msm_ois_platform_probe,
 	.driver = {
 		.name = "qcom,ois",
-		.owner = THIS_MODULE,
 		.of_match_table = msm_ois_dt_match,
 	},
 };

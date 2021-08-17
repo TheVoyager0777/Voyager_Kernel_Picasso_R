@@ -1,14 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2015-2017, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
  */
 #ifndef WCD9335_H
 #define WCD9335_H
@@ -16,8 +8,8 @@
 #include <sound/soc.h>
 #include <sound/jack.h>
 #include <dsp/apr_audio-v2.h>
-#include "wcd9xxx-slimslave.h"
-#include "wcd-mbhc-v2.h"
+#include <asoc/wcd9xxx-slimslave.h>
+#include <asoc/wcd-mbhc-v2.h>
 
 #define TASHA_REG_VAL(reg, val)      {reg, 0, val}
 
@@ -89,6 +81,8 @@ enum wcd9335_codec_event {
 
 enum tasha_on_demand_supply {
 	ON_DEMAND_MICBIAS = 0,
+	ON_DEMAND_TX_SUPPLY,
+	ON_DEMAND_RX_SUPPLY,
 	ON_DEMAND_SUPPLIES_MAX,
 };
 
@@ -138,95 +132,102 @@ enum {
 };
 
 #if IS_ENABLED(CONFIG_SND_SOC_WCD9335)
-extern void *tasha_get_afe_config(struct snd_soc_codec *codec,
+extern void *tasha_get_afe_config(struct snd_soc_component *component,
 				  enum afe_config_type config_type);
-extern int tasha_cdc_mclk_enable(struct snd_soc_codec *codec, int enable,
-				 bool dapm);
-extern int tasha_cdc_mclk_tx_enable(struct snd_soc_codec *codec, int enable,
-				    bool dapm);
-extern int tasha_enable_efuse_sensing(struct snd_soc_codec *codec);
-extern int tasha_mbhc_hs_detect(struct snd_soc_codec *codec,
+extern int tasha_cdc_mclk_enable(struct snd_soc_component *component,
+				 int enable, bool dapm);
+extern int tasha_cdc_mclk_tx_enable(struct snd_soc_component *component,
+				    int enable, bool dapm);
+extern int tasha_enable_efuse_sensing(struct snd_soc_component *component);
+extern int tasha_mbhc_hs_detect(struct snd_soc_component *component,
 				struct wcd_mbhc_config *mbhc_cfg);
-extern void tasha_mbhc_hs_detect_exit(struct snd_soc_codec *codec);
+extern void tasha_mbhc_hs_detect_exit(struct snd_soc_component *component);
 extern void tasha_mbhc_zdet_gpio_ctrl(
-		int (*zdet_gpio_cb)(struct snd_soc_codec *codec, bool high),
-		struct snd_soc_codec *codec);
+		int (*zdet_gpio_cb)(struct snd_soc_component *component,
+		bool high), struct snd_soc_component *component);
 extern int tasha_codec_info_create_codec_entry(
 		struct snd_info_entry *codec_root,
-		struct snd_soc_codec *codec);
+		struct snd_soc_component *component);
 extern void tasha_event_register(
-	int (*machine_event_cb)(struct snd_soc_codec *codec,
+	int (*machine_event_cb)(struct snd_soc_component *component,
 				enum wcd9335_codec_event),
-	struct snd_soc_codec *codec);
-extern int tasha_codec_enable_standalone_micbias(struct snd_soc_codec *codec,
-						 int micb_num,
-						 bool enable);
-extern int tasha_set_spkr_mode(struct snd_soc_codec *codec, int mode);
-extern int tasha_set_spkr_gain_offset(struct snd_soc_codec *codec, int offset);
+	struct snd_soc_component *component);
+extern int tasha_codec_enable_standalone_micbias(
+				struct snd_soc_component *component,
+				int micb_num,
+				bool enable);
+extern int tasha_set_spkr_mode(struct snd_soc_component *component, int mode);
+extern int tasha_set_spkr_gain_offset(struct snd_soc_component *component,
+				int offset);
 extern enum codec_variant tasha_codec_ver(void);
 #else /* CONFIG_SND_SOC_WCD9335 */
-static inline void *tasha_get_afe_config(struct snd_soc_codec *codec,
+static inline void *tasha_get_afe_config(struct snd_soc_component *component,
 				  enum afe_config_type config_type)
 {
 	return NULL;
 }
-static inline int tasha_cdc_mclk_enable(struct snd_soc_codec *codec,
+static inline int tasha_cdc_mclk_enable(struct snd_soc_component *component,
 					int enable,
 					bool dapm)
 {
 	return 0;
 }
-static inline int tasha_cdc_mclk_tx_enable(struct snd_soc_codec *codec,
+static inline int tasha_cdc_mclk_tx_enable(struct snd_soc_component *component,
 					   int enable,
 					   bool dapm)
 {
 	return 0;
 }
-static inline int tasha_enable_efuse_sensing(struct snd_soc_codec *codec)
+static inline int tasha_enable_efuse_sensing(
+				struct snd_soc_component *component)
 {
 	return 0;
 }
-static inline int tasha_mbhc_hs_detect(struct snd_soc_codec *codec,
+static inline int tasha_mbhc_hs_detect(struct snd_soc_component *component,
 				struct wcd_mbhc_config *mbhc_cfg)
 {
 	return 0;
 }
-static inline void tasha_mbhc_hs_detect_exit(struct snd_soc_codec *codec)
+static inline void tasha_mbhc_hs_detect_exit(
+				struct snd_soc_component *component)
 {
 
 }
 static inline void tasha_mbhc_zdet_gpio_ctrl(
-		int (*zdet_gpio_cb)(struct snd_soc_codec *codec, bool high),
-		struct snd_soc_codec *codec)
+		int (*zdet_gpio_cb)(struct snd_soc_component *component,
+				    bool high),
+		struct snd_soc_component *component)
 {
 
 }
 static inline int tasha_codec_info_create_codec_entry(
 		struct snd_info_entry *codec_root,
-		struct snd_soc_codec *codec)
+		struct snd_soc_component *component)
 {
 	return 0;
 }
 static inline void tasha_event_register(
-	int (*machine_event_cb)(struct snd_soc_codec *codec,
+	int (*machine_event_cb)(struct snd_soc_component *component,
 				enum wcd9335_codec_event),
-	struct snd_soc_codec *codec)
+	struct snd_soc_component *component)
 {
 
 }
 static inline int tasha_codec_enable_standalone_micbias(
-				struct snd_soc_codec *codec,
+				struct snd_soc_component *component,
 				int micb_num,
 				bool enable)
 {
 	return 0;
 }
-static inline int tasha_set_spkr_mode(struct snd_soc_codec *codec, int mode)
+static inline int tasha_set_spkr_mode(struct snd_soc_component *component,
+				      int mode)
 {
 	return 0;
 }
-static inline int tasha_set_spkr_gain_offset(struct snd_soc_codec *codec,
-					     int offset)
+static inline int tasha_set_spkr_gain_offset(
+				struct snd_soc_component *component,
+				int offset)
 {
 	return 0;
 }

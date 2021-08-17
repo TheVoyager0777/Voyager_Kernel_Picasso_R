@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
@@ -1393,7 +1394,7 @@ int msm_vdec_querycap(struct msm_vidc_inst *inst, struct v4l2_capability *cap)
 	strlcpy(cap->driver, MSM_VIDC_DRV_NAME, sizeof(cap->driver));
 	strlcpy(cap->card, MSM_VDEC_DVC_NAME, sizeof(cap->card));
 	cap->bus_info[0] = 0;
-	cap->version = MSM_VIDC_VERSION;
+	//cap->version = MSM_VIDC_VERSION;
 	cap->capabilities = V4L2_CAP_VIDEO_CAPTURE_MPLANE |
 						V4L2_CAP_VIDEO_OUTPUT_MPLANE |
 						V4L2_CAP_STREAMING;
@@ -2035,11 +2036,11 @@ static int try_get_ctrl(struct msm_vidc_inst *inst, struct v4l2_ctrl *ctrl)
 			switch (hprop.h264_entropy) {
 			case HAL_H264_ENTROPY_CAVLC:
 				ctrl->val =
-				 V4L2_MPEG_VIDEO_H264_ENTROPY_MODE_CAVLC;
+					V4L2_MPEG_VIDEO_H264_ENTROPY_MODE_CAVLC;
 				break;
 			case HAL_H264_ENTROPY_CABAC:
 				ctrl->val =
-				 V4L2_MPEG_VIDEO_H264_ENTROPY_MODE_CABAC;
+					V4L2_MPEG_VIDEO_H264_ENTROPY_MODE_CABAC;
 				break;
 			case HAL_UNUSED_ENTROPY:
 				rc = -ENOTSUPP;
@@ -2610,6 +2611,12 @@ static int try_set_ext_ctrl(struct msm_vidc_inst *inst,
 	int rc = 0, i = 0, fourcc = 0;
 	struct v4l2_ext_control *ext_control;
 	struct v4l2_control control;
+	u32 old_mode = 0;
+	bool mode_changed = false;
+	enum mode {
+		PRIMARY = V4L2_CID_MPEG_VIDC_VIDEO_STREAM_OUTPUT_PRIMARY,
+		SECONDARY = V4L2_CID_MPEG_VIDC_VIDEO_STREAM_OUTPUT_SECONDARY
+	};
 
 	if (!inst || !inst->core || !ctrl) {
 		dprintk(VIDC_ERR,
@@ -2620,6 +2627,7 @@ static int try_set_ext_ctrl(struct msm_vidc_inst *inst,
 	ext_control = ctrl->controls;
 	control.id =
 		V4L2_CID_MPEG_VIDC_VIDEO_STREAM_OUTPUT_MODE;
+	 old_mode = msm_comm_g_ctrl_for_id(inst, control.id);
 
 	for (i = 0; i < ctrl->count; i++) {
 		switch (ext_control[i].id) {
@@ -2631,6 +2639,10 @@ static int try_set_ext_ctrl(struct msm_vidc_inst *inst,
 				dprintk(VIDC_ERR,
 					"%s Failed setting stream output mode : %d\n",
 					__func__, rc);
+
+			if (old_mode == SECONDARY && control.value == PRIMARY)
+				mode_changed = true;
+
 			break;
 		case V4L2_CID_MPEG_VIDC_VIDEO_DPB_COLOR_FORMAT:
 			switch (ext_control[i].value) {
@@ -2642,6 +2654,25 @@ static int try_set_ext_ctrl(struct msm_vidc_inst *inst,
 						dprintk(VIDC_ERR,
 							"%s Release output buffers failed\n",
 							__func__);
+				}
+
+				/* Update buffer reqmt for split to comb mode */
+				if (mode_changed) {
+					fourcc =
+						inst->fmts[CAPTURE_PORT].fourcc;
+					msm_comm_set_color_format(inst,
+						HAL_BUFFER_OUTPUT, fourcc);
+					if (rc) {
+						dprintk(VIDC_ERR,
+							"%s Failed setting output color format : %d\n",
+								__func__, rc);
+						break;
+					}
+					rc = msm_comm_try_get_bufreqs(inst);
+					if (rc)
+						dprintk(VIDC_ERR,
+							"%s Failed to get buffer requirements : %d\n",
+							__func__, rc);
 				}
 				break;
 			case V4L2_MPEG_VIDC_VIDEO_DPB_COLOR_FMT_UBWC:
@@ -2785,4 +2816,5 @@ int msm_vdec_ctrl_init(struct msm_vidc_inst *inst)
 	return msm_comm_ctrl_init(inst, msm_vdec_ctrls,
 		ARRAY_SIZE(msm_vdec_ctrls), &msm_vdec_ctrl_ops);
 }
+
 

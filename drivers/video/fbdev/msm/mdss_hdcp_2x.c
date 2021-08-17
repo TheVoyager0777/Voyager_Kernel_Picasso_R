@@ -1,14 +1,5 @@
-/* Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2015-2020, The Linux Foundation. All rights reserved. */
 
 #define pr_fmt(fmt)	"[mdss-hdcp-2x] %s: " fmt, __func__
 
@@ -236,7 +227,7 @@ static int mdss_hdcp_2x_get_next_message(struct mdss_hdcp_2x_ctrl *hdcp,
 	case REP_STREAM_MANAGE:
 		return REP_STREAM_READY;
 	default:
-		pr_err("Uknown message ID (%d)", hdcp->last_msg);
+		pr_err("Unknown message ID (%d)\n", hdcp->last_msg);
 		return -EINVAL;
 	}
 }
@@ -407,7 +398,7 @@ static void mdss_hdcp_2x_msg_sent(struct mdss_hdcp_2x_ctrl *hdcp)
 	switch (hdcp->app_data.response.data[0]) {
 	case SKE_SEND_TYPE_ID:
 		if (!hdcp2_app_comm(hdcp->hdcp2_ctx,
-				HDCP2_CMD_SET_HW_KEY, &hdcp->app_data)) {
+				HDCP2_CMD_EN_ENCRYPTION, &hdcp->app_data)) {
 			hdcp->authenticated = true;
 
 			cdata.cmd = HDCP_TRANSPORT_CMD_STATUS_SUCCESS;
@@ -587,7 +578,7 @@ static void mdss_hdcp_2x_msg_recvd(struct mdss_hdcp_2x_ctrl *hdcp)
 	if (msg[0] == REP_STREAM_READY) {
 		if (!hdcp->authenticated) {
 			rc = hdcp2_app_comm(hdcp->hdcp2_ctx,
-					HDCP2_CMD_SET_HW_KEY,
+					HDCP2_CMD_EN_ENCRYPTION,
 					&hdcp->app_data);
 			if (!rc) {
 				hdcp->authenticated = true;
@@ -611,9 +602,9 @@ static void mdss_hdcp_2x_msg_recvd(struct mdss_hdcp_2x_ctrl *hdcp)
 			mdss_hdcp_2x_message_name(out_msg));
 
 	if (out_msg == AKE_NO_STORED_KM)
-		hdcp->no_stored_km = 1;
+		hdcp->no_stored_km = true;
 	else
-		hdcp->no_stored_km = 0;
+		hdcp->no_stored_km = false;
 
 	if (out_msg == SKE_SEND_EKS) {
 		hdcp->repeater_flag = hdcp->app_data.repeater_flag;
@@ -672,7 +663,7 @@ static int mdss_hdcp_2x_wakeup(struct mdss_hdcp_2x_wakeup_data *data)
 
 	switch (hdcp->wakeup_cmd) {
 	case HDCP_2X_CMD_START:
-		hdcp->no_stored_km = 0;
+		hdcp->no_stored_km = false;
 		hdcp->repeater_flag = false;
 		hdcp->update_stream = false;
 		hdcp->last_msg = INVALID_MESSAGE;

@@ -1,3 +1,7 @@
+# SPDX-License-Identifier: GPL-2.0-only
+#
+# Shared Heap for external processors
+#
 config MEM_SHARE_QMI_SERVICE
        depends on QCOM_QMI_HELPERS
        bool "Shared Heap for external processors"

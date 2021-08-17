@@ -73,14 +73,6 @@ config DEVFREQ_GOV_PASSIVE
 	  through sysfs entries. The passive governor recommends that
 	  devfreq device uses the OPP table to get the frequency/voltage.
 
-config DEVFREQ_GOV_CPUFREQ
-	tristate "CPUfreq"
-	depends on CPU_FREQ
-	help
-	  Chooses frequency based on the online CPUs' current frequency and a
-	  CPU frequency to device frequency mapping table(s). This governor
-	  can be useful for controlling devices such as DDR, cache, CCI, etc.
-
 config QCOM_BIMC_BWMON
 	tristate "QCOM BIMC Bandwidth monitor hardware"
 	depends on ARCH_QCOM
@@ -98,24 +90,6 @@ config ARM_MEMLAT_MON
 	  monitor the memory latency characteristics of an ARM CPU workload.
 	  This driver uses these counters to implement the APIs needed by
 	  the mem_latency devfreq governor.
-
-config QCOMCCI_HWMON
-	tristate "QTI CCI Cache monitor hardware"
-	depends on ARCH_QCOM
-	help
-	  QTI CCI has additional PMU counters that can be used to monitor
-	  cache requests. QTI CCI hardware monitor device configures these
-	  registers to monitor cache and inform governor. It can also set an
-	  IRQ when count exceeds a programmable limit.
-
-config QCOM_M4M_HWMON
-	tristate "QCOM M4M cache monitor hardware"
-	depends on ARCH_QCOM
-	help
-	  QCOM M4M has counters that can be used to monitor requests coming to
-	  M4M. QCOM M4M hardware monitor device programs corresponding registers
-	  to monitor cache and inform governor. It can also set an IRQ when
-	  count exceeds a programmable limit.
 
 config DEVFREQ_GOV_QCOM_BW_HWMON
 	tristate "HW monitor based governor for device BW"
@@ -136,15 +110,6 @@ config DEVFREQ_GOV_QCOM_CACHE_HWMON
 	  it can conflict with existing profiling tools. This governor is
 	  unlikely to be useful for other devices.
 
-config DEVFREQ_GOV_SPDM_HYP
-	bool "QTI SPDM Hypervisor Governor"
-	depends on ARCH_QCOM
-	help
-	  Hypervisor based governor for CPU bandwidth voting
-	  for QTI chipsets.
-	  Sets the frequency using a "on-demand" algorithm.
-	  This governor is unlikely to be useful for other devices.
-
 config DEVFREQ_GOV_MEMLAT
 	tristate "HW monitor based governor for device BW"
 	depends on ARM_MEMLAT_MON
@@ -155,11 +120,20 @@ config DEVFREQ_GOV_MEMLAT
 	  this uses target specific counters it can conflict with existing profiling
 	  tools.
 
+config DEVFREQ_GOV_CDSPL3
+	tristate "QTI DEVFREQ governor for CDSP L3 requests"
+	depends on QCOM_CDSP_RM
+	help
+	  CDSP resource manager will use this governor to vote for L3 clock
+	  for IO-coherent traffic generated from CDSP. The driver implements
+	  a callback routine for CDSP resource manager to register a CPU L3
+	  clock frequency level.
+
 comment "DEVFREQ Drivers"
 
 config DEVFREQ_GOV_QCOM_ADRENO_TZ
 	tristate "Qualcomm Technologies Inc Adreno Trustzone"
-	depends on QCOM_KGSL && QCOM_SCM
+	depends on QCOM_KGSL
 	help
 	   Trustzone based governor for the Adreno GPU. Sets
 	   the frequency using a "on-demand" algorithm. This
@@ -214,6 +188,20 @@ config ARM_RK3399_DMC_DEVFREQ
           It sets the frequency for the memory controller and reads the usage counts
           from hardware.
 
+config ARM_QCOM_DEVFREQ_FW
+	bool "Qualcomm Technologies Inc. DEVFREQ FW driver"
+	depends on ARCH_QCOM
+	select DEVFREQ_GOV_PERFORMANCE
+	select DEVFREQ_GOV_POWERSAVE
+	select DEVFREQ_GOV_USERSPACE
+	default n
+	help
+	  The firmware present in some QCOM chipsets offloads the steps
+	  necessary for changing the frequency of some devices (Eg: L3). This
+	  driver implements the devfreq interface for this firmware so that
+	  various governors could be used to scale the frequency of these
+	  devices.
+
 config DEVFREQ_SIMPLE_DEV
 	tristate "Device driver for simple clock device with no status info"
 	select DEVFREQ_GOV_PERFORMANCE
@@ -238,70 +226,26 @@ config QCOM_DEVFREQ_DEVBW
 	  agnostic interface to so that some of the devfreq governors can be
 	  shared across SoCs.
 
-config SPDM_SCM
-	bool "QTI SPDM SCM based call support"
-	depends on DEVFREQ_SPDM
-	help
-	  SPDM driver support the dcvs algorithm logic being accessed via
-	  scm or hvc calls. This adds the support for SPDM interaction to
-          tz via SCM based call. If not selected then Hypervisor interaction
-          will be activated.
-
-config DEVFREQ_SPDM
-	bool "QTI SPDM based bandwidth voting"
+config ARM_QCOM_DEVFREQ_QOSLAT
+	bool "Qualcomm Technologies Inc. DEVFREQ QOSLAT device driver"
 	depends on ARCH_QCOM
-	select DEVFREQ_GOV_SPDM_HYP
+	select DEVFREQ_GOV_PERFORMANCE
+	select DEVFREQ_GOV_POWERSAVE
+	select DEVFREQ_GOV_USERSPACE
+	default n
 	help
-	  This adds the support for SPDM based bandwidth voting on QTI chipsets.
-	  This driver allows any SPDM based client to vote for bandwidth.
-	  Used with the QTI SPDM Hypervisor Governor.
+	  Some Qualcomm Technologies, Inc. (QTI) chipsets have an
+	  interface to vote for a memory latency QoS level. This
+	  driver votes on this interface to request a particular
+	  memory latency QoS level.
 
-config DEVFREQ_GOV_CDSPL3
-	bool "QTI DEVFREQ governor for CDSP L3 requests"
-	depends on QCOM_CDSP_RM
+config DEVFREQ_GOV_STATICMAP
+	tristate "Device driver for static voting of DDR freq based on a clock rate change"
+	depends on ARCH_QCOM
 	help
-	  CDSP resource manager will use this governor to vote for L3 clock
-	  for IO-coherent traffic generated from CDSP
-
-config DEVFREQ_BOOST
-	bool "Devfreq Boost"
-	help
-	  Boosts enumerated devfreq devices upon input, and allows for boosting
-	  specific devfreq devices on other custom events. The boost frequencies
-	  for this driver should be set so that frame drops are near-zero at the
-	  boosted frequencies and power consumption is minimized at said
-	  frequencies. The goal of this driver is to provide an interface to
-	  achieve optimal device performance by requesting boosts on key events,
-	  such as when a frame is ready to rendered to the display.
-
-if DEVFREQ_BOOST
-
-config DEVFREQ_INPUT_BOOST_DURATION_MS
-	int "Input boost duration"
-	default "100"
-	help
-	  Input boost duration in milliseconds for all boostable devices.
-
-config DEVFREQ_WAKE_BOOST_DURATION_MS
-	int "Wake boost duration"
-	default "1000"
-	help
-	  Wake boost duration in milliseconds for all boostable devices.
-
-config DEVFREQ_MSM_CPUBW_BOOST_FREQ
-	int "Boost freq for cpubw device"
-	default "0"
-	help
-	  CPUBW boost frequency for the MSM DDR bus.
-
-
-config DEVFREQ_MSM_LLCCBW_BOOST_FREQ
-	int "Boost freq for llccbw device"
-	default "0"
-	help
-	  LLCCBW boost frequency for the MSM DDR bus.
-
-endif
+	  Clock notifier based governor for device to DDR Bandwidth voting.
+	  This governor votes for the DDR BW based on the device's clock rate
+	  change.
 
 source "drivers/devfreq/event/Kconfig"
 

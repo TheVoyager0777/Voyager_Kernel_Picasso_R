@@ -20,8 +20,6 @@
 #define GMAC_PACKET_FILTER		0x00000008
 #define GMAC_HASH_TAB_0_31		0x00000010
 #define GMAC_HASH_TAB_32_63		0x00000014
-#define GMAC_VLAN_CTRL_TAG		0x00000050
-#define GMAC_VLAN_DATA_TAG		0x00000054
 #define GMAC_RX_FLOW_CTRL		0x00000090
 #define GMAC_QX_TX_FLOW_CTRL(x)		(0x70 + x * 4)
 #define GMAC_TXQ_PRTY_MAP0		0x98
@@ -36,29 +34,15 @@
 #define GMAC_PCS_BASE			0x000000e0
 #define GMAC_PHYIF_CONTROL_STATUS	0x000000f8
 #define GMAC_PMT			0x000000c0
-#define GMAC_VERSION			0x00000110
 #define GMAC_DEBUG			0x00000114
 #define GMAC_HW_FEATURE0		0x0000011c
 #define GMAC_HW_FEATURE1		0x00000120
 #define GMAC_HW_FEATURE2		0x00000124
+#define GMAC_HW_FEATURE3		0x00000128
 #define GMAC_MDIO_ADDR			0x00000200
 #define GMAC_MDIO_DATA			0x00000204
 #define GMAC_ADDR_HIGH(reg)		(0x300 + reg * 8)
 #define GMAC_ADDR_LOW(reg)		(0x304 + reg * 8)
-#define GMAC_MTL_RX_QMAP		0x00000c30
-
-/*MAC VLAN CTRL Bit*/
-#define GMAC_VLANTR_OB_MASK			(0x1)
-#define GMAC_VLANTR_CT_MASKBIT			BIT(1)
-#define GMAC_VLANTR_OFFSET_SHIFT		2
-#define GMAC_VLANTR_VLAN_EN			BIT(16)
-#define GMAC_VLANTR_VLAN_CMP			BIT(17)
-#define GMAC_VLANTR_VLAN_CMP_DISABLE		BIT(18)
-#define GMAC_VLANTR_DMA_CHAN_EN			BIT(24)
-#define GMAC_VLANTR_DMA_CHAN_NUM		25
-
-/*MTL Rx Queue Bit*/
-#define GMAC_MTL_RXQ_DMACH		BIT(4)
 
 /* RX Queues Routing */
 #define GMAC_RXQCTRL_AVCPQ_MASK		GENMASK(2, 0)
@@ -114,7 +98,7 @@
 #define	GMAC_PCS_IRQ_DEFAULT	(GMAC_INT_RGSMIIS | GMAC_INT_PCS_LINK |	\
 				 GMAC_INT_PCS_ANE)
 
-#define	GMAC_INT_DEFAULT_MASK	GMAC_INT_PMT_EN
+#define	GMAC_INT_DEFAULT_ENABLE	(GMAC_INT_PMT_EN | GMAC_INT_LPI_EN)
 
 enum dwmac4_irq_status {
 	time_stamp_irq = 0x00001000,
@@ -122,6 +106,7 @@ enum dwmac4_irq_status {
 	mmc_tx_irq = 0x00000400,
 	mmc_rx_irq = 0x00000200,
 	mmc_irq = 0x00000100,
+	lpi_irq = 0x00000020,
 	pmt_irq = 0x00000010,
 };
 
@@ -148,6 +133,10 @@ enum power_event {
 #define GMAC4_LPI_CTRL_STATUS_LPITXA	BIT(19)	/* Enable LPI TX Automate */
 #define GMAC4_LPI_CTRL_STATUS_PLS	BIT(17) /* PHY Link Status */
 #define GMAC4_LPI_CTRL_STATUS_LPIEN	BIT(16)	/* LPI Enable */
+#define GMAC4_LPI_CTRL_STATUS_RLPIEX	BIT(3) /* Receive LPI Exit */
+#define GMAC4_LPI_CTRL_STATUS_RLPIEN	BIT(2) /* Receive LPI Entry */
+#define GMAC4_LPI_CTRL_STATUS_TLPIEX	BIT(1) /* Transmit LPI Exit */
+#define GMAC4_LPI_CTRL_STATUS_TLPIEN	BIT(0) /* Transmit LPI Entry */
 
 /* MAC Debug bitmap */
 #define GMAC_DEBUG_TFCSTS_MASK		GENMASK(18, 17)
@@ -164,7 +153,6 @@ enum power_event {
 /* MAC config */
 #define GMAC_CONFIG_IPC			BIT(27)
 #define GMAC_CONFIG_2K			BIT(22)
-#define GMAC_CONFIG_CRC			BIT(21)
 #define GMAC_CONFIG_ACS			BIT(20)
 #define GMAC_CONFIG_BE			BIT(18)
 #define GMAC_CONFIG_JD			BIT(17)
@@ -199,21 +187,26 @@ enum power_event {
 #define GMAC_HW_RXFIFOSIZE		GENMASK(4, 0)
 
 /* MAC HW features2 bitmap */
+#define GMAC_HW_FEAT_PPSOUTNUM		GENMASK(26, 24)
 #define GMAC_HW_FEAT_TXCHCNT		GENMASK(21, 18)
 #define GMAC_HW_FEAT_RXCHCNT		GENMASK(15, 12)
 #define GMAC_HW_FEAT_TXQCNT		GENMASK(9, 6)
 #define GMAC_HW_FEAT_RXQCNT		GENMASK(3, 0)
+
+/* MAC HW features3 bitmap */
+#define GMAC_HW_FEAT_ASP		GENMASK(29, 28)
+#define GMAC_HW_FEAT_FRPES		GENMASK(14, 13)
+#define GMAC_HW_FEAT_FRPBS		GENMASK(12, 11)
+#define GMAC_HW_FEAT_FRPSEL		BIT(10)
 
 /* MAC HW ADDR regs */
 #define GMAC_HI_DCS			GENMASK(18, 16)
 #define GMAC_HI_DCS_SHIFT		16
 #define GMAC_HI_REG_AE			BIT(31)
 
-/* MAC HW PPS outputs mask */
-#define GMAC_PPSOUTNUM_MASK		0x7
-
 /*  MTL registers */
 #define MTL_OPERATION_MODE		0x00000c00
+#define MTL_FRPE			BIT(15)
 #define MTL_OPERATION_SCHALG_MASK	GENMASK(6, 5)
 #define MTL_OPERATION_SCHALG_WRR	(0x0 << 5)
 #define MTL_OPERATION_SCHALG_WFQ	(0x1 << 5)
@@ -275,8 +268,6 @@ enum power_event {
 #define MTL_OP_MODE_RFA_SHIFT		8
 
 #define MTL_OP_MODE_EHFC		BIT(7)
-#define MTL_OP_MODE_FEP			BIT(4)
-#define MTL_OP_MODE_FUP			BIT(3)
 
 #define MTL_OP_MODE_RTC_MASK		0x18
 #define MTL_OP_MODE_RTC_SHIFT		3

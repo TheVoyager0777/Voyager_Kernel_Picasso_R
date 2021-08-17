@@ -1,13 +1,3 @@
-/*
- * Many of the syscalls used in this file expect some of the arguments
- * to be __user pointers not __kernel pointers.  To limit the sparse
- * noise, turn off sparse checking for this file.
- */
-#ifdef __CHECKER__
-#undef __CHECKER__
-#warning "Sparse checking disabled for this file"
-#endif
-
 #include <linux/module.h>
 #include <linux/sched.h>
 #include <linux/ctype.h>
@@ -32,7 +22,6 @@
 #include <linux/nfs_fs.h>
 #include <linux/nfs_fs_sb.h>
 #include <linux/nfs_mount.h>
-#include <soc/qcom/boot_stats.h>
 
 #include "do_mounts.h"
 
@@ -42,14 +31,7 @@ int root_mountflags = MS_RDONLY | MS_SILENT;
 static char * __initdata root_device_name;
 static char __initdata saved_root_name[64];
 static int root_wait;
-#ifdef CONFIG_EARLY_SERVICES
-static char saved_modem_name[64];
-static char saved_early_userspace[64];
-static char init_prog[128] = "/early_services/init_early";
-static char *init_prog_argv[2] = { init_prog, NULL };
-static int es_status; /*1= es mount is success 0= es failed to run*/
-#define EARLY_SERVICES_MOUNT_POINT "/early_services"
-#endif
+
 dev_t ROOT_DEV;
 
 static int __init load_ramdisk(char *str)
@@ -306,22 +288,6 @@ static int __init root_dev_setup(char *line)
 
 __setup("root=", root_dev_setup);
 
-#ifdef CONFIG_EARLY_SERVICES
-static int __init modem_dev_setup(char *line)
-{
-	strlcpy(saved_modem_name, line, sizeof(saved_modem_name));
-	return 1;
-}
-
-__setup("modem=", modem_dev_setup);
-static int __init early_userspace_setup(char *line)
-{
-	strlcpy(saved_early_userspace, line, sizeof(saved_early_userspace));
-	return 1;
-}
-
-__setup("early_userspace=", early_userspace_setup);
-#endif
 static int __init rootwait_setup(char *str)
 {
 	if (*str)
@@ -384,40 +350,14 @@ static void __init get_fs_names(char *page)
 	*s = '\0';
 }
 
-#ifdef CONFIG_EARLY_SERVICES
-static void get_fs_names_runtime(char *page)
-{
-	char *s = page;
-	int len = get_filesystem_list_runtime(page);
-	char *p, *next;
-
-	page[len] = '\0';
-
-	for (p = page-1; p; p = next) {
-		next = strnchr(++p, len, '\n');
-		if (*p++ != '\t')
-			continue;
-		while ((*s++ = *p++) != '\n')
-			;
-		s[-1] = '\0';
-	}
-	*s = '\0';
-}
-#endif
 static int __init do_mount_root(char *name, char *fs, int flags, void *data)
 {
 	struct super_block *s;
-	int err;
-
-	place_marker("M - DRIVER F/S Init");
-
-	err = sys_mount((char __user *)name, (char __user *)"/root",
-			(char __user *)fs, (unsigned long)flags,
-						(void __user *)data);
+	int err = ksys_mount(name, "/root", fs, flags, data);
 	if (err)
 		return err;
 
-	sys_chdir("/root");
+	ksys_chdir("/root");
 	s = current->fs->pwd.dentry->d_sb;
 	ROOT_DEV = s->s_dev;
 	printk(KERN_INFO
@@ -425,27 +365,9 @@ static int __init do_mount_root(char *name, char *fs, int flags, void *data)
 	       s->s_type->name,
 	       sb_rdonly(s) ? " readonly" : "",
 	       MAJOR(ROOT_DEV), MINOR(ROOT_DEV));
-
-	place_marker("M - DRIVER F/S Ready");
-
 	return 0;
 }
-#ifdef CONFIG_EARLY_SERVICES
-static int do_mount_part(char *name, char *fs, int flags,
-				void *data, char *mnt_point)
-{
-	int err;
 
-	err = sys_mount((char __user *)name, (char __user *)mnt_point,
-			(char __user *)fs, (unsigned long)flags,
-						(void __user *)data);
-	if (err) {
-		pr_err("Mount Partition [%s] failed[%d]\n", name, err);
-		return err;
-	}
-	return 0;
-}
-#endif
 void __init mount_block_root(char *name, int flags)
 {
 	struct page *page = alloc_page(GFP_KERNEL);
@@ -557,21 +479,21 @@ void __init change_floppy(char *fmt, ...)
 	va_start(args, fmt);
 	vsprintf(buf, fmt, args);
 	va_end(args);
-	fd = sys_open("/dev/root", O_RDWR | O_NDELAY, 0);
+	fd = ksys_open("/dev/root", O_RDWR | O_NDELAY, 0);
 	if (fd >= 0) {
-		sys_ioctl(fd, FDEJECT, 0);
-		sys_close(fd);
+		ksys_ioctl(fd, FDEJECT, 0);
+		ksys_close(fd);
 	}
 	printk(KERN_NOTICE "VFS: Insert %s and press ENTER\n", buf);
-	fd = sys_open("/dev/console", O_RDWR, 0);
+	fd = ksys_open("/dev/console", O_RDWR, 0);
 	if (fd >= 0) {
-		sys_ioctl(fd, TCGETS, (long)&termios);
+		ksys_ioctl(fd, TCGETS, (long)&termios);
 		termios.c_lflag &= ~ICANON;
-		sys_ioctl(fd, TCSETSF, (long)&termios);
-		sys_read(fd, &c, 1);
+		ksys_ioctl(fd, TCSETSF, (long)&termios);
+		ksys_read(fd, &c, 1);
 		termios.c_lflag |= ICANON;
-		sys_ioctl(fd, TCSETSF, (long)&termios);
-		sys_close(fd);
+		ksys_ioctl(fd, TCSETSF, (long)&termios);
+		ksys_close(fd);
 	}
 }
 #endif
@@ -610,58 +532,6 @@ void __init mount_root(void)
 #endif
 }
 
-#ifdef CONFIG_EARLY_SERVICES
-int get_early_services_status(void)
-{
-	return es_status;
-}
-
-static int mount_partition(char *part_name, char *mnt_point)
-{
-	struct page *page = alloc_page(GFP_KERNEL);
-	char *fs_names = page_address(page);
-	char *p;
-	int err = -EPERM;
-
-	if (!part_name[0]) {
-		pr_err("Unknown partition\n");
-		return -ENOENT;
-	}
-
-	get_fs_names_runtime(fs_names);
-	for (p = fs_names; *p; p += strlen(p)+1) {
-		err = do_mount_part(part_name, p, root_mountflags,
-					NULL, mnt_point);
-		switch (err) {
-		case 0:
-			return err;
-		case -EACCES:
-		case -EINVAL:
-			continue;
-		}
-		return err;
-	}
-	return err;
-}
-void launch_early_services(void)
-{
-	int rc = 0;
-
-	devtmpfs_mount("dev");
-	rc = mount_partition(saved_early_userspace, EARLY_SERVICES_MOUNT_POINT);
-	if (!rc) {
-		place_marker("Early Services Partition ready");
-		rc = call_usermodehelper(init_prog, init_prog_argv, NULL, 0);
-		if (!rc) {
-			es_status = 1;
-			pr_info("early_init launched\n");
-		} else
-			pr_err("early_init failed\n");
-	}
-}
-#else
-void launch_early_services(void) { }
-#endif
 /*
  * Prepare the namespace - decide what/where to mount, load ramdisks, etc.
  */
@@ -720,8 +590,8 @@ void __init prepare_namespace(void)
 	mount_root();
 out:
 	devtmpfs_mount("dev");
-	sys_mount(".", "/", NULL, MS_MOVE, NULL);
-	sys_chroot(".");
+	ksys_mount(".", "/", NULL, MS_MOVE, NULL);
+	ksys_chroot(".");
 }
 
 static bool is_tmpfs;

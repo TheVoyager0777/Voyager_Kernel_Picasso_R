@@ -1,13 +1,7 @@
-/* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2016-2018, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 #ifndef MSM_SDW_H
 #define MSM_SDW_H
@@ -101,7 +95,7 @@ struct msm_sdw_priv {
 			 int bytes, void *src);
 	int (*multi_reg_write)(struct msm_sdw_priv *msm_sdw, const void *data,
 			       size_t count);
-	struct snd_soc_codec *codec;
+	struct snd_soc_component *component;
 	struct device_node *sdw_gpio_p; /* used by pinctrl API */
 	/* SoundWire data structure */
 	struct msm_sdw_ctrl_data *sdw_ctrl_data;
@@ -135,7 +129,8 @@ struct msm_sdw_priv {
 	struct afe_clk_set sdw_cdc_core_clk;
 	struct afe_clk_set sdw_npl_clk;
 	struct notifier_block service_nb;
-	int (*sdw_cdc_gpio_fn)(bool enable, struct snd_soc_codec *codec);
+	int (*sdw_cdc_gpio_fn)(bool enable,
+		struct snd_soc_component *component);
 	bool dev_up;
 
 	int spkr_gain_offset;
@@ -161,30 +156,34 @@ struct msm_sdw_priv {
 };
 
 #if IS_ENABLED(CONFIG_SND_SOC_MSM_SDW)
-extern int msm_sdw_set_spkr_mode(struct snd_soc_codec *codec, int mode);
-extern int msm_sdw_set_spkr_gain_offset(struct snd_soc_codec *codec,
+extern int msm_sdw_set_spkr_mode(struct snd_soc_component *component, int mode);
+extern int msm_sdw_set_spkr_gain_offset(struct snd_soc_component *component,
 					int offset);
 extern void msm_sdw_gpio_cb(
-	int (*sdw_cdc_gpio_fn)(bool enable, struct snd_soc_codec *codec),
-	struct snd_soc_codec *codec);
+	int (*sdw_cdc_gpio_fn)(bool enable,
+				struct snd_soc_component *component),
+	struct snd_soc_component *component);
 extern struct regmap *msm_sdw_regmap_init(struct device *dev,
 					  const struct regmap_config *config);
 extern int msm_sdw_codec_info_create_codec_entry(
-	struct snd_info_entry *codec_root,
-	struct snd_soc_codec *codec);
+	struct snd_info_entry *component_root,
+	struct snd_soc_component *component);
 #else /* CONFIG_SND_SOC_MSM_SDW */
-static inline int msm_sdw_set_spkr_mode(struct snd_soc_codec *codec, int mode)
+static inline int msm_sdw_set_spkr_mode(struct snd_soc_component *component,
+					int mode)
 {
 	return 0;
 }
-static inline int msm_sdw_set_spkr_gain_offset(struct snd_soc_codec *codec,
-					int offset);
+static inline int msm_sdw_set_spkr_gain_offset(
+				struct snd_soc_component *component,
+				int offset);
 {
 	return 0;
 }
 static inline void msm_sdw_gpio_cb(
-	int (*sdw_cdc_gpio_fn)(bool enable, struct snd_soc_codec *codec),
-	struct snd_soc_codec *codec);
+	int (*sdw_cdc_gpio_fn)(bool enable,
+	struct snd_soc_component *component),
+	struct snd_soc_component *component);
 {
 
 }
@@ -194,8 +193,8 @@ static inline struct regmap *msm_sdw_regmap_init(struct device *dev,
 	return NULL;
 }
 static inline int msm_sdw_codec_info_create_codec_entry(
-	struct snd_info_entry *codec_root,
-	struct snd_soc_codec *codec)
+	struct snd_info_entry *component_root,
+	struct snd_soc_component *component)
 {
 	return 0;
 }

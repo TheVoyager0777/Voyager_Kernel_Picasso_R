@@ -36,16 +36,17 @@
 #include <elliptic/elliptic_mixer_controls.h>
 #include <dsp/apr_elliptic.h>
 
-// Alternative mechanism to load calibration data.
-// Read calibration data during driver initialization
-// and send message to the DSP
-// 
-// #define ELLIPTIC_LOAD_CALIBRATION_DATA_FROM_FILESYSTEM 1
-//
+
+/* Alternative mechanism to load calibration data.
+* Read calibration data during driver initialization
+* and send message to the DSP
+*
+* #define ELLIPTIC_LOAD_CALIBRATION_DATA_FROM_FILESYSTEM 1
+*/
 #ifdef ELLIPTIC_LOAD_CALIBRATION_DATA_FROM_FILESYSTEM
-#include <linux/syscalls.h> 
-#include <linux/fcntl.h> 
-#include <asm/uaccess.h> 
+#include <linux/syscalls.h>
+#include <linux/fcntl.h>
+#include <asm/uaccess.h>
 #endif
 
 static struct elliptic_device *elliptic_devices;
@@ -174,7 +175,6 @@ static int device_open(struct inode *inode, struct file *filp)
 
 	EL_PRINT_I("Opened device elliptic%u", minor);
 	dev->opened = 1;
-
 	return 0;
 }
 
@@ -201,7 +201,7 @@ int elliptic_data_initialize(struct elliptic_data
 	atomic_set(&elliptic_data->abort_io, 0);
 	spin_lock_init(&elliptic_data->fifo_isr_spinlock);
 
-    elliptic_data->wakeup_timeout = wakeup_timeout;
+	elliptic_data->wakeup_timeout = wakeup_timeout;
 
 	mutex_init(&elliptic_data->user_buffer_lock);
 	init_waitqueue_head(&elliptic_data->fifo_isr_not_empty);
@@ -759,22 +759,20 @@ int __init elliptic_driver_init(void)
 	if (elliptic_userspace_ctrl_driver_init())
 		goto fail;
 
-	wake_source = kmalloc(sizeof(struct wakeup_source), GFP_KERNEL);
+        wake_source = wakeup_source_register(NULL, "elliptic_wake_source");
 
 	if (!wake_source) {
 		EL_PRINT_E("failed to allocate wake source");
 		return -ENOMEM;
 	}
 
-	wakeup_source_init(wake_source, "elliptic_wake_source");
-
 #ifdef ELLIPTIC_LOAD_CALIBRATION_DATA_FROM_FILESYSTEM
-    /* Code to send calibration to engine */
-    {
-        size_t calib_data_size = load_calibration_data(calibration_filename);
-        if (calib_data_size > 0)
-            elliptic_send_calibration_to_engine(calib_data_size);
-    }
+	/* Code to send calibration to engine */
+	{
+		size_t calib_data_size = load_calibration_data(calibration_filename);
+		if (calib_data_size > 0)
+			elliptic_send_calibration_to_engine(calib_data_size);
+	}
 #endif
 	return 0;
 
@@ -786,8 +784,7 @@ fail:
 void elliptic_driver_exit(void)
 {
 	if (wake_source) {
-		wakeup_source_trash(wake_source);
-		kfree(wake_source);
+		wakeup_source_unregister(wake_source);
 	}
 
 	elliptic_cleanup_sysfs();

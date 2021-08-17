@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
 #ifndef __MSM_VIDC_PRIVATE_H__
 #define __MSM_VIDC_PRIVATE_H__
 

@@ -1,14 +1,8 @@
-/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  */
+
 #if !defined(_GSI_EMULATION_H_)
 # define _GSI_EMULATION_H_
 
@@ -16,7 +10,10 @@
 
 # include "gsi.h"
 # include "gsi_reg.h"
+
+#if defined(CONFIG_IPA_EMULATION)
 # include "gsi_emulation_stubs.h"
+#endif
 
 # define gsi_emu_readl(c)     (readl(c))
 # define gsi_emu_writel(v, c) ({ __iowmb(); writel_relaxed((v), (c)); })

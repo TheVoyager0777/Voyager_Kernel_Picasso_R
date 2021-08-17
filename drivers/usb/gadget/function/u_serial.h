@@ -1,12 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * u_serial.h - interface to USB gadget "serial port"/TTY utilities
  *
  * Copyright (C) 2008 David Brownell
  * Copyright (C) 2008 by Nokia Corporation
- *
- * This software is distributed under the terms of the GNU General
- * Public License ("GPL") as published by the Free Software Foundation,
- * either version 2 of that License or (at your option) any later version.
  */
 
 #ifndef __U_SERIAL_H
@@ -45,23 +42,11 @@ struct gserial {
 
 	/* REVISIT avoid this CDC-ACM support harder ... */
 	struct usb_cdc_line_coding port_line_coding;	/* 9600-8-N-1 etc */
-	u16				serial_state;
-
-	/* control signal callbacks*/
-	unsigned int (*get_dtr)(struct gserial *p);
-	unsigned int (*get_rts)(struct gserial *p);
 
 	/* notification callbacks */
 	void (*connect)(struct gserial *p);
 	void (*disconnect)(struct gserial *p);
 	int (*send_break)(struct gserial *p, int duration);
-	unsigned int (*send_carrier_detect)(struct gserial *p,
-			unsigned int yes);
-	unsigned int (*send_ring_indicator)(struct gserial *p,
-			unsigned int yes);
-	int (*send_modem_ctrl_bits)(struct gserial *p, int ctrl_bits);
-	/* notification changes to modem */
-	void (*notify_modem)(void *gser, u8 portno, int ctrl_bits);
 };
 
 /* utilities to allocate/free request and buffer */

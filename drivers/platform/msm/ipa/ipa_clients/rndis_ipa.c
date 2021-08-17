@@ -1,14 +1,8 @@
-/* Copyright (c) 2013-2018,2020 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  */
+
 #include <linux/atomic.h>
 #include <linux/errno.h>
 #include <linux/etherdevice.h>
@@ -37,7 +31,6 @@
 #define DEBUGFS_DIR_NAME "rndis_ipa"
 #define DEBUGFS_AGGR_DIR_NAME "rndis_ipa_aggregation"
 #define NETDEV_NAME "rndis"
-#define DRV_RESOURCE_ID IPA_RM_RESOURCE_RNDIS_PROD
 #define IPV4_HDR_NAME "rndis_eth_ipv4"
 #define IPV6_HDR_NAME "rndis_eth_ipv6"
 #define IPA_TO_USB_CLIENT IPA_CLIENT_USB_CONS
@@ -166,7 +159,6 @@ enum rndis_ipa_operation {
  * @rx_dropped: number of filtered out Rx packets
  * @rx_dump_enable: dump all Rx packets
  * @icmp_filter: allow all ICMP packet to pass through the filters
- * @rm_enable: flag that enable/disable Resource manager request prior to Tx
  * @deaggregation_enable: enable/disable IPA HW deaggregation logic
  * @during_xmit_error: flags that indicate that the driver is in a middle
  *  of error handling in Tx path
@@ -191,6 +183,7 @@ enum rndis_ipa_operation {
  * @state_lock: used to protect the state variable.
  * @pm_hdl: handle for IPA PM framework
  * @is_vlan_mode: should driver work in vlan mode?
+ * @netif_rx_function: holds the correct network stack API, needed for NAPI
  */
 struct rndis_ipa_dev {
 	struct net_device *net;
@@ -201,7 +194,6 @@ struct rndis_ipa_dev {
 	u32 rx_dropped;
 	bool rx_dump_enable;
 	bool icmp_filter;
-	bool rm_enable;
 	bool deaggregation_enable;
 	bool during_xmit_error;
 	struct dentry *directory;
@@ -221,6 +213,7 @@ struct rndis_ipa_dev {
 	spinlock_t state_lock; /* Spinlock for the state variable.*/
 	u32 pm_hdl;
 	bool is_vlan_mode;
+	int (*netif_rx_function)(struct sk_buff *skb);
 };
 
 /**
@@ -262,18 +255,10 @@ static int rndis_ipa_hdrs_destroy(struct rndis_ipa_dev *rndis_ipa_ctx);
 static struct net_device_stats *rndis_ipa_get_stats(struct net_device *net);
 static int rndis_ipa_register_properties(char *netdev_name, bool is_vlan_mode);
 static int rndis_ipa_deregister_properties(char *netdev_name);
-static void rndis_ipa_rm_notify
-	(void *user_data, enum ipa_rm_event event,
-	unsigned long data);
-static int rndis_ipa_create_rm_resource(struct rndis_ipa_dev *rndis_ipa_ctx);
-static int rndis_ipa_destroy_rm_resource(struct rndis_ipa_dev *rndis_ipa_ctx);
 static int rndis_ipa_register_pm_client(struct rndis_ipa_dev *rndis_ipa_ctx);
 static int rndis_ipa_deregister_pm_client(struct rndis_ipa_dev *rndis_ipa_ctx);
 static bool rx_filter(struct sk_buff *skb);
 static bool tx_filter(struct sk_buff *skb);
-static bool rm_enabled(struct rndis_ipa_dev *rndis_ipa_ctx);
-static int resource_request(struct rndis_ipa_dev *rndis_ipa_ctx);
-static void resource_release(struct rndis_ipa_dev *rndis_ipa_ctx);
 static netdev_tx_t rndis_ipa_start_xmit
 	(struct sk_buff *skb, struct net_device *net);
 static int rndis_ipa_debugfs_atomic_open
@@ -452,8 +437,10 @@ static struct ipa_ep_cfg usb_to_ipa_ep_cfg_deaggr_en = {
 	},
 	.deaggr = {
 		.deaggr_hdr_len = sizeof(struct rndis_pkt_hdr),
+		.syspipe_err_detection = true,
 		.packet_offset_valid = true,
 		.packet_offset_location = 8,
+		.ignore_min_pkt_err = true,
 		.max_packet_len = 8192, /* Will be overridden*/
 	},
 	.route = {
@@ -554,7 +541,6 @@ int rndis_ipa_init(struct ipa_usb_init_params *params)
 	rndis_ipa_ctx->tx_filter = false;
 	rndis_ipa_ctx->rx_filter = false;
 	rndis_ipa_ctx->icmp_filter = true;
-	rndis_ipa_ctx->rm_enable = true;
 	rndis_ipa_ctx->tx_dropped = 0;
 	rndis_ipa_ctx->rx_dropped = 0;
 	rndis_ipa_ctx->tx_dump_enable = false;
@@ -603,8 +589,7 @@ int rndis_ipa_init(struct ipa_usb_init_params *params)
 	}
 	RNDIS_IPA_DEBUG("Device Ethernet address set %pM\n", net->dev_addr);
 
-	if ((ipa_get_hw_type() >= IPA_HW_v3_0) &&
-		ipa_is_vlan_mode(IPA_VLAN_IF_RNDIS,
+	if (ipa_is_vlan_mode(IPA_VLAN_IF_RNDIS,
 		&rndis_ipa_ctx->is_vlan_mode)) {
 		RNDIS_IPA_ERROR("couldn't acquire vlan mode, is ipa ready?\n");
 		goto fail_get_vlan_mode;
@@ -642,6 +627,14 @@ int rndis_ipa_init(struct ipa_usb_init_params *params)
 		("netdev:%s registration succeeded, index=%d\n",
 		net->name, net->ifindex);
 
+	if (ipa_get_lan_rx_napi()) {
+		rndis_ipa_ctx->netif_rx_function = netif_receive_skb;
+		RNDIS_IPA_DEBUG("LAN RX NAPI enabled = True");
+	} else {
+		rndis_ipa_ctx->netif_rx_function = netif_rx_ni;
+		RNDIS_IPA_DEBUG("LAN RX NAPI enabled = False");
+	}
+
 	rndis_ipa = rndis_ipa_ctx;
 	params->ipa_rx_notify = rndis_ipa_packet_receive_notify;
 	params->ipa_tx_notify = rndis_ipa_tx_complete_notify;
@@ -649,7 +642,7 @@ int rndis_ipa_init(struct ipa_usb_init_params *params)
 	params->skip_ep_cfg = false;
 	rndis_ipa_ctx->state = RNDIS_IPA_INITIALIZED;
 	RNDIS_IPA_STATE_DEBUG(rndis_ipa_ctx);
-	pr_info("RNDIS_IPA NetDev was initialized");
+	pr_info("RNDIS_IPA NetDev was initialized\n");
 
 	RNDIS_IPA_LOG_EXIT();
 
@@ -756,15 +749,12 @@ int rndis_ipa_pipe_connect_notify(
 		return -EINVAL;
 	}
 
-	if (ipa_pm_is_used())
-		result = rndis_ipa_register_pm_client(rndis_ipa_ctx);
-	else
-		result = rndis_ipa_create_rm_resource(rndis_ipa_ctx);
+	result = rndis_ipa_register_pm_client(rndis_ipa_ctx);
 	if (result) {
-		RNDIS_IPA_ERROR("fail on RM create\n");
-		goto fail_create_rm;
+		RNDIS_IPA_ERROR("fail on PM register\n");
+		goto fail_register_pm;
 	}
-	RNDIS_IPA_DEBUG("RM resource was created\n");
+	RNDIS_IPA_DEBUG("PM client was registered\n");
 
 	rndis_ipa_ctx->ipa_to_usb_hdl = ipa_to_usb_hdl;
 	rndis_ipa_ctx->usb_to_ipa_hdl = usb_to_ipa_hdl;
@@ -842,11 +832,8 @@ int rndis_ipa_pipe_connect_notify(
 	return 0;
 
 fail:
-	if (ipa_pm_is_used())
-		rndis_ipa_deregister_pm_client(rndis_ipa_ctx);
-	else
-		rndis_ipa_destroy_rm_resource(rndis_ipa_ctx);
-fail_create_rm:
+	rndis_ipa_deregister_pm_client(rndis_ipa_ctx);
+fail_register_pm:
 	return result;
 }
 EXPORT_SYMBOL(rndis_ipa_pipe_connect_notify);
@@ -964,11 +951,11 @@ static netdev_tx_t rndis_ipa_start_xmit(struct sk_buff *skb,
 		goto out;
 	}
 
-	ret = resource_request(rndis_ipa_ctx);
-	if (ret) {
-		RNDIS_IPA_DEBUG("Waiting to resource\n");
+	ret = ipa_pm_activate(rndis_ipa_ctx->pm_hdl);
+	if (unlikely(ret)) {
+		RNDIS_IPA_DEBUG("Failed activate PM client\n");
 		netif_stop_queue(net);
-		goto resource_busy;
+		goto fail_pm_activate;
 	}
 
 	if (atomic_read(&rndis_ipa_ctx->outstanding_pkts) >=
@@ -984,7 +971,7 @@ static netdev_tx_t rndis_ipa_start_xmit(struct sk_buff *skb,
 	skb = rndis_encapsulate_skb(skb, rndis_ipa_ctx);
 	trace_rndis_tx_dp(skb->protocol);
 	ret = ipa_tx_dp(IPA_TO_USB_CLIENT, skb, NULL);
-	if (ret) {
+	if (unlikely(ret)) {
 		RNDIS_IPA_ERROR("ipa transmit failed (%d)\n", ret);
 		goto fail_tx_packet;
 	}
@@ -997,8 +984,8 @@ static netdev_tx_t rndis_ipa_start_xmit(struct sk_buff *skb,
 fail_tx_packet:
 	rndis_ipa_xmit_error(skb);
 out:
-	resource_release(rndis_ipa_ctx);
-resource_busy:
+	ipa_pm_deferred_deactivate(rndis_ipa_ctx->pm_hdl);
+fail_pm_activate:
 	RNDIS_IPA_DEBUG
 		("packet Tx done - %s\n",
 		(status == NETDEV_TX_OK) ? "OK" : "FAIL");
@@ -1031,7 +1018,7 @@ static void rndis_ipa_tx_complete_notify(
 
 	ret = 0;
 	NULL_CHECK_RETVAL(private);
-	if (ret)
+	if (unlikely(ret))
 		return;
 
 	trace_rndis_status_rcvd(skb->protocol);
@@ -1087,50 +1074,6 @@ static void rndis_ipa_tx_timeout(struct net_device *net)
 }
 
 /**
- * rndis_ipa_rm_notify() - callback supplied to IPA resource manager
- *   for grant/release events
- * user_data: the driver context supplied to IPA resource manager during call
- *  to ipa_rm_create_resource().
- * event: the event notified to us by IPA resource manager (Release/Grant)
- * data: reserved field supplied by IPA resource manager
- *
- * This callback shall be called based on resource request/release sent
- * to the IPA resource manager.
- * In case the queue was stopped during EINPROGRESS for Tx path and the
- * event received is Grant then the queue shall be restarted.
- * In case the event notified is a release notification the netdev discard it.
- */
-static void rndis_ipa_rm_notify(
-	void *user_data, enum ipa_rm_event event,
-	unsigned long data)
-{
-	struct rndis_ipa_dev *rndis_ipa_ctx = user_data;
-
-	RNDIS_IPA_LOG_ENTRY();
-
-	if (event == IPA_RM_RESOURCE_RELEASED) {
-		RNDIS_IPA_DEBUG("Resource Released\n");
-		return;
-	}
-
-	if (event != IPA_RM_RESOURCE_GRANTED) {
-		RNDIS_IPA_ERROR
-			("Unexceoted event receieved from RM (%d\n)", event);
-		return;
-	}
-	RNDIS_IPA_DEBUG("Resource Granted\n");
-
-	if (netif_queue_stopped(rndis_ipa_ctx->net)) {
-		RNDIS_IPA_DEBUG("starting queue\n");
-		netif_start_queue(rndis_ipa_ctx->net);
-	} else {
-		RNDIS_IPA_DEBUG("queue already awake\n");
-	}
-
-	RNDIS_IPA_LOG_EXIT();
-}
-
-/**
  * rndis_ipa_packet_receive_notify() - Rx notify for packet sent from
  *  tethered PC (USB->IPA).
  *  is USB->IPA->Apps-processor
@@ -1179,6 +1122,12 @@ static void rndis_ipa_packet_receive_notify(
 		("packet Rx, len=%d\n",
 		skb->len);
 
+	if (unlikely(rndis_ipa_ctx == NULL)) {
+		RNDIS_IPA_DEBUG("Private context is NULL. Drop SKB.\n");
+		dev_kfree_skb_any(skb);
+		return;
+	}
+
 	if (unlikely(rndis_ipa_ctx->rx_dump_enable))
 		rndis_ipa_dump_skb(skb);
 
@@ -1186,11 +1135,15 @@ static void rndis_ipa_packet_receive_notify(
 		RNDIS_IPA_DEBUG("use connect()/up() before receive()\n");
 		RNDIS_IPA_DEBUG("packet dropped (length=%d)\n",
 				skb->len);
+		rndis_ipa_ctx->rx_dropped++;
+		dev_kfree_skb_any(skb);
 		return;
 	}
 
-	if (evt != IPA_RECEIVE)	{
+	if (unlikely(evt != IPA_RECEIVE)) {
 		RNDIS_IPA_ERROR("a none IPA_RECEIVE event in driver RX\n");
+		rndis_ipa_ctx->rx_dropped++;
+		dev_kfree_skb_any(skb);
 		return;
 	}
 
@@ -1208,9 +1161,9 @@ static void rndis_ipa_packet_receive_notify(
 	}
 
 	trace_rndis_netif_ni(skb->protocol);
-	result = netif_rx_ni(skb);
-	if (result)
-		RNDIS_IPA_ERROR("fail on netif_rx_ni\n");
+	result = rndis_ipa_ctx->netif_rx_function(skb);
+	if (unlikely(result))
+		RNDIS_IPA_ERROR("fail on netif_rx_function\n");
 	rndis_ipa_ctx->net->stats.rx_packets++;
 	rndis_ipa_ctx->net->stats.rx_bytes += packet_len;
 }
@@ -1339,15 +1292,12 @@ int rndis_ipa_pipe_disconnect_notify(void *private)
 	rndis_ipa_ctx->net->stats.tx_dropped += outstanding_dropped_pkts;
 	atomic_set(&rndis_ipa_ctx->outstanding_pkts, 0);
 
-	if (ipa_pm_is_used())
-		retval = rndis_ipa_deregister_pm_client(rndis_ipa_ctx);
-	else
-		retval = rndis_ipa_destroy_rm_resource(rndis_ipa_ctx);
+	retval = rndis_ipa_deregister_pm_client(rndis_ipa_ctx);
 	if (retval) {
-		RNDIS_IPA_ERROR("Fail to clean RM\n");
+		RNDIS_IPA_ERROR("Fail to deregister PM\n");
 		return retval;
 	}
-	RNDIS_IPA_DEBUG("RM was successfully destroyed\n");
+	RNDIS_IPA_DEBUG("PM was successfully deregistered\n");
 
 	spin_lock_irqsave(&rndis_ipa_ctx->state_lock, flags);
 	next_state = rndis_ipa_next_state(rndis_ipa_ctx->state,
@@ -1493,7 +1443,7 @@ static void rndis_ipa_xmit_error(struct sk_buff *skb)
 	delay_jiffies = msecs_to_jiffies(
 		rndis_ipa_ctx->error_msec_sleep_time + rand_dealy_msec);
 
-	retval = schedule_delayed_work(
+	retval = queue_delayed_work(system_power_efficient_wq, 
 		&rndis_ipa_ctx->xmit_error_delayed_work, delay_jiffies);
 	if (!retval) {
 		RNDIS_IPA_ERROR("fail to schedule delayed work\n");
@@ -1815,86 +1765,7 @@ static int  rndis_ipa_deregister_properties(char *netdev_name)
 	return 0;
 }
 
-/**
- * rndis_ipa_create_rm_resource() -creates the resource representing
- *  this Netdev and supply notification callback for resource event
- *  such as Grant/Release
- * @rndis_ipa_ctx: this driver context
- *
- * In order make sure all needed resources are available during packet
- * transmit this Netdev shall use Request/Release mechanism of
- * the IPA resource manager.
- * This mechanism shall iterate over a dependency graph and make sure
- * all dependent entities are ready to for packet Tx
- * transfer (Apps->IPA->USB).
- * In this function the resource representing the Netdev is created
- * in addition to the basic dependency between the Netdev and the USB client.
- * Hence, USB client, is a dependency for the Netdev and may be notified in
- * case of packet transmit from this Netdev to tethered Host.
- * As implied from the "may" in the above sentence there is a scenario where
- * the USB is not notified. This is done thanks to the IPA resource manager
- * inactivity timer.
- * The inactivity timer allow the Release requests to be delayed in order
- * prevent ping-pong with the USB and other dependencies.
- */
-static int rndis_ipa_create_rm_resource(struct rndis_ipa_dev *rndis_ipa_ctx)
-{
-	struct ipa_rm_create_params create_params = {0};
-	struct ipa_rm_perf_profile profile;
-	int result;
 
-	RNDIS_IPA_LOG_ENTRY();
-
-	create_params.name = DRV_RESOURCE_ID;
-	create_params.reg_params.user_data = rndis_ipa_ctx;
-	create_params.reg_params.notify_cb = rndis_ipa_rm_notify;
-	result = ipa_rm_create_resource(&create_params);
-	if (result) {
-		RNDIS_IPA_ERROR("Fail on ipa_rm_create_resource\n");
-		goto fail_rm_create;
-	}
-	RNDIS_IPA_DEBUG("RM client was created\n");
-
-	profile.max_supported_bandwidth_mbps = IPA_APPS_MAX_BW_IN_MBPS;
-	ipa_rm_set_perf_profile(DRV_RESOURCE_ID, &profile);
-
-	result = ipa_rm_inactivity_timer_init
-		(DRV_RESOURCE_ID,
-		INACTIVITY_MSEC_DELAY);
-	if (result) {
-		RNDIS_IPA_ERROR("Fail on ipa_rm_inactivity_timer_init\n");
-		goto fail_inactivity_timer;
-	}
-
-	RNDIS_IPA_DEBUG("rm_it client was created\n");
-
-	result = ipa_rm_add_dependency_sync
-		(DRV_RESOURCE_ID,
-		IPA_RM_RESOURCE_USB_CONS);
-
-	if (result && result != -EINPROGRESS)
-		RNDIS_IPA_ERROR("unable to add RNDIS/USB dependency (%d)\n",
-				result);
-	else
-		RNDIS_IPA_DEBUG("RNDIS/USB dependency was set\n");
-
-	result = ipa_rm_add_dependency_sync
-		(IPA_RM_RESOURCE_USB_PROD,
-		IPA_RM_RESOURCE_APPS_CONS);
-	if (result && result != -EINPROGRESS)
-		RNDIS_IPA_ERROR("unable to add USB/APPS dependency (%d)\n",
-				result);
-	else
-		RNDIS_IPA_DEBUG("USB/APPS dependency was set\n");
-
-	RNDIS_IPA_LOG_EXIT();
-
-	return 0;
-
-fail_inactivity_timer:
-fail_rm_create:
-	return result;
-}
 
 static void rndis_ipa_pm_cb(void *p, enum ipa_pm_cb_event event)
 {
@@ -1919,64 +1790,6 @@ static void rndis_ipa_pm_cb(void *p, enum ipa_pm_cb_event event)
 	RNDIS_IPA_LOG_EXIT();
 }
 
-/**
- * rndis_ipa_destroy_rm_resource() - delete the dependency and destroy
- * the resource done on rndis_ipa_create_rm_resource()
- * @rndis_ipa_ctx: this driver context
- *
- * This function shall delete the dependency create between
- * the Netdev to the USB.
- * In addition the inactivity time shall be destroy and the resource shall
- * be deleted.
- */
-static int rndis_ipa_destroy_rm_resource(struct rndis_ipa_dev *rndis_ipa_ctx)
-{
-	int result;
-
-	RNDIS_IPA_LOG_ENTRY();
-
-	result = ipa_rm_delete_dependency
-		(DRV_RESOURCE_ID,
-		IPA_RM_RESOURCE_USB_CONS);
-	if (result && result != -EINPROGRESS) {
-		RNDIS_IPA_ERROR("Fail to delete RNDIS/USB dependency\n");
-		goto bail;
-	}
-	RNDIS_IPA_DEBUG("RNDIS/USB dependency was successfully deleted\n");
-
-	result = ipa_rm_delete_dependency
-		(IPA_RM_RESOURCE_USB_PROD,
-		IPA_RM_RESOURCE_APPS_CONS);
-	if (result == -EINPROGRESS) {
-		RNDIS_IPA_DEBUG("RM dependency deletion is in progress");
-	} else if (result) {
-		RNDIS_IPA_ERROR("Fail to delete USB/APPS dependency\n");
-		goto bail;
-	} else {
-		RNDIS_IPA_DEBUG("USB/APPS dependency was deleted\n");
-	}
-
-	result = ipa_rm_inactivity_timer_destroy(DRV_RESOURCE_ID);
-	if (result) {
-		RNDIS_IPA_ERROR("Fail to destroy inactivity timern");
-		goto bail;
-	}
-	RNDIS_IPA_DEBUG("RM inactivity timer was successfully destroy\n");
-
-	result = ipa_rm_delete_resource(DRV_RESOURCE_ID);
-	if (result) {
-		RNDIS_IPA_ERROR("resource deletion failed\n");
-		goto bail;
-	}
-	RNDIS_IPA_DEBUG
-		("Netdev RM resource was deleted (resid:%d)\n",
-		DRV_RESOURCE_ID);
-
-	RNDIS_IPA_LOG_EXIT();
-
-bail:
-	return result;
-}
 
 static int rndis_ipa_register_pm_client(struct rndis_ipa_dev *rndis_ipa_ctx)
 {
@@ -2005,54 +1818,6 @@ static int rndis_ipa_deregister_pm_client(struct rndis_ipa_dev *rndis_ipa_ctx)
 	return 0;
 }
 
-/**
- * resource_request() - request for the Netdev resource
- * @rndis_ipa_ctx: main driver context
- *
- * This function shall send the IPA resource manager inactivity time a request
- * to Grant the Netdev producer.
- * In case the resource is already Granted the function shall return immediately
- * and "pet" the inactivity timer.
- * In case the resource was not already Granted this function shall
- * return EINPROGRESS and the Netdev shall stop the send queue until
- * the IPA resource manager notify it that the resource is
- * granted (done in a differ context)
- */
-static int resource_request(struct rndis_ipa_dev *rndis_ipa_ctx)
-{
-	int result = 0;
-
-	if (!rm_enabled(rndis_ipa_ctx))
-		return result;
-
-	if (ipa_pm_is_used())
-		return ipa_pm_activate(rndis_ipa_ctx->pm_hdl);
-
-	return ipa_rm_inactivity_timer_request_resource(
-			DRV_RESOURCE_ID);
-
-}
-
-/**
- * resource_release() - release the Netdev resource
- * @rndis_ipa_ctx: main driver context
- *
- * start the inactivity timer count down.by using the IPA resource
- * manager inactivity time.
- * The actual resource release shall occur only if no request shall be done
- * during the INACTIVITY_MSEC_DELAY.
- */
-static void resource_release(struct rndis_ipa_dev *rndis_ipa_ctx)
-{
-	if (!rm_enabled(rndis_ipa_ctx))
-		return;
-	if (ipa_pm_is_used())
-		ipa_pm_deferred_deactivate(rndis_ipa_ctx->pm_hdl);
-	else
-		ipa_rm_inactivity_timer_release_resource(DRV_RESOURCE_ID);
-
-	return;
-}
 
 /**
  * rndis_encapsulate_skb() - encapsulate the given Ethernet skb with
@@ -2074,7 +1839,7 @@ static struct sk_buff *rndis_encapsulate_skb(struct sk_buff *skb,
 	if (unlikely(skb_headroom(skb) < sizeof(rndis_template_hdr))) {
 		struct sk_buff *new_skb = skb_copy_expand(skb,
 			sizeof(rndis_template_hdr), 0, GFP_ATOMIC);
-		if (!new_skb) {
+		if (unlikely(!new_skb)) {
 			RNDIS_IPA_ERROR("no memory for skb expand\n");
 			return skb;
 		}
@@ -2140,19 +1905,6 @@ static bool tx_filter(struct sk_buff *skb)
 	return true;
 }
 
-/**
- * rm_enabled() - allow the use of resource manager Request/Release to
- *  be bypassed
- * @rndis_ipa_ctx: main driver context
- *
- * By disabling the resource manager flag the Request for the Netdev resource
- * shall be bypassed and the packet shall be sent.
- * accordingly, Release request shall be bypass as well.
- */
-static bool rm_enabled(struct rndis_ipa_dev *rndis_ipa_ctx)
-{
-	return rndis_ipa_ctx->rm_enable;
-}
 
 /**
  * rndis_ipa_ep_registers_cfg() - configure the USB endpoints
@@ -2428,14 +2180,6 @@ static void rndis_ipa_debugfs_init(struct rndis_ipa_dev *rndis_ipa_ctx)
 		goto fail_file;
 	}
 
-	file = debugfs_create_bool
-		("rm_enable", flags_read_write,
-		rndis_ipa_ctx->directory, &rndis_ipa_ctx->rm_enable);
-	if (!file) {
-		RNDIS_IPA_ERROR("could not create debugfs rm file\n");
-		goto fail_file;
-	}
-
 	file = debugfs_create_u32
 		("outstanding_high", flags_read_write,
 		rndis_ipa_ctx->directory,
@@ -2693,7 +2437,7 @@ static int rndis_ipa_init_module(void)
 	if (ipa_rndis_logbuf == NULL)
 		RNDIS_IPA_DEBUG("failed to create IPC log, continue...\n");
 
-	pr_info("RNDIS_IPA module is loaded.");
+	pr_info("RNDIS_IPA module is loaded.\n");
 	return 0;
 }
 
@@ -2703,7 +2447,7 @@ static void rndis_ipa_cleanup_module(void)
 		ipc_log_context_destroy(ipa_rndis_logbuf);
 	ipa_rndis_logbuf = NULL;
 
-	pr_info("RNDIS_IPA module is unloaded.");
+	pr_info("RNDIS_IPA module is unloaded.\n");
 }
 
 MODULE_LICENSE("GPL v2");

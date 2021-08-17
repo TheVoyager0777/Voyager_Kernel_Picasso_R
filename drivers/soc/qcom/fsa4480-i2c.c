@@ -1,13 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/kernel.h>
@@ -126,7 +118,7 @@ static int fsa4480_usbc_event_changed(struct notifier_block *nb,
 		dev_dbg(dev, "%s: queueing usbc_analog_work\n",
 			__func__);
 		pm_stay_awake(fsa_priv->dev);
-		schedule_work(&fsa_priv->usbc_analog_work);
+		queue_work(system_freezable_wq, &fsa_priv->usbc_analog_work);
 		break;
 	default:
 		break;
@@ -262,7 +254,7 @@ int fsa4480_unreg_notifier(struct notifier_block *nb,
 		goto done;
 	}
 	/* Do not reset switch settings for usb digital hs */
-	if (mode.intval != POWER_SUPPLY_TYPEC_SINK)
+	if (mode.intval == POWER_SUPPLY_TYPEC_SINK_AUDIO_ADAPTER)
 		fsa4480_usbc_update_settings(fsa_priv, 0x18, 0x98);
 	rc = blocking_notifier_chain_unregister
 					(&fsa_priv->fsa4480_notifier, nb);
@@ -433,7 +425,7 @@ static int fsa4480_remove(struct i2c_client *i2c)
 		return -EINVAL;
 
 	fsa4480_usbc_update_settings(fsa_priv, 0x18, 0x98);
-	cancel_work(&fsa_priv->usbc_analog_work);
+	cancel_work_sync(&fsa_priv->usbc_analog_work);
 	pm_relax(fsa_priv->dev);
 	/* deregister from PMI */
 	power_supply_unreg_notifier(&fsa_priv->psy_nb);

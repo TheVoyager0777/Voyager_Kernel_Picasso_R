@@ -1,14 +1,7 @@
-/* Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2014-2018, 2020, The Linux Foundation. All rights reserved.
  */
+
 #define pr_fmt(fmt)	"ACC: %s: " fmt, __func__
 
 #include <linux/module.h>
@@ -121,44 +114,22 @@ static u64 mem_acc_read_efuse_row(struct mem_acc_regulator *mem_acc_vreg,
 	u64 efuse_bits;
 	struct scm_desc desc = {0};
 
-	struct mem_acc_read_req {
-		u32 row_address;
-		int addr_type;
-	} req;
-
-	struct mem_acc_read_rsp {
-		u32 row_data[2];
-		u32 status;
-	} rsp;
-
 	if (!use_tz_api) {
 		efuse_bits = readq_relaxed(mem_acc_vreg->efuse_base
 			+ row_num * BYTES_PER_FUSE_ROW);
 		return efuse_bits;
 	}
 
-	desc.args[0] = req.row_address = mem_acc_vreg->efuse_addr +
-					row_num * BYTES_PER_FUSE_ROW;
-	desc.args[1] = req.addr_type = 0;
+	desc.args[0] = mem_acc_vreg->efuse_addr + row_num * BYTES_PER_FUSE_ROW;
+	desc.args[1] = 0;
 	desc.arginfo = SCM_ARGS(2);
 	efuse_bits = 0;
 
-	if (!is_scm_armv8()) {
-		rc = scm_call(SCM_SVC_FUSE, SCM_FUSE_READ,
-			&req, sizeof(req), &rsp, sizeof(rsp));
-	} else {
-		rc = scm_call2(SCM_SIP_FNID(SCM_SVC_FUSE, SCM_FUSE_READ),
-				&desc);
-		rsp.row_data[0] = desc.ret[0];
-		rsp.row_data[1] = desc.ret[1];
-		rsp.status = desc.ret[2];
-	}
-
+	rc = scm_call2(SCM_SIP_FNID(SCM_SVC_FUSE, SCM_FUSE_READ), &desc);
 	if (rc) {
-		pr_err("read row %d failed, err code = %d", row_num, rc);
+		pr_err("read row %d failed, err code = %d\n", row_num, rc);
 	} else {
-		efuse_bits = ((u64)(rsp.row_data[1]) << 32) +
-				(u64)rsp.row_data[0];
+		efuse_bits = ((u64)(desc.ret[1]) << 32) + (u64)desc.ret[0];
 	}
 
 	return efuse_bits;
@@ -423,7 +394,7 @@ static int mem_acc_sel_setup(struct mem_acc_regulator *mem_acc_vreg,
 	char *mem_select_size_str;
 
 	mem_acc_vreg->acc_sel_addr[mem_type] = res->start;
-	len = res->end - res->start + 1;
+	len = resource_size(res);
 	pr_debug("'acc_sel_addr' = %pa mem_type=%d (len=%d)\n",
 					&res->start, mem_type, len);
 
@@ -476,7 +447,7 @@ static int mem_acc_efuse_init(struct platform_device *pdev,
 	}
 
 	mem_acc_vreg->efuse_addr = res->start;
-	len = res->end - res->start + 1;
+	len = resource_size(res);
 
 	pr_info("efuse_addr = %pa (len=0x%x)\n", &res->start, len);
 
@@ -526,7 +497,7 @@ static int mem_acc_custom_data_init(struct platform_device *pdev,
 		return -EINVAL;
 	}
 
-	len = res->end - res->start + 1;
+	len = resource_size(res);
 	mem_acc_vreg->acc_custom_addr[mem_type] =
 		devm_ioremap(mem_acc_vreg->dev, res->start, len);
 	if (!mem_acc_vreg->acc_custom_addr[mem_type]) {
@@ -1263,7 +1234,7 @@ static int mem_acc_init(struct platform_device *pdev,
 		pr_debug("'acc-en' resource missing or not used.\n");
 	} else {
 		mem_acc_vreg->acc_en_addr = res->start;
-		len = res->end - res->start + 1;
+		len = resource_size(res);
 		pr_debug("'acc_en_addr' = %pa (len=0x%x)\n", &res->start, len);
 
 		mem_acc_vreg->acc_en_base = devm_ioremap(mem_acc_vreg->dev,
@@ -1515,7 +1486,7 @@ static struct platform_driver mem_acc_regulator_driver = {
 	.driver		= {
 		.name		= "qcom,mem-acc-regulator",
 		.of_match_table = mem_acc_regulator_match_table,
-		.owner		= THIS_MODULE,
+
 	},
 };
 

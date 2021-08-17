@@ -1,33 +1,57 @@
-/* Copyright (c) 2016, The Linux Foundation. All rights reserved.
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
+#include <linux/platform_device.h>
 #ifndef __LLCC_QCOM__
 #define __LLCC_QCOM__
 
+#define LLCC_CPUSS       1
+#define LLCC_VIDSC0      2
+#define LLCC_VIDSC1      3
+#define LLCC_ROTATOR     4
+#define LLCC_VOICE       5
+#define LLCC_AUDIO       6
+#define LLCC_MDMHPGRW    7
+#define LLCC_MDM         8
+#define LLCC_MDMHW       9
+#define LLCC_CMPT        10
+#define LLCC_GPUHTW      11
+#define LLCC_GPU         12
+#define LLCC_MMUHWT      13
+#define LLCC_SENSOR      14
+#define LLCC_CMPTDMA     15
+#define LLCC_DISP        16
+#define LLCC_VIDFW       17
+#define LLCC_CAMFW       18
+#define LLCC_MSSTCM      19
+#define LLCC_MDMHPFX     20
+#define LLCC_MDMPNG      21
+#define LLCC_AUDHW       22
+#define LLCC_NPU         23
+#define LLCC_WLNHW       24
+#define LLCC_PIMEM       25
+#define LLCC_DISPVG      27
+#define LLCC_CVP         28
+#define LLCC_MODEMVPE    29
+#define LLCC_APTCM       30
+#define LLCC_WRTCH       31
+#define LLCC_CVPFW       32
+
 /**
  * llcc_slice_desc - Cache slice descriptor
- * @llcc_slice_id: llcc slice id
- * @llcc_slice_size: Size allocated for the llcc slice
- * @dev: pointer to llcc device
+ * @slice_id: llcc slice id
+ * @slice_size: Size allocated for the llcc slice
  */
 struct llcc_slice_desc {
-	int llcc_slice_id;
-	size_t llcc_slice_size;
-	struct device *dev;
+	u32 slice_id;
+	size_t slice_size;
 };
 
 /**
  * llcc_slice_config - Data associated with the llcc slice
- * @name: name of the use case associated with the llcc slice
  * @usecase_id: usecase id for which the llcc slice is used
  * @slice_id: llcc slice id assigned to each slice
  * @max_cap: maximum capacity of the llcc slice
@@ -35,16 +59,16 @@ struct llcc_slice_desc {
  * @fixed_size: whether the llcc slice can grow beyond its size
  * @bonus_ways: bonus ways associated with llcc slice
  * @res_ways: reserved ways associated with llcc slice
- * @cache_mode: mode of the llcce slice
+ * @cache_mode: mode of the llcc slice
  * @probe_target_ways: Probe only reserved and bonus ways on a cache miss
  * @dis_cap_alloc: Disable capacity based allocation
+ * @write_scid_en: Enables write cache support for a given scid.
  * @retain_on_pc: Retain through power collapse
  * @activate_on_init: activate the slice on init
  */
 struct llcc_slice_config {
-	const char *name;
-	int usecase_id;
-	int slice_id;
+	u32 usecase_id;
+	u32 slice_id;
 	u32 max_cap;
 	u32 priority;
 	bool fixed_size;
@@ -53,17 +77,68 @@ struct llcc_slice_config {
 	u32 cache_mode;
 	u32 probe_target_ways;
 	bool dis_cap_alloc;
+	bool write_scid_en;
 	bool retain_on_pc;
-	u32 activate_on_init;
+	bool activate_on_init;
 };
 
-#ifdef CONFIG_QCOM_LLCC
+/**
+ * llcc_drv_data - Data associated with the llcc driver
+ * @regmap: regmap associated with the llcc banks
+ * @bcast_regmap: regmap associated with broadcast llcc bank
+ * @cfg: pointer to the data structure for slice configuration
+ * @lock: mutex associated with each slice
+ * @cfg_size: size of the config data table
+ * @max_slices: max slices as read from device tree
+ * @num_banks: Number of llcc banks
+ * @bitmap: Bit map to track the active slice ids
+ * @offsets: Pointer to the bank offsets array
+ * @ecc_irq: interrupt for llcc cache error detection and reporting
+ */
+struct llcc_drv_data {
+	struct regmap *regmap;
+	struct regmap *bcast_regmap;
+	const struct llcc_slice_config *cfg;
+	struct mutex lock;
+	u32 cfg_size;
+	u32 max_slices;
+	u32 num_banks;
+	unsigned long *bitmap;
+	u32 *offsets;
+	int ecc_irq;
+	bool cap_based_alloc_and_pwr_collapse;
+};
+
+/**
+ * llcc_edac_reg_data - llcc edac registers data for each error type
+ * @name: Name of the error
+ * @synd_reg: Syndrome register address
+ * @count_status_reg: Status register address to read the error count
+ * @ways_status_reg: Status register address to read the error ways
+ * @reg_cnt: Number of registers
+ * @count_mask: Mask value to get the error count
+ * @ways_mask: Mask value to get the error ways
+ * @count_shift: Shift value to get the error count
+ * @ways_shift: Shift value to get the error ways
+ */
+struct llcc_edac_reg_data {
+	char *name;
+	u64 synd_reg;
+	u64 count_status_reg;
+	u64 ways_status_reg;
+	u32 reg_cnt;
+	u32 count_mask;
+	u32 ways_mask;
+	u8  count_shift;
+	u8  ways_shift;
+};
+
+#if IS_ENABLED(CONFIG_QCOM_LLCC)
 /**
  * llcc_slice_getd - get llcc slice descriptor
- * @dev: Device pointer of the client
- * @name: Name of the use case
+ * @uid: usecase_id of the client
  */
-struct llcc_slice_desc *llcc_slice_getd(struct device *dev, const char *name);
+struct llcc_slice_desc *llcc_slice_getd(u32 uid);
 
 /**
  * llcc_slice_putd - llcc slice descritpor
@@ -99,17 +174,12 @@ int llcc_slice_deactivate(struct llcc_slice_desc *desc);
  * qcom_llcc_probe - program the sct table
  * @pdev: platform device pointer
  * @table: soc sct table
+ * @sz: Size of the config table
  */
 int qcom_llcc_probe(struct platform_device *pdev,
 		      const struct llcc_slice_config *table, u32 sz);
-/**
- * qcom_llcc_remove - clean up llcc driver
- * @pdev: platform driver pointer
- */
-int qcom_llcc_remove(struct platform_device *pdev);
 #else
-static inline struct llcc_slice_desc *llcc_slice_getd(struct device *dev,
-			const char *name)
+static inline struct llcc_slice_desc *llcc_slice_getd(u32 uid)
 {
 	return NULL;
 }

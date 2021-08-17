@@ -1,13 +1,5 @@
-/* Copyright (c) 2008-2017, 2019 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 */
+/* Copyright (c) 2008-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef DIAGFWD_H
@@ -43,16 +35,15 @@ int diag_cmd_log_on_demand(unsigned char *src_buf, int src_len,
 			   unsigned char *dest_buf, int dest_len);
 int diag_cmd_get_mobile_id(unsigned char *src_buf, int src_len,
 			   unsigned char *dest_buf, int dest_len);
-int diag_process_diag_transport_query_cmd(unsigned char *src_buf, int src_len,
-				      unsigned char *dest_buf, int dest_len);
 int diag_check_common_cmd(struct diag_pkt_header_t *header);
 void diag_update_userspace_clients(unsigned int type);
 void diag_update_sleeping_process(int process_id, int data_type);
 int diag_process_apps_pkt(unsigned char *buf, int len, int pid);
 void diag_send_error_rsp(unsigned char *buf, int len, int pid);
 void diag_update_pkt_buffer(unsigned char *buf, uint32_t len, int type);
-int diag_process_stm_cmd(unsigned char *buf, int len, unsigned char *dest_buf);
-void diag_md_hdlc_reset_timer_func(unsigned long pid);
+int diag_process_stm_cmd(unsigned char *buf, unsigned char *dest_buf);
+void diag_md_hdlc_reset_timer_func(struct timer_list *tlist);
 void diag_update_md_clients(unsigned int type);
-void diag_update_md_clients_proc(unsigned int proc, unsigned int type);
+void diag_process_stm_mask(uint8_t cmd, uint8_t data_mask,
+	int data_type);
 #endif

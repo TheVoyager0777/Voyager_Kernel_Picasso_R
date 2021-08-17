@@ -1,16 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  inode.c - part of debugfs, a tiny little debug file system
  *
  *  Copyright (C) 2004 Greg Kroah-Hartman <greg@kroah.com>
  *  Copyright (C) 2004 IBM Inc.
  *
- *	This program is free software; you can redistribute it and/or
- *	modify it under the terms of the GNU General Public License version
- *	2 as published by the Free Software Foundation.
- *
  *  debugfs is for people to use instead of /proc or /sys.
  *  See ./Documentation/core-api/kernel-api.rst for more details.
- *
  */
 
 #include <linux/module.h>
@@ -279,10 +275,7 @@ struct dentry *debugfs_lookup(const char *name, struct dentry *parent)
 	if (!parent)
 		parent = debugfs_mount->mnt_root;
 
-	inode_lock(d_inode(parent));
-	dentry = lookup_one_len(name, parent, strlen(name));
-	inode_unlock(d_inode(parent));
-
+	dentry = lookup_one_len_unlocked(name, parent, strlen(name));
 	if (IS_ERR(dentry))
 		return NULL;
 	if (!d_really_is_positive(dentry)) {

@@ -58,8 +58,19 @@ config LEDS_AAT1290
 	help
 	 This option enables support for the LEDs on the AAT1290.
 
+config LEDS_APU
+	tristate "Front panel LED support for PC Engines APU/APU2/APU3 boards"
+	depends on LEDS_CLASS
+	depends on X86 && DMI
+	help
+	  This driver makes the PC Engines APU/APU2/APU3 front panel LEDs
+	  accessible from userspace programs through the LED subsystem.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called leds-apu.
+
 config LEDS_AS3645A
-	tristate "AS3645A LED flash controller support"
+	tristate "AS3645A and LM3555 LED flash controllers support"
 	depends on I2C && LEDS_CLASS_FLASH
 	depends on V4L2_FLASH_LED_CLASS || !V4L2_FLASH_LED_CLASS
 	help
@@ -94,6 +105,19 @@ config LEDS_CPCAP
 	  This option enables support for LEDs offered by Motorola's
 	  CPCAP PMIC.
 
+config LEDS_CR0014114
+	tristate "LED Support for Crane CR0014114"
+	depends on LEDS_CLASS
+	depends on SPI
+	depends on OF
+	help
+	  This option enables support for CR0014114 LED Board which
+	  is widely used in vending machines produced by
+	  Crane Merchandising Systems.
+
+	  To compile this driver as a module, choose M here: the module
+	  will be called leds-cr0014114.
+
 config LEDS_LM3530
 	tristate "LCD Backlight driver for LM3530"
 	depends on LEDS_CLASS
@@ -127,15 +151,22 @@ config LEDS_LM3642
 	  converter plus 1.5A constant current driver for a high-current
 	  white LED.
 
-config LEDS_AW3644
-        tristate "LED support for AW3644 Chip"
-        depends on LEDS_CLASS && I2C
-        select REGMAP_I2C
-        help
-          This option enables support for LEDs connected to AW3644.
-          The AW3644 is a 4MHz fixed-frequency synchronous boost
-          converter plus 1.5A constant current driver for a high-current
-          white LED.
+config LEDS_LM3692X
+	tristate "LED support for LM3692x Chips"
+	depends on LEDS_CLASS && I2C && OF
+	select REGMAP_I2C
+	help
+	  This option enables support for the TI LM3692x family
+	  of white LED string drivers used for backlighting.
+
+config LEDS_LM3601X
+	tristate "LED support for LM3601x Chips"
+	depends on LEDS_CLASS && I2C
+	depends on LEDS_CLASS_FLASH
+	select REGMAP_I2C
+	help
+	  This option enables support for the TI LM3601x family
+	  of flash, torch and indicator classes.
 
 config LEDS_LOCOMO
 	tristate "LED Support for Locomo device"
@@ -176,6 +207,21 @@ config LEDS_NET48XX
 	help
 	  This option enables support for the Soekris net4801 and net4826 error
 	  LED.
+
+config LEDS_QTI_FLASH
+	tristate "Support for QTI Flash LEDs"
+	depends on LEDS_CLASS_FLASH
+	depends on MFD_SPMI_PMIC
+	select LEDS_TRIGGERS
+	help
+	  This driver supports flash LED peripheral that is present on
+	  some Qualcomm Technologies, Inc. PMICs (e.g. PM8350C).  It can
+	  configure the flash LED target current for several independent
+	  channels. It also supports various over current and over
+	  temperature mitigation features.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called leds-qti-flash.
 
 config LEDS_FSG
 	tristate "LED Support for the Freecom FSG-3"
@@ -346,7 +392,7 @@ config LEDS_LP8788
 
 config LEDS_LP8860
 	tristate "LED support for the TI LP8860 4 channel LED driver"
-	depends on LEDS_CLASS && I2C
+	depends on LEDS_CLASS && I2C && OF
 	select REGMAP_I2C
 	help
 	  If you say yes here you get support for the TI LP8860 4 channel
@@ -414,36 +460,6 @@ config LEDS_PCA963X
 	  This option enables support for LEDs connected to the PCA963x
 	  LED driver chip accessed via the I2C bus. Supported
 	  devices include PCA9633 and PCA9634
-
-config LEDS_PCA9956B
-	tristate "LED support for PCA9956B I2C chip"
-	depends on LEDS_CLASS
-	depends on I2C
-	help
-	  This option enables support for LEDs connected to the PCA9956B
-	  LED driver chip accessed via the I2C bus. Supported
-	  devices include PCA9956B
-
-config LEDS_QPNP_FLASH_V2
-        tristate "Support for QPNP V2 Flash LEDs"
-        depends on LEDS_CLASS && MFD_SPMI_PMIC
-	select LEDS_TRIGGERS
-        help
-          This driver supports the flash V2 LED functionality of Qualcomm
-          Technologies, Inc. QPNP PMICs.  This driver supports PMICs starting
-          from PMI8998.  It can configure the flash LED target current for
-          several independent channels.  It also supports various over current
-          and over temperature mitigation features.
-
-config LEDS_QPNP_HAPTICS
-	tristate "Haptics support for QPNP PMIC"
-	depends on LEDS_CLASS && MFD_SPMI_PMIC
-	help
-	  This option enables device driver support for the haptics peripheral
-	  found on Qualcomm Technologies, Inc. QPNP PMICs.  The haptic
-	  peripheral is capable of driving both LRA and ERM vibrators.  This
-	  module provides haptic feedback for user actions such as a long press
-	  on the touch screen.
 
 config LEDS_WM831X_STATUS
 	tristate "LED support for status LEDs on WM831x PMICs"
@@ -543,7 +559,7 @@ config LEDS_MC13783
 	depends on LEDS_CLASS
 	depends on MFD_MC13XXX
 	help
-	  This option enable support for on-chip LED drivers found
+	  This option enables support for on-chip LED drivers found
 	  on Freescale Semiconductor MC13783/MC13892/MC34708 PMIC.
 
 config LEDS_NS2
@@ -566,7 +582,7 @@ config LEDS_NETXBIG
 	depends on MACH_KIRKWOOD
 	default y
 	help
-	  This option enable support for LEDs found on the LaCie 2Big
+	  This option enables support for LEDs found on the LaCie 2Big
 	  and 5Big Network v2 boards. The LEDs are wired to a CPLD and are
 	  controlled through a GPIO extension bus.
 
@@ -616,12 +632,12 @@ config LEDS_MAX8997
 	  MAXIM MAX8997 PMIC.
 
 config LEDS_LM355x
-	tristate "LED support for LM355x Chips, LM3554 and LM3556"
+	tristate "LED support for LM3554 and LM3556 chips"
 	depends on LEDS_CLASS && I2C
 	select REGMAP_I2C
 	help
-	  This option enables support for LEDs connected to LM355x.
-	  LM355x includes Torch, Flash and Indicator functions.
+	  This option enables support for LEDs connected to LM3554
+	  and LM3556. It includes Torch, Flash and Indicator functions.
 
 config LEDS_OT200
 	tristate "LED support for the Bachmann OT200"
@@ -669,14 +685,16 @@ config LEDS_IS31FL32XX
 	  LED controllers. They are I2C devices with multiple constant-current
 	  channels, each with independent 256-level PWM control.
 
-config LEDS_QCOM_CLK
-	tristate "LED Support for cock controller based PWM drvier"
-	depends on OF && PINCTRL && LEDS_CLASS
+config LEDS_SC27XX_BLTC
+	tristate "LED support for the SC27xx breathing light controller"
+	depends on LEDS_CLASS && MFD_SC27XX_PMIC
+	depends on OF
 	help
-	  This option enables the driver for clock driven LED.
-	  This driver controls the duty cycle of clocks generated
-	  by Qualcomm Technologies, Inc Chipsets.
-	  It also configures the pinctrl to output the clock.
+	  Say Y here to include support for the SC27xx breathing light controller
+	  LEDs.
+
+	  This driver can also be built as a module. If so the module will be
+	  called leds-sc27xx-bltc.
 
 comment "LED driver for blink(1) USB RGB LED is under Special HID drivers (HID_THINGM)"
 
@@ -699,22 +717,13 @@ config LEDS_POWERNV
 	  To compile this driver as a module, choose 'm' here: the module
 	  will be called leds-powernv.
 
-config LEDS_QTI_TRI_LED
-	tristate "LED support for Qualcomm Technologies, Inc. TRI_LED"
-	depends on LEDS_CLASS && MFD_SPMI_PMIC && PWM && OF
-	help
-	  This driver supports the TRI_LED module found in Qualcomm
-	  Technologies, Inc. PMIC chips. TRI_LED supports 3 LED drivers
-	  at max and each is controlled by a PWM channel used for dimming
-	  or blinking.
-
 config LEDS_SYSCON
 	bool "LED support for LEDs on system controllers"
 	depends on LEDS_CLASS=y
 	depends on MFD_SYSCON
 	depends on OF
 	help
-	  This option enabled support for the LEDs on syscon type
+	  This option enables support for the LEDs on syscon type
 	  devices. This will only work with device tree enabled
 	  devices.
 
@@ -728,11 +737,20 @@ config LEDS_PM8058
 
 config LEDS_MLXCPLD
 	tristate "LED support for the Mellanox boards"
-	depends on X86_64 && DMI
+	depends on X86 && DMI
 	depends on LEDS_CLASS
 	help
-	  This option enabled support for the LEDs on the Mellanox
-	  boards. Say Y to enabled these.
+	  This option enables support for the LEDs on the Mellanox
+	  boards. Say Y to enable these.
+
+config LEDS_MLXREG
+	tristate "LED support for the Mellanox switches management control"
+	depends on LEDS_CLASS
+	help
+	  This option enables support for the LEDs on the Mellanox Ethernet and
+	  InfiniBand switches. The driver can be activated by the platform device
+	  device add call. Say Y to enable these. To compile this driver as a
+	  module, choose 'M' here: the module will be called leds-mlxreg.
 
 config LEDS_USER
 	tristate "Userspace LED support"
@@ -752,6 +770,26 @@ config LEDS_NIC78BX
 
 	  To compile this driver as a module, choose M here: the module
 	  will be called leds-nic78bx.
+
+config LEDS_QTI_TRI_LED
+	tristate "LED support for Qualcomm Technologies, Inc. TRI_LED"
+	depends on LEDS_CLASS && MFD_SPMI_PMIC && PWM && OF
+	help
+	  This driver supports the TRI_LED module found in Qualcomm
+	  Technologies, Inc. PMIC chips. TRI_LED supports 3 LED drivers
+	  at max and each is controlled by a PWM channel used for dimming
+	  or blinking.
+
+config LEDS_QPNP_FLASH_V2
+        tristate "Support for QPNP V2 Flash LEDs"
+        depends on LEDS_CLASS && MFD_SPMI_PMIC
+	select LEDS_TRIGGERS
+        help
+          This driver supports the flash V2 LED functionality of Qualcomm
+          Technologies, Inc. QPNP PMICs.  This driver supports PMICs starting
+          from PMI8998, PM8150L and their derivatives.  It can configure the
+          flash LED target current for several independent channels.  It also
+          supports various over current and over temperature mitigation features.
 
 config LEDS_QPNP_VIBRATOR_LDO
 	tristate "Vibrator-LDO support for QPNP PMIC"

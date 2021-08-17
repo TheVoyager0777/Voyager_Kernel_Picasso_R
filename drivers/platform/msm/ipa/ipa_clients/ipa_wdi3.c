@@ -1,13 +1,6 @@
-/* Copyright (c) 2017, 2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/ipa_wdi3.h>
@@ -45,6 +38,9 @@
 		IPA_IPC_LOGGING(ipa_get_ipc_logbuf_low(), \
 			OFFLOAD_DRV_NAME " %s:%d " fmt, ## args); \
 	} while (0)
+
+#define IPA_TX_MAX_INTF_PROP 2
+#define IPA_RX_MAX_INTF_PROP 2
 
 struct ipa_wdi_intf_info {
 	char netdev_name[IPA_RESOURCE_NAME_MAX];
@@ -121,7 +117,7 @@ int ipa_wdi_init(struct ipa_wdi_init_in_params *in,
 
 	ipa_wdi_ctx->is_smmu_enabled = out->is_smmu_enabled;
 
-	if (IPA_WDI2_OVER_GSI() || (in->wdi_version == IPA_WDI_3))
+	if (ipa3_ctx->ipa_wdi3_over_gsi)
 		out->is_over_gsi = true;
 	else
 		out->is_over_gsi = false;
@@ -129,21 +125,10 @@ int ipa_wdi_init(struct ipa_wdi_init_in_params *in,
 }
 EXPORT_SYMBOL(ipa_wdi_init);
 
-int ipa3_get_wdi_version(void)
-{
-	if (ipa_wdi_ctx)
-		return ipa_wdi_ctx->wdi_version;
-	/* default version is IPA_WDI_3 */
-	return IPA_WDI_3;
-}
-EXPORT_SYMBOL(ipa3_get_wdi_version);
-
 int ipa_wdi_cleanup(void)
 {
 	struct ipa_wdi_intf_info *entry;
 	struct ipa_wdi_intf_info *next;
-
-	ipa_uc_dereg_rdyCB();
 
 	/* clear interface list */
 	list_for_each_entry_safe(entry, next,
@@ -201,8 +186,8 @@ int ipa_wdi_reg_intf(struct ipa_wdi_reg_intf_in_params *in)
 	struct ipa_wdi_intf_info *entry;
 	struct ipa_tx_intf tx;
 	struct ipa_rx_intf rx;
-	struct ipa_ioc_tx_intf_prop tx_prop[2];
-	struct ipa_ioc_rx_intf_prop rx_prop[2];
+	struct ipa_ioc_tx_intf_prop *tx_prop =  NULL;
+	struct ipa_ioc_rx_intf_prop *rx_prop = NULL;
 	u32 len;
 	int ret = 0;
 
@@ -261,42 +246,53 @@ int ipa_wdi_reg_intf(struct ipa_wdi_reg_intf_in_params *in)
 		hdr->hdr[IPA_IP_v4].hdr_hdl, hdr->hdr[IPA_IP_v6].hdr_hdl);
 
 	/* populate tx prop */
+	tx_prop = kmalloc(
+		sizeof(*tx_prop) * IPA_TX_MAX_INTF_PROP, GFP_KERNEL);
+	if (!tx_prop) {
+		IPAERR("failed to allocate memory\n");
+		ret = -ENOMEM;
+		goto fail_commit_hdr;
+	}
 	tx.num_props = 2;
+	memset(tx_prop, 0, sizeof(*tx_prop) * IPA_TX_MAX_INTF_PROP);
 	tx.prop = tx_prop;
 
-	memset(tx_prop, 0, sizeof(tx_prop));
 	tx_prop[0].ip = IPA_IP_v4;
-	if (ipa_wdi_ctx->wdi_version == IPA_WDI_3)
-		tx_prop[0].dst_pipe = IPA_CLIENT_WLAN2_CONS;
-	else
+	if (!ipa3_ctx->ipa_wdi3_over_gsi)
 		tx_prop[0].dst_pipe = IPA_CLIENT_WLAN1_CONS;
-
+	else
+		tx_prop[0].dst_pipe = IPA_CLIENT_WLAN2_CONS;
 	tx_prop[0].alt_dst_pipe = in->alt_dst_pipe;
 	tx_prop[0].hdr_l2_type = in->hdr_info[0].hdr_type;
 	strlcpy(tx_prop[0].hdr_name, hdr->hdr[IPA_IP_v4].name,
 		sizeof(tx_prop[0].hdr_name));
 
 	tx_prop[1].ip = IPA_IP_v6;
-	if (ipa_wdi_ctx->wdi_version == IPA_WDI_3)
-		tx_prop[1].dst_pipe = IPA_CLIENT_WLAN2_CONS;
-	else
+	if (!ipa3_ctx->ipa_wdi3_over_gsi)
 		tx_prop[1].dst_pipe = IPA_CLIENT_WLAN1_CONS;
-
+	else
+		tx_prop[1].dst_pipe = IPA_CLIENT_WLAN2_CONS;
 	tx_prop[1].alt_dst_pipe = in->alt_dst_pipe;
 	tx_prop[1].hdr_l2_type = in->hdr_info[1].hdr_type;
 	strlcpy(tx_prop[1].hdr_name, hdr->hdr[IPA_IP_v6].name,
 		sizeof(tx_prop[1].hdr_name));
 
 	/* populate rx prop */
+	rx_prop = kmalloc(
+		sizeof(*rx_prop) * IPA_RX_MAX_INTF_PROP, GFP_KERNEL);
+	if (!rx_prop) {
+		IPAERR("failed to allocate memory\n");
+		ret = -ENOMEM;
+		goto fail_commit_hdr;
+	}
 	rx.num_props = 2;
+	memset(rx_prop, 0, sizeof(*rx_prop) * IPA_RX_MAX_INTF_PROP);
 	rx.prop = rx_prop;
-	memset(rx_prop, 0, sizeof(rx_prop));
 	rx_prop[0].ip = IPA_IP_v4;
-	if (ipa_wdi_ctx->wdi_version == IPA_WDI_3)
-		rx_prop[0].src_pipe = IPA_CLIENT_WLAN2_PROD;
-	else
+	if (!ipa3_ctx->ipa_wdi3_over_gsi)
 		rx_prop[0].src_pipe = IPA_CLIENT_WLAN1_PROD;
-
+	else
+		rx_prop[0].src_pipe = IPA_CLIENT_WLAN2_PROD;
 	rx_prop[0].hdr_l2_type = in->hdr_info[0].hdr_type;
 	if (in->is_meta_data_valid) {
 		rx_prop[0].attrib.attrib_mask |= IPA_FLT_META_DATA;
@@ -305,11 +301,10 @@ int ipa_wdi_reg_intf(struct ipa_wdi_reg_intf_in_params *in)
 	}
 
 	rx_prop[1].ip = IPA_IP_v6;
-	if (ipa_wdi_ctx->wdi_version == IPA_WDI_3)
-		rx_prop[1].src_pipe = IPA_CLIENT_WLAN2_PROD;
-	else
+	if (!ipa3_ctx->ipa_wdi3_over_gsi)
 		rx_prop[1].src_pipe = IPA_CLIENT_WLAN1_PROD;
-
+	else
+		rx_prop[1].src_pipe = IPA_CLIENT_WLAN2_PROD;
 	rx_prop[1].hdr_l2_type = in->hdr_info[1].hdr_type;
 	if (in->is_meta_data_valid) {
 		rx_prop[1].attrib.attrib_mask |= IPA_FLT_META_DATA;
@@ -327,11 +322,16 @@ int ipa_wdi_reg_intf(struct ipa_wdi_reg_intf_in_params *in)
 	init_completion(&ipa_wdi_ctx->wdi_completion);
 
 	kfree(hdr);
+	kfree(tx_prop);
+	kfree(rx_prop);
+
 	mutex_unlock(&ipa_wdi_ctx->lock);
 	return 0;
 
 fail_commit_hdr:
 	kfree(hdr);
+	kfree(tx_prop);
+	kfree(rx_prop);
 fail_alloc_hdr:
 	kfree(new_intf);
 	mutex_unlock(&ipa_wdi_ctx->lock);
@@ -401,44 +401,6 @@ fail:
 }
 EXPORT_SYMBOL(ipa_wdi_dereg_intf);
 
-static void ipa_wdi_rm_notify(void *user_data, enum ipa_rm_event event,
-		unsigned long data)
-{
-	if (!ipa_wdi_ctx) {
-		IPA_WDI_ERR("Invalid context\n");
-		return;
-	}
-
-	switch (event) {
-	case IPA_RM_RESOURCE_GRANTED:
-		complete_all(&ipa_wdi_ctx->wdi_completion);
-		break;
-
-	case IPA_RM_RESOURCE_RELEASED:
-		break;
-
-	default:
-		IPA_WDI_ERR("Invalid RM Evt: %d", event);
-		break;
-	}
-}
-
-static int ipa_wdi_cons_release(void)
-{
-	return 0;
-}
-
-static int ipa_wdi_cons_request(void)
-{
-	int ret = 0;
-
-	if (!ipa_wdi_ctx) {
-		IPA_WDI_ERR("wdi ctx is not initialized\n");
-		ret = -EFAULT;
-	}
-
-	return ret;
-}
 
 static void ipa_wdi_pm_cb(void *p, enum ipa_pm_cb_event event)
 {
@@ -449,7 +411,6 @@ int ipa_wdi_conn_pipes(struct ipa_wdi_conn_in_params *in,
 			struct ipa_wdi_conn_out_params *out)
 {
 	int i, j, ret = 0;
-	struct ipa_rm_create_params param;
 	struct ipa_pm_register_params pm_params;
 	struct ipa_wdi_in_params in_tx;
 	struct ipa_wdi_in_params in_rx;
@@ -485,46 +446,15 @@ int ipa_wdi_conn_pipes(struct ipa_wdi_conn_in_params *in,
 		}
 	}
 
-	if (!ipa_pm_is_used()) {
-		memset(&param, 0, sizeof(param));
-		param.name = IPA_RM_RESOURCE_WLAN_PROD;
-		param.reg_params.user_data = ipa_wdi_ctx;
-		param.reg_params.notify_cb = ipa_wdi_rm_notify;
-		param.floor_voltage = IPA_VOLTAGE_SVS;
-		ret = ipa_rm_create_resource(&param);
-		if (ret) {
-			IPA_WDI_ERR("fail to create WLAN_PROD resource\n");
-			ret = -EFAULT;
-			goto fail_setup_sys_pipe;
-		}
-
-		memset(&param, 0, sizeof(param));
-		param.name = IPA_RM_RESOURCE_WLAN_CONS;
-		param.request_resource = ipa_wdi_cons_request;
-		param.release_resource = ipa_wdi_cons_release;
-		ret = ipa_rm_create_resource(&param);
-		if (ret) {
-			IPA_WDI_ERR("fail to create WLAN_CONS resource\n");
-			goto fail_create_rm_cons;
-		}
-
-		if (ipa_rm_add_dependency(IPA_RM_RESOURCE_WLAN_PROD,
-			IPA_RM_RESOURCE_APPS_CONS)) {
-			IPA_WDI_ERR("fail to add rm dependency\n");
-			ret = -EFAULT;
-			goto fail_add_dependency;
-		}
-	} else {
-		memset(&pm_params, 0, sizeof(pm_params));
-		pm_params.name = "wdi";
-		pm_params.callback = ipa_wdi_pm_cb;
-		pm_params.user_data = NULL;
-		pm_params.group = IPA_PM_GROUP_DEFAULT;
-		if (ipa_pm_register(&pm_params, &ipa_wdi_ctx->ipa_pm_hdl)) {
-			IPA_WDI_ERR("fail to register ipa pm\n");
-			ret = -EFAULT;
-			goto fail_setup_sys_pipe;
-		}
+	memset(&pm_params, 0, sizeof(pm_params));
+	pm_params.name = "wdi";
+	pm_params.callback = ipa_wdi_pm_cb;
+	pm_params.user_data = NULL;
+	pm_params.group = IPA_PM_GROUP_DEFAULT;
+	if (ipa_pm_register(&pm_params, &ipa_wdi_ctx->ipa_pm_hdl)) {
+		IPA_WDI_ERR("fail to register ipa pm\n");
+		ret = -EFAULT;
+		goto fail_setup_sys_pipe;
 	}
 
 	if (ipa_wdi_ctx->wdi_version == IPA_WDI_3) {
@@ -560,10 +490,6 @@ int ipa_wdi_conn_pipes(struct ipa_wdi_conn_in_params *in,
 				in->u_rx.rx.event_ring_doorbell_pa;
 			in_rx.u.ul.rdy_comp_ring_size =
 				in->u_rx.rx.event_ring_size;
-			in_rx.u.ul.is_txr_rn_db_pcie_addr =
-				in->u_rx.rx.is_txr_rn_db_pcie_addr;
-			in_rx.u.ul.is_evt_rn_db_pcie_addr =
-				in->u_rx.rx.is_evt_rn_db_pcie_addr;
 			if (ipa_connect_wdi_pipe(&in_rx, &out_rx)) {
 				IPA_WDI_ERR("fail to setup rx pipe\n");
 				ret = -EFAULT;
@@ -589,10 +515,6 @@ int ipa_wdi_conn_pipes(struct ipa_wdi_conn_in_params *in,
 				in->u_tx.tx.event_ring_size;
 			in_tx.u.dl.num_tx_buffers =
 				in->u_tx.tx.num_pkt_buffers;
-			in_tx.u.dl.is_txr_rn_db_pcie_addr =
-				in->u_tx.tx.is_txr_rn_db_pcie_addr;
-			in_tx.u.dl.is_evt_rn_db_pcie_addr =
-				in->u_tx.tx.is_evt_rn_db_pcie_addr;
 			if (ipa_connect_wdi_pipe(&in_tx, &out_tx)) {
 				IPA_WDI_ERR("fail to setup tx pipe\n");
 				ret = -EFAULT;
@@ -620,10 +542,6 @@ int ipa_wdi_conn_pipes(struct ipa_wdi_conn_in_params *in,
 				in->u_rx.rx_smmu.event_ring_doorbell_pa;
 			in_rx.u.ul_smmu.rdy_comp_ring_size =
 				in->u_rx.rx_smmu.event_ring_size;
-			in_rx.u.ul_smmu.is_txr_rn_db_pcie_addr =
-				in->u_rx.rx_smmu.is_txr_rn_db_pcie_addr;
-			in_rx.u.ul_smmu.is_evt_rn_db_pcie_addr =
-				in->u_rx.rx_smmu.is_evt_rn_db_pcie_addr;
 			if (ipa_connect_wdi_pipe(&in_rx, &out_rx)) {
 				IPA_WDI_ERR("fail to setup rx pipe\n");
 				ret = -EFAULT;
@@ -649,10 +567,6 @@ int ipa_wdi_conn_pipes(struct ipa_wdi_conn_in_params *in,
 				in->u_tx.tx_smmu.event_ring_size;
 			in_tx.u.dl_smmu.num_tx_buffers =
 				in->u_tx.tx_smmu.num_pkt_buffers;
-			in_tx.u.dl_smmu.is_txr_rn_db_pcie_addr =
-				in->u_tx.tx_smmu.is_txr_rn_db_pcie_addr;
-			in_tx.u.dl_smmu.is_evt_rn_db_pcie_addr =
-				in->u_tx.tx_smmu.is_evt_rn_db_pcie_addr;
 			if (ipa_connect_wdi_pipe(&in_tx, &out_tx)) {
 				IPA_WDI_ERR("fail to setup tx pipe\n");
 				ret = -EFAULT;
@@ -669,17 +583,8 @@ int ipa_wdi_conn_pipes(struct ipa_wdi_conn_in_params *in,
 fail:
 	ipa_disconnect_wdi_pipe(ipa_wdi_ctx->rx_pipe_hdl);
 fail_connect_pipe:
-	if (!ipa_pm_is_used())
-		ipa_rm_delete_dependency(IPA_RM_RESOURCE_WLAN_PROD,
-			IPA_RM_RESOURCE_APPS_CONS);
-	else
-		ipa_pm_deregister(ipa_wdi_ctx->ipa_pm_hdl);
-fail_add_dependency:
-	if (!ipa_pm_is_used())
-		ipa_rm_delete_resource(IPA_RM_RESOURCE_WLAN_CONS);
-fail_create_rm_cons:
-	if (!ipa_pm_is_used())
-		ipa_rm_delete_resource(IPA_RM_RESOURCE_WLAN_PROD);
+	ipa_pm_deregister(ipa_wdi_ctx->ipa_pm_hdl);
+
 fail_setup_sys_pipe:
 	for (j = 0; j < i; j++)
 		ipa_teardown_sys_pipe(ipa_wdi_ctx->sys_pipe_hdl[j]);
@@ -704,12 +609,12 @@ int ipa_wdi_disconn_pipes(void)
 		}
 	}
 
-	if (ipa_wdi_ctx->wdi_version == IPA_WDI_3) {
-		ipa_ep_idx_rx = ipa_get_ep_mapping(IPA_CLIENT_WLAN2_PROD);
-		ipa_ep_idx_tx = ipa_get_ep_mapping(IPA_CLIENT_WLAN2_CONS);
-	} else {
+	if (!ipa3_ctx->ipa_wdi3_over_gsi) {
 		ipa_ep_idx_rx = ipa_get_ep_mapping(IPA_CLIENT_WLAN1_PROD);
 		ipa_ep_idx_tx = ipa_get_ep_mapping(IPA_CLIENT_WLAN1_CONS);
+	} else {
+		ipa_ep_idx_rx = ipa_get_ep_mapping(IPA_CLIENT_WLAN2_PROD);
+		ipa_ep_idx_tx = ipa_get_ep_mapping(IPA_CLIENT_WLAN2_CONS);
 	}
 
 	if (ipa_wdi_ctx->wdi_version == IPA_WDI_3) {
@@ -728,27 +633,9 @@ int ipa_wdi_disconn_pipes(void)
 		}
 	}
 
-	if (!ipa_pm_is_used()) {
-		if (ipa_rm_delete_dependency(IPA_RM_RESOURCE_WLAN_PROD,
-					IPA_RM_RESOURCE_APPS_CONS)) {
-			IPA_WDI_ERR("fail to delete rm dependency\n");
-			return -EFAULT;
-		}
-
-		if (ipa_rm_delete_resource(IPA_RM_RESOURCE_WLAN_PROD)) {
-			IPA_WDI_ERR("fail to delete WLAN_PROD resource\n");
-			return -EFAULT;
-		}
-
-		if (ipa_rm_delete_resource(IPA_RM_RESOURCE_WLAN_CONS)) {
-			IPA_WDI_ERR("fail to delete WLAN_CONS resource\n");
-			return -EFAULT;
-		}
-	} else {
-		if (ipa_pm_deregister(ipa_wdi_ctx->ipa_pm_hdl)) {
-			IPA_WDI_ERR("fail to deregister ipa pm\n");
-			return -EFAULT;
-		}
+	if (ipa_pm_deregister(ipa_wdi_ctx->ipa_pm_hdl)) {
+		IPA_WDI_ERR("fail to deregister ipa pm\n");
+		return -EFAULT;
 	}
 
 	return 0;
@@ -765,12 +652,12 @@ int ipa_wdi_enable_pipes(void)
 		return -EPERM;
 	}
 
-	if (ipa_wdi_ctx->wdi_version == IPA_WDI_3) {
-		ipa_ep_idx_rx = ipa_get_ep_mapping(IPA_CLIENT_WLAN2_PROD);
-		ipa_ep_idx_tx = ipa_get_ep_mapping(IPA_CLIENT_WLAN2_CONS);
-	} else {
+	if (!ipa3_ctx->ipa_wdi3_over_gsi) {
 		ipa_ep_idx_rx = ipa_get_ep_mapping(IPA_CLIENT_WLAN1_PROD);
 		ipa_ep_idx_tx = ipa_get_ep_mapping(IPA_CLIENT_WLAN1_CONS);
+	} else {
+		ipa_ep_idx_rx = ipa_get_ep_mapping(IPA_CLIENT_WLAN2_PROD);
+		ipa_ep_idx_tx = ipa_get_ep_mapping(IPA_CLIENT_WLAN2_CONS);
 	}
 
 	if (ipa_wdi_ctx->wdi_version == IPA_WDI_3) {
@@ -797,24 +684,10 @@ int ipa_wdi_enable_pipes(void)
 		}
 	}
 
-	if (!ipa_pm_is_used()) {
-		ret = ipa_rm_request_resource(IPA_RM_RESOURCE_WLAN_PROD);
-		if (ret == -EINPROGRESS) {
-			if (wait_for_completion_timeout(
-				&ipa_wdi_ctx->wdi_completion, 10*HZ) == 0) {
-				IPA_WDI_ERR("WLAN_PROD res req time out\n");
-				return -EFAULT;
-			}
-		} else if (ret != 0) {
-			IPA_WDI_ERR("fail to request resource\n");
-			return -EFAULT;
-		}
-	} else {
-		ret = ipa_pm_activate_sync(ipa_wdi_ctx->ipa_pm_hdl);
-		if (ret) {
-			IPA_WDI_ERR("fail to activate ipa pm\n");
-			return -EFAULT;
-		}
+	ret = ipa_pm_activate_sync(ipa_wdi_ctx->ipa_pm_hdl);
+	if (ret) {
+		IPA_WDI_ERR("fail to activate ipa pm\n");
+		return -EFAULT;
 	}
 
 	return 0;
@@ -831,12 +704,12 @@ int ipa_wdi_disable_pipes(void)
 		return -EPERM;
 	}
 
-	if (ipa_wdi_ctx->wdi_version == IPA_WDI_3) {
-		ipa_ep_idx_rx = ipa_get_ep_mapping(IPA_CLIENT_WLAN2_PROD);
-		ipa_ep_idx_tx = ipa_get_ep_mapping(IPA_CLIENT_WLAN2_CONS);
-	} else {
+	if (!ipa3_ctx->ipa_wdi3_over_gsi) {
 		ipa_ep_idx_rx = ipa_get_ep_mapping(IPA_CLIENT_WLAN1_PROD);
 		ipa_ep_idx_tx = ipa_get_ep_mapping(IPA_CLIENT_WLAN1_CONS);
+	} else {
+		ipa_ep_idx_rx = ipa_get_ep_mapping(IPA_CLIENT_WLAN2_PROD);
+		ipa_ep_idx_tx = ipa_get_ep_mapping(IPA_CLIENT_WLAN2_CONS);
 	}
 
 	if (ipa_wdi_ctx->wdi_version == IPA_WDI_3) {
@@ -863,18 +736,10 @@ int ipa_wdi_disable_pipes(void)
 		}
 	}
 
-	if (!ipa_pm_is_used()) {
-		ret = ipa_rm_release_resource(IPA_RM_RESOURCE_WLAN_PROD);
-		if (ret != 0) {
-			IPA_WDI_ERR("fail to release resource\n");
-			return -EFAULT;
-		}
-	} else {
-		ret = ipa_pm_deactivate_sync(ipa_wdi_ctx->ipa_pm_hdl);
-		if (ret) {
-			IPA_WDI_ERR("fail to deactivate ipa pm\n");
-			return -EFAULT;
-		}
+	ret = ipa_pm_deactivate_sync(ipa_wdi_ctx->ipa_pm_hdl);
+	if (ret) {
+		IPA_WDI_ERR("fail to deactivate ipa pm\n");
+		return -EFAULT;
 	}
 
 	return 0;
@@ -883,39 +748,15 @@ EXPORT_SYMBOL(ipa_wdi_disable_pipes);
 
 int ipa_wdi_set_perf_profile(struct ipa_wdi_perf_profile *profile)
 {
-	struct ipa_rm_perf_profile rm_profile;
-	enum ipa_rm_resource_name resource_name;
-
 	if (profile == NULL) {
 		IPA_WDI_ERR("Invalid input\n");
 		return -EINVAL;
 	}
 
-	if (!ipa_pm_is_used()) {
-		rm_profile.max_supported_bandwidth_mbps =
-			profile->max_supported_bw_mbps;
-
-		if (profile->client == IPA_CLIENT_WLAN1_PROD ||
-			profile->client == IPA_CLIENT_WLAN2_PROD) {
-			resource_name = IPA_RM_RESOURCE_WLAN_PROD;
-		} else if (profile->client == IPA_CLIENT_WLAN1_CONS ||
-				   profile->client == IPA_CLIENT_WLAN2_CONS) {
-			resource_name = IPA_RM_RESOURCE_WLAN_CONS;
-		} else {
-			IPA_WDI_ERR("not supported\n");
-			return -EINVAL;
-		}
-
-		if (ipa_rm_set_perf_profile(resource_name, &rm_profile)) {
-			IPA_WDI_ERR("fail to setup rm perf profile\n");
-			return -EFAULT;
-		}
-	} else {
-		if (ipa_pm_set_throughput(ipa_wdi_ctx->ipa_pm_hdl,
-			profile->max_supported_bw_mbps)) {
-			IPA_WDI_ERR("fail to setup pm perf profile\n");
-			return -EFAULT;
-		}
+	if (ipa_pm_set_throughput(ipa_wdi_ctx->ipa_pm_hdl,
+		profile->max_supported_bw_mbps)) {
+		IPA_WDI_ERR("fail to set pm throughput\n");
+		return -EFAULT;
 	}
 
 	return 0;
@@ -941,3 +782,15 @@ int ipa_wdi_get_stats(struct IpaHwStatsWDIInfoData_t *stats)
 	return ipa_get_wdi_stats(stats);
 }
 EXPORT_SYMBOL(ipa_wdi_get_stats);
+
+int ipa_wdi_bw_monitor(struct ipa_wdi_bw_info *info)
+{
+	return ipa_uc_bw_monitor(info);
+}
+EXPORT_SYMBOL(ipa_wdi_bw_monitor);
+
+int ipa_wdi_sw_stats(struct ipa_wdi_tx_info *info)
+{
+	return ipa_set_wlan_tx_info(info);
+}
+EXPORT_SYMBOL(ipa_wdi_sw_stats);

@@ -5,11 +5,11 @@
 menu "Misc devices"
 
 config SPI_XIAOMI_TP
-	bool
-	depends on SPI
-	default y if TOUCHSCREEN_NT36xxx_HOSTDL_SPI
-	help
-	  Say Y if want use xiaomi touch panel.
+        bool
+        depends on SPI
+        default y if TOUCHSCREEN_NT36xxx_HOSTDL_SPI
+        help
+        Say Y if want use xiaomi touch panel.
 
 config SENSORS_LIS3LV02D
 	tristate
@@ -60,7 +60,7 @@ config AD525X_DPOT_SPI
 
 config ATMEL_TCLIB
 	bool "Atmel AT32/AT91 Timer/Counter Library"
-	depends on (AVR32 || ARCH_AT91)
+	depends on ARCH_AT91
 	help
 	  Select this if you want a library to allocate the Timer/Counter
 	  blocks found on many Atmel processors.  This facilitates using
@@ -82,7 +82,6 @@ config ATMEL_TCB_CLKSRC
 config ATMEL_TCB_CLKSRC_BLOCK
 	int
 	depends on ATMEL_TCB_CLKSRC
-	prompt "TC Block" if CPU_AT32AP700X
 	default 0
 	range 0 1
 	help
@@ -120,6 +119,20 @@ config IBM_ASM
 	  website <http://www-03.ibm.com/systems/info/x86servers/serverproven/compat/us/>
 	  for information on the specific driver level and support statement
 	  for your IBM server.
+
+config IBMVMC
+	tristate "IBM Virtual Management Channel support"
+	depends on PPC_PSERIES
+	help
+	  This is the IBM POWER Virtual Management Channel
+
+	  This driver is to be used for the POWER Virtual
+	  Management Channel virtual adapter on the PowerVM
+	  platform. It provides both request/response and
+	  async message support through the /dev/ibmvmc node.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called ibmvmc.
 
 config PHANTOM
 	tristate "Sensable PHANToM (PCI)"
@@ -199,7 +212,7 @@ config ICS932S401
 
 config ATMEL_SSC
 	tristate "Device driver for Atmel SSC peripheral"
-	depends on HAS_IOMEM && (AVR32 || ARCH_AT91 || COMPILE_TEST)
+	depends on HAS_IOMEM && (ARCH_AT91 || COMPILE_TEST)
 	---help---
 	  This option enables device driver support for Atmel Synchronized
 	  Serial Communication peripheral (SSC).
@@ -400,16 +413,6 @@ config SPEAR13XX_PCIE_GADGET
 	 entry will be created for that controller. User can use these
 	 sysfs node to configure PCIe EP as per his requirements.
 
-config TI_DAC7512
-	tristate "Texas Instruments DAC7512"
-	depends on SPI && SYSFS
-	help
-	  If you say yes here you get support for the Texas Instruments
-	  DAC7512 16-bit digital-to-analog converter.
-
-	  This driver can also be built as a module. If so, the module
-	  will be called ti_dac7512.
-
 config VMWARE_BALLOON
 	tristate "VMware Balloon Driver"
 	depends on VMWARE_VMCI && X86 && HYPERVISOR_GUEST
@@ -483,27 +486,19 @@ config SRAM_EXEC
 config HDCP_QSEECOM
 	tristate "QTI High-Bandwidth Digital Content Protection Module"
 	help
-	  This module implements HDCP 2.2 features over external interfaces
-	  such as the DisplayPort interface. It exposes APIs for the interface
-	  driver to communicate with QTI Secure Execution Environment (QSEE)
-	  via the QSEECOM Driver and also communicates with the Receiver via
-	  APIs exposed by the interface driver.
+	This module implements HDCP 2.2 features over external interfaces
+	such as the DisplayPort interface. It exposes APIs for the interface
+	driver to communicate with QTI Secure Execution Environment (QSEE)
+	via the QSEECOM Driver and also communicates with the Receiver via
+	APIs exposed by the interface driver.
 
 config QSEECOM
-        tristate "QTI Secure Execution Communicator driver"
-        help
-          Provides a communication interface between userspace and
-          QTI Secure Execution Environment (QSEE) using Secure Channel
-          Manager (SCM) interface. It exposes APIs for both userspace and
-          kernel clients.
-
-config PROFILER
-       tristate "Qualcomm Technologies, Inc. trustzone Communicator driver"
-       help
-         Provides a communication interface between userspace and
-         trustzone using Secure Channel Manager (SCM) interface.
-         It exposes APIs for userspace to get system profiling
-         information.
+	tristate "QTI Secure Execution Communicator driver"
+	help
+	  Provides a communication interface between userspace and
+	  QTI Secure Execution Environment (QSEE) using Secure Channel
+	  Manager (SCM) interface. It exposes APIs for both userspace and
+	  kernel clients.
 
 config VEXPRESS_SYSCFG
 	bool "Versatile Express System Configuration driver"
@@ -538,6 +533,10 @@ config PCI_ENDPOINT_TEST
            Enable this configuration option to enable the host side test driver
            for PCI Endpoint.
 
+config MISC_RTSX
+	tristate
+	default MISC_RTSX_PCI || MISC_RTSX_USB
+
 config UID_SYS_STATS
 	bool "Per-UID statistics"
 	depends on PROFILING && TASK_XACCT && TASK_IO_ACCOUNTING
@@ -567,14 +566,6 @@ config QPNP_MISC
 	  peripheral. The MISC peripheral holds the USB ID interrupt
 	  and the driver provides an API to check if this interrupt
 	  is available on the current PMIC chip.
-
-config TI_DRV8846
-	tristate "TI step motor driver IC"
-	depends on PWM
-	help
-	  Say 'y' here to include support for the H-Bridge Stepper
-	  Motor Driver. The MISC peripheral holds the pwm and the
-	  driver provides an API to drive stepper motor.
 
 config OKL4_USER_VIRQ
 	tristate "User space accessible OKL4 virtual interrupts"
@@ -615,11 +606,33 @@ config SIMTRAY_STATUS
 	default n
 	help
 	  Say 'y' here to support SIM tray GPIO detection
+config WIGIG_SENSING_SPI
+	tristate "Sensing over 60GHz using wil6210 / SPI bus"
+	depends on SPI && WIL6210
+	default n
+	help
+	  This module adds support for various sensing use cases, like gesture
+	  detection, face recognition, proximity detection and more. The sensor
+	  operates over 60GHz frequency band, using low power SPI interface.
+	  The output of the driver is CIRs (Channel Impulse Response) which
+	  must be processed in user space in order to get meaningful results.
 
-config LDO_WL2866D
-        bool  "multi ldo wl2866d"
-        ---help---
-        This option enables multi ldo wl2866d.
+config QTI_XR_SMRTVWR_MISC
+	tristate "QTI XR Reference device Misc driver support"
+	help
+	  This driver supports the misc chips in XR Reference devices
+	  such as NDI controller chip, Power up Sensor rails etc. Note: This
+	  driver initializes gpios, enables/disables LDOs that are part of
+	  XR standalone reference device.
+
+config QTI_MAXIM_FAN_CONTROLLER
+	tristate "QTI MAXIM fan controller  driver support"
+	help
+	  This driver supports the Maxim(MAX31760) fan controller.
+	  This driver exposes i2c control to control registers for
+	  setting different PWM, different temperature settings etc.
+	  Also, this driver initializes the power for the fan controller
+	  and exposes sysfs node to control different speeds of fan.
 
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
@@ -633,6 +646,9 @@ source "drivers/misc/mic/Kconfig"
 source "drivers/misc/genwqe/Kconfig"
 source "drivers/misc/echo/Kconfig"
 source "drivers/misc/cxl/Kconfig"
+source "drivers/misc/ocxl/Kconfig"
+source "drivers/misc/cardreader/Kconfig"
+source "drivers/misc/aw8624_haptic/Kconfig"
 source "drivers/misc/fpr_FingerprintCard/Kconfig"
 endmenu
 
@@ -654,4 +670,3 @@ config OKL4_LINK_SHBUF
 	      transport. This driver presents the link to Linux as a character device
 	      which can be written to or read from to access the shared memory. An ioctl
 	      on the device is used to send a virtual interrupt to the partner cell.
-

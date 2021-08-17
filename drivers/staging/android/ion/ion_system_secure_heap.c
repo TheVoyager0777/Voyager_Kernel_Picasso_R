@@ -1,16 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- *
  * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
  */
 
 #include <linux/slab.h>
@@ -61,8 +51,7 @@ static bool is_cp_flag_present(unsigned long flags)
 			ION_FLAG_CP_BITSTREAM |
 			ION_FLAG_CP_PIXEL |
 			ION_FLAG_CP_NON_PIXEL |
-			ION_FLAG_CP_CAMERA |
-			ION_FLAG_CP_CAMERA_ENCODE);
+			ION_FLAG_CP_CAMERA);
 }
 
 static void ion_system_secure_heap_free(struct ion_buffer *buffer)
@@ -75,11 +64,10 @@ static void ion_system_secure_heap_free(struct ion_buffer *buffer)
 	secure_heap->sys_heap->ops->free(buffer);
 }
 
-static int ion_system_secure_heap_allocate(
-					struct ion_heap *heap,
-					struct ion_buffer *buffer,
-					unsigned long size,
-					unsigned long flags)
+static int ion_system_secure_heap_allocate(struct ion_heap *heap,
+					   struct ion_buffer *buffer,
+					   unsigned long size,
+					   unsigned long flags)
 {
 	int ret = 0;
 	struct ion_system_secure_heap *secure_heap = container_of(heap,
@@ -116,7 +104,7 @@ static void process_one_prefetch(struct ion_heap *sys_heap,
 	ret = sys_heap->ops->allocate(sys_heap, &buffer, info->size,
 					buffer.flags);
 	if (ret) {
-		pr_debug("%s: Failed to prefetch %#llx, ret = %d\n",
+		pr_debug("%s: Failed to prefetch 0x%llx, ret = %d\n",
 			 __func__, info->size, ret);
 		return;
 	}
@@ -186,7 +174,7 @@ static void process_one_shrink(struct ion_system_secure_heap *secure_heap,
 	size = min_t(size_t, pool_size, info->size);
 	ret = sys_heap->ops->allocate(sys_heap, &buffer, size, buffer.flags);
 	if (ret) {
-		pr_debug("%s: Failed to shrink %#llx, ret = %d\n",
+		pr_debug("%s: Failed to shrink 0x%llx, ret = %d\n",
 			 __func__, info->size, ret);
 		return;
 	}
@@ -222,9 +210,9 @@ static void ion_system_secure_heap_prefetch_work(struct work_struct *work)
 	spin_unlock_irqrestore(&secure_heap->work_lock, flags);
 }
 
-static int alloc_prefetch_info(
-			struct ion_prefetch_regions __user *user_regions,
-			bool shrink, struct list_head *items)
+static int alloc_prefetch_info(struct ion_prefetch_regions __user *
+			       user_regions, bool shrink,
+			       struct list_head *items)
 {
 	struct prefetch_info *info;
 	u64 user_sizes;
@@ -282,9 +270,10 @@ static int __ion_system_secure_heap_resize(struct ion_heap *heap, void *ptr,
 		return -EINVAL;
 
 	for (i = 0; i < data->nr_regions; i++) {
-		ret = alloc_prefetch_info(
-			(struct ion_prefetch_regions *)data->regions + i,
-			shrink, &items);
+		struct ion_prefetch_regions *r;
+
+		r = (struct ion_prefetch_regions *)data->regions + i;
+		ret = alloc_prefetch_info(r, shrink, &items);
 		if (ret)
 			goto out_free;
 	}
@@ -352,41 +341,6 @@ static int ion_system_secure_heap_shrink(struct ion_heap *heap, gfp_t gfp_mask,
 						gfp_mask, nr_to_scan);
 }
 
-static int ion_system_secure_heap_pm_freeze(struct ion_heap *heap)
-{
-	struct ion_system_secure_heap *secure_heap;
-	unsigned long count;
-	long sz;
-	struct shrink_control sc = {
-		.gfp_mask = GFP_HIGHUSER,
-	};
-
-	secure_heap = container_of(heap, struct ion_system_secure_heap, heap);
-
-	sz = atomic_long_read(&heap->total_allocated);
-	if (sz) {
-		pr_err("%s: %lx bytes won't be saved across hibernation. Aborting.",
-		       __func__, sz);
-		return -EINVAL;
-	}
-
-	/* Since userspace is frozen, no more requests will be queued */
-	cancel_delayed_work_sync(&secure_heap->prefetch_work);
-
-	count = heap->shrinker.count_objects(&heap->shrinker, &sc);
-	sc.nr_to_scan = count;
-	heap->shrinker.scan_objects(&heap->shrinker, &sc);
-
-	count = heap->shrinker.count_objects(&heap->shrinker, &sc);
-	if (count) {
-		pr_err("%s: Failed to free all objects - %ld remaining",
-		       __func__, count);
-		return -EINVAL;
-	}
-
-	return 0;
-}
-
 static struct ion_heap_ops system_secure_heap_ops = {
 	.allocate = ion_system_secure_heap_allocate,
 	.free = ion_system_secure_heap_free,
@@ -394,9 +348,6 @@ static struct ion_heap_ops system_secure_heap_ops = {
 	.unmap_kernel = ion_system_secure_heap_unmap_kernel,
 	.map_user = ion_system_secure_heap_map_user,
 	.shrink = ion_system_secure_heap_shrink,
-	.pm = {
-		.freeze = ion_system_secure_heap_pm_freeze,
-	}
 };
 
 struct ion_heap *ion_system_secure_heap_create(struct ion_platform_heap *unused)
@@ -476,9 +427,8 @@ got_page:
 	return page;
 }
 
-int ion_secure_page_pool_shrink(
-		struct ion_system_heap *sys_heap,
-		int vmid, int order_idx, int nr_to_scan)
+int ion_secure_page_pool_shrink(struct ion_system_heap *sys_heap,
+				int vmid, int order_idx, int nr_to_scan)
 {
 	int ret, freed = 0;
 	int order = orders[order_idx];

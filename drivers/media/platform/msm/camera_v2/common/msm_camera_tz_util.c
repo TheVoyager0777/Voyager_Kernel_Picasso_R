@@ -1,4 +1,5 @@
-/* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -55,16 +56,16 @@
 #endif
 
 /* Update version major number in case the HLOS-TA interface is changed*/
-#define TA_IF_VERSION_MAJ	    1
-#define TA_IF_VERSION_MIN	    4
+#define TA_IF_VERSION_MAJ	    2
+#define TA_IF_VERSION_MIN	    1
 
 #undef CDBG
 #ifdef MSM_CAMERA_TZ_UTIL_VERBOSE
 	#define CDBG(fmt, args...) \
-		pr_info("%s:%d - " fmt, __func__, __LINE__, ##args)
+		pr_info("%s:%d -\n"fmt, __func__, __LINE__, ##args)
 #else /* MSM_CAMERA_TZ_UTIL_VERBOSE */
 	#define CDBG(fmt, args...) \
-		pr_debug("%s:%d - " fmt,  __func__, __LINE__, ##args)
+		pr_debug("%s:%d -\n"fmt,  __func__, __LINE__, ##args)
 #endif /* MSM_CAMERA_TZ_UTIL_VERBOSE */
 
 #pragma pack(push, msm_camera_tz_util, 1)

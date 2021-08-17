@@ -1,13 +1,6 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "AXI: %s(): " fmt, __func__
@@ -176,9 +169,6 @@ err:
 	if (mem_err) {
 		for (; i > 0; i--)
 			kfree(usecase[i-1].vectors);
-
-		kfree(usecase);
-		kfree(pdata);
 	}
 
 	return NULL;
@@ -287,22 +277,6 @@ struct msm_bus_scale_pdata *msm_bus_pdata_from_node(
 	return pdata;
 }
 EXPORT_SYMBOL(msm_bus_pdata_from_node);
-
-/**
- * msm_bus_cl_clear_pdata() - Clear pdata allocated from device-tree
- * of_node: Device tree node to extract information from
- */
-void msm_bus_cl_clear_pdata(struct msm_bus_scale_pdata *pdata)
-{
-	int i;
-
-	for (i = 0; i < pdata->num_usecases; i++)
-		kfree(pdata->usecase[i].vectors);
-
-	kfree(pdata->usecase);
-	kfree(pdata);
-}
-EXPORT_SYMBOL(msm_bus_cl_clear_pdata);
 
 static int *get_arr(struct platform_device *pdev,
 		const struct device_node *node, const char *prop,
@@ -414,8 +388,7 @@ static struct msm_bus_node_info *get_nodes(struct device_node *of_node,
 	}
 
 	pdata->len = i;
-	info = (struct msm_bus_node_info *)
-		devm_kzalloc(&pdev->dev, sizeof(struct msm_bus_node_info) *
+	info = devm_kzalloc(&pdev->dev, sizeof(struct msm_bus_node_info) *
 			pdata->len, GFP_KERNEL);
 	if (ZERO_OR_NULL_PTR(info)) {
 		pr_err("Failed to alloc memory for nodes: %d\n", pdata->len);
@@ -494,9 +467,9 @@ static struct msm_bus_node_info *get_nodes(struct device_node *of_node,
 						"qcom,bimc,bw", &num_bw);
 
 		if (num_bw != info[i].num_thresh) {
-			pr_err("%s:num_bw %d must equal num_thresh %d",
+			pr_err("%s:num_bw %d must equal num_thresh %d\n",
 				__func__, num_bw, info[i].num_thresh);
-			pr_err("%s:Err setting up dual conf for %s",
+			pr_err("%s:Err setting up dual conf for %s\n",
 				__func__, info[i].name);
 			goto err;
 		}
@@ -543,14 +516,15 @@ static struct msm_bus_node_info *get_nodes(struct device_node *of_node,
 		ret = of_property_read_u32(child_node, "qcom,ff",
 							&info[i].ff);
 		if (ret) {
-			pr_debug("fudge factor not present %d", info[i].id);
+			pr_debug("fudge factor not present %d\n", info[i].id);
 			info[i].ff = 0;
 		}
 
 		ret = of_property_read_u32(child_node, "qcom,floor-bw",
 						&temp);
 		if (ret) {
-			pr_debug("fabdev floor bw not present %d", info[i].id);
+			pr_debug("fabdev floor bw not present %d\n",
+							info[i].id);
 			info[i].floor_bw = 0;
 		} else {
 			info[i].floor_bw = KBTOB(temp);
@@ -616,7 +590,6 @@ static struct msm_bus_node_info *get_nodes(struct device_node *of_node,
 			info[i].iface_clk_node = NULL;
 
 		pr_debug("Node name: %s\n", info[i].name);
-		of_node_put(child_node);
 		i++;
 	}
 
@@ -748,7 +721,7 @@ struct msm_bus_fabric_registration
 						&temp);
 
 	if (ret) {
-		pr_err("nr-lim threshold not specified");
+		pr_err("nr-lim threshold not specified\n");
 		pdata->nr_lim_thresh = 0;
 	} else {
 		pdata->nr_lim_thresh = KBTOB(temp);
@@ -757,7 +730,7 @@ struct msm_bus_fabric_registration
 	ret = of_property_read_u32(of_node, "qcom,eff-fact",
 						&pdata->eff_fact);
 	if (ret) {
-		pr_err("Fab eff-factor not present");
+		pr_err("Fab eff-factor not present\n");
 		pdata->eff_fact = 0;
 	}
 

@@ -102,7 +102,7 @@ struct elliptic_shared_data_block {
 struct elliptic_shared_data_block *elliptic_get_shared_obj(uint32_t
 	object_id);
 
-extern unsigned int elliptic_add_platform_controls(void *platform);
+extern unsigned int elliptic_add_component_controls(void *component);
 
 void elliptic_set_calibration_data(uint8_t *calib_data, size_t size);
 
@@ -120,7 +120,8 @@ enum elliptic_system_configuration_parameter_type {
 	ESCPT_CALIBRATION_PROFILE,
 	ESCPT_ULTRASOUND_GAIN,
 	ESCPT_LOG_LEVEL,
-	ESCPT_BUILD_BRANCH,
+	ESCPT_BUILD_BRANCH, //13
+	
 	ESCPT_FSELECTION,
 	ESCPT_ENGINE_DIAGNOSTICS,
 	ESCPT_ENGINE_CUSTOM_SETTING_0,

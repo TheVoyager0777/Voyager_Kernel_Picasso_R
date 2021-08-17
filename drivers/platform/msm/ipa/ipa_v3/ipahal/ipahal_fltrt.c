@@ -1,13 +1,6 @@
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/ipa.h>
@@ -51,7 +44,6 @@
  * @flt_parse_hw_rule: Parse flt rule read from H/W
  * @eq_bitfield: Array of the bit fields of the support equations.
  *	0xFF means the equation is not supported
- * @prefetech_buf_size: Prefetch buf size;
  */
 struct ipahal_fltrt_obj {
 	bool support_hash;
@@ -81,7 +73,6 @@ struct ipahal_fltrt_obj {
 	int (*rt_parse_hw_rule)(u8 *addr, struct ipahal_rt_rule_entry *rule);
 	int (*flt_parse_hw_rule)(u8 *addr, struct ipahal_flt_rule_entry *rule);
 	u8 eq_bitfield[IPA_EQ_MAX];
-	u32 prefetech_buf_size;
 };
 
 
@@ -254,7 +245,7 @@ static int ipa_rt_gen_hw_rule(struct ipahal_rt_rule_gen_params *params,
 		IPAHAL_ERR("Invalid HDR type %d\n", params->hdr_type);
 		WARN_ON_RATELIMIT_IPA(1);
 		return -EINVAL;
-	};
+	}
 
 	ipa_assert_on(params->priority & ~0x3FF);
 	rule_hdr->u.hdr.priority = params->priority;
@@ -320,7 +311,7 @@ static int ipa_rt_gen_hw_rule_ipav4_5(struct ipahal_rt_rule_gen_params *params,
 		IPAHAL_ERR("Invalid HDR type %d\n", params->hdr_type);
 		WARN_ON_RATELIMIT_IPA(1);
 		return -EINVAL;
-	};
+	}
 
 	ipa_assert_on(params->priority & ~0x3FF);
 	rule_hdr->u.hdr.priority = params->priority;
@@ -522,11 +513,9 @@ static int ipa_flt_gen_hw_rule_ipav4(struct ipahal_flt_rule_gen_params *params,
 	return 0;
 }
 
-static int ipa_flt_gen_hw_rule_ipav4_5
-(
+static int ipa_flt_gen_hw_rule_ipav4_5(
 	struct ipahal_flt_rule_gen_params *params,
-	u32 *hw_len, u8 *buf
-)
+	u32 *hw_len, u8 *buf)
 {
 	struct ipa4_5_flt_rule_hw_hdr *rule_hdr;
 	u8 *start;
@@ -665,7 +654,6 @@ static struct ipahal_fltrt_obj ipahal_fltrt_objs[IPA_HW_MAX] = {
 			[IPA_IS_FRAG]			= 15,
 			[IPA_IS_PURE_ACK]		= 0xFF,
 		},
-		IPA3_0_HW_RULE_PREFETCH_BUF_SIZE,
 	},
 
 	/* IPAv4 */
@@ -711,7 +699,6 @@ static struct ipahal_fltrt_obj ipahal_fltrt_objs[IPA_HW_MAX] = {
 			[IPA_IS_FRAG]			= 15,
 			[IPA_IS_PURE_ACK]		= 0xFF,
 		},
-		IPA3_0_HW_RULE_PREFETCH_BUF_SIZE,
 	},
 
 	/* IPAv4.2 */
@@ -757,7 +744,6 @@ static struct ipahal_fltrt_obj ipahal_fltrt_objs[IPA_HW_MAX] = {
 			[IPA_IS_FRAG]			= 15,
 			[IPA_IS_PURE_ACK]		= 0xFF,
 		},
-		IPA3_0_HW_RULE_PREFETCH_BUF_SIZE,
 	},
 
 	/* IPAv4.5 */
@@ -803,7 +789,6 @@ static struct ipahal_fltrt_obj ipahal_fltrt_objs[IPA_HW_MAX] = {
 			[IPA_IS_FRAG]			= 15,
 			[IPA_IS_PURE_ACK]		= 0,
 		},
-		IPA3_0_HW_RULE_PREFETCH_BUF_SIZE,
 	},
 };
 
@@ -833,7 +818,7 @@ static int ipa_flt_generate_eq(enum ipa_ip_type ipt,
 	 * default "rule" means no attributes set -> map to
 	 * OFFSET_MEQ32_0 with mask of 0 and val of 0 and offset 0
 	 */
-	if ((attrib->attrib_mask == 0) && (attrib->ext_attrib_mask == 0)) {
+	if (attrib->attrib_mask == 0) {
 		eq_atrb->rule_eq_bitmap = 0;
 		eq_atrb->rule_eq_bitmap |= IPA_GET_RULE_EQ_BIT_PTRN(
 			IPA_OFFSET_MEQ32_0);
@@ -973,6 +958,31 @@ static int ipa_fltrt_generate_mac_hw_rule_bdy(u16 *en_rule,
 	return 0;
 }
 
+static inline int ipa_fltrt_generate_vlan_hw_rule_bdy(u16 *en_rule,
+	const struct ipa_rule_attrib *attrib,
+	u8 *ofst_meq32, u8 **extra, u8 **rest)
+{
+	if (attrib->attrib_mask & IPA_FLT_VLAN_ID) {
+		uint32_t vlan_tag;
+
+		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ofst_meq32, *ofst_meq32)) {
+			IPAHAL_ERR("ran out of meq32 eq\n");
+			return -EPERM;
+		}
+		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
+			ipa3_0_ofst_meq32[*ofst_meq32]);
+		/* -6 => offset of 802_1Q tag in L2 hdr */
+		*extra = ipa_write_8((u8)-6, *extra);
+		/* filter vlan packets: 0x8100 TPID + required VLAN ID */
+		vlan_tag = (0x8100 << 16) | (attrib->vlan_id & 0xFFF);
+		*rest = ipa_write_32(0xFFFF0FFF, *rest);
+		*rest = ipa_write_32(vlan_tag, *rest);
+		(*ofst_meq32)++;
+	}
+
+	return 0;
+}
+
 static int ipa_fltrt_generate_hw_rule_bdy_ip4(u16 *en_rule,
 	const struct ipa_rule_attrib *attrib,
 	u8 **extra_wrds, u8 **rest_wrds)
@@ -1092,23 +1102,9 @@ static int ipa_fltrt_generate_hw_rule_bdy_ip4(u16 *en_rule,
 		}
 	}
 
-	if (attrib->attrib_mask & IPA_FLT_VLAN_ID) {
-		uint32_t vlan_tag;
-
-		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ofst_meq32, ofst_meq32)) {
-			IPAHAL_ERR("ran out of meq32 eq\n");
-			goto err;
-		}
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ofst_meq32[ofst_meq32]);
-		/* -6 => offset of 802_1Q tag in L2 hdr */
-		extra = ipa_write_8((u8)-6, extra);
-		/* filter vlan packets: 0x8100 TPID + required VLAN ID */
-		vlan_tag = (0x8100 << 16) | (attrib->vlan_id & 0xFFF);
-		rest = ipa_write_32(0xFFFF0FFF, rest);
-		rest = ipa_write_32(vlan_tag, rest);
-		ofst_meq32++;
-	}
+	if (ipa_fltrt_generate_vlan_hw_rule_bdy(en_rule, attrib, &ofst_meq32,
+		&extra, &rest))
+		goto err;
 
 	if (attrib->attrib_mask & IPA_FLT_TYPE) {
 		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ihl_ofst_meq32,
@@ -1187,54 +1183,6 @@ static int ipa_fltrt_generate_hw_rule_bdy_ip4(u16 *en_rule,
 		ihl_ofst_meq32 += 2;
 	}
 
-	if (attrib->attrib_mask & IPA_FLT_L2TP_UDP_INNER_MAC_DST_ADDR) {
-		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ihl_ofst_meq32,
-			ihl_ofst_meq32) || IPA_IS_RAN_OUT_OF_EQ(
-			ipa3_0_ihl_ofst_meq32, ihl_ofst_meq32 + 1)) {
-			IPAHAL_ERR("ran out of ihl_meq32 eq\n");
-			goto err;
-		}
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ihl_ofst_meq32[ihl_ofst_meq32]);
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ihl_ofst_meq32[ihl_ofst_meq32 + 1]);
-		/* populate first ihl meq eq */
-		extra = ipa_write_8(24, extra);
-		rest = ipa_write_8(attrib->dst_mac_addr_mask[3], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr_mask[2], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr_mask[1], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr_mask[0], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr[3], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr[2], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr[1], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr[0], rest);
-		/* populate second ihl meq eq */
-		extra = ipa_write_8(28, extra);
-		rest = ipa_write_16(0, rest);
-		rest = ipa_write_8(attrib->dst_mac_addr_mask[5], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr_mask[4], rest);
-		rest = ipa_write_16(0, rest);
-		rest = ipa_write_8(attrib->dst_mac_addr[5], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr[4], rest);
-		ihl_ofst_meq32 += 2;
-	}
-
-	if (attrib->ext_attrib_mask & IPA_FLT_EXT_L2TP_UDP_INNER_ETHER_TYPE) {
-		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ofst_meq32, ofst_meq32)) {
-			IPAHAL_ERR("ran out of meq32 eq\n");
-			goto err;
-		}
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ofst_meq32[ofst_meq32]);
-		/* 76 => offset of inner ether type in L2TP over UDP hdr */
-		extra = ipa_write_8(76, extra);
-		rest = ipa_write_16(0, rest);
-		rest = ipa_write_16(attrib->ether_type, rest);
-		rest = ipa_write_16(0, rest);
-		rest = ipa_write_16(attrib->ether_type, rest);
-		ofst_meq32++;
-	}
-
 	if (attrib->attrib_mask & IPA_FLT_TCP_SYN) {
 		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ihl_ofst_meq32,
 			ihl_ofst_meq32)) {
@@ -1274,21 +1222,6 @@ static int ipa_fltrt_generate_hw_rule_bdy_ip4(u16 *en_rule,
 		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(IPA_METADATA_COMPARE);
 		rest = ipa_write_32(attrib->meta_data_mask, rest);
 		rest = ipa_write_32(attrib->meta_data, rest);
-	}
-
-	if (attrib->ext_attrib_mask & IPA_FLT_EXT_MTU) {
-		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ihl_ofst_rng16,
-				ihl_ofst_rng16)) {
-			IPAHAL_ERR("ran out of ihl_rng16 eq\n");
-			goto err;
-		}
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ihl_ofst_rng16[ihl_ofst_rng16]);
-		/* 130  => (130 - 128) = 2 offset of length in v4 header */
-		extra = ipa_write_8(130, extra);
-		rest = ipa_write_16(attrib->payload_length, rest);
-		rest = ipa_write_16(0, rest);
-		ihl_ofst_rng16++;
 	}
 
 	if (attrib->attrib_mask & IPA_FLT_SRC_PORT_RANGE) {
@@ -1404,17 +1337,6 @@ static int ipa_fltrt_generate_hw_rule_bdy_ip6(u16 *en_rule,
 		extra = ipa_write_8(attrib->u.v6.next_hdr, extra);
 	}
 
-	if (attrib->ext_attrib_mask & IPA_FLT_EXT_NEXT_HDR) {
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ihl_ofst_meq32[ihl_ofst_meq32]);
-		/* 134  => offset of Next header after v6 header. */
-		extra = ipa_write_8(134, extra);
-		rest = ipa_write_32(0xFF000000, rest);
-		rest = ipa_write_32(attrib->u.v6.next_hdr << 24, rest);
-		extra = ipa_write_8(attrib->u.v6.next_hdr, extra);
-		ihl_ofst_meq32++;
-	}
-
 	if (attrib->attrib_mask & IPA_FLT_TC) {
 		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(IPA_TC_EQ);
 		extra = ipa_write_8(attrib->u.v6.tc, extra);
@@ -1500,23 +1422,9 @@ static int ipa_fltrt_generate_hw_rule_bdy_ip6(u16 *en_rule,
 		ofst_meq32++;
 	}
 
-	if (attrib->attrib_mask & IPA_FLT_VLAN_ID) {
-		uint32_t vlan_tag;
-
-		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ofst_meq32, ofst_meq32)) {
-			IPAHAL_ERR("ran out of meq32 eq\n");
-			goto err;
-		}
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ofst_meq32[ofst_meq32]);
-		/* -6 => offset of 802_1Q tag in L2 hdr */
-		extra = ipa_write_8((u8)-6, extra);
-		/* filter vlan packets: 0x8100 TPID + required VLAN ID */
-		vlan_tag = (0x8100 << 16) | (attrib->vlan_id & 0xFFF);
-		rest = ipa_write_32(0xFFFF0FFF, rest);
-		rest = ipa_write_32(vlan_tag, rest);
-		ofst_meq32++;
-	}
+	if (ipa_fltrt_generate_vlan_hw_rule_bdy(en_rule, attrib, &ofst_meq32,
+		&extra, &rest))
+		goto err;
 
 	if (attrib->attrib_mask & IPA_FLT_TYPE) {
 		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ihl_ofst_meq32,
@@ -1593,125 +1501,6 @@ static int ipa_fltrt_generate_hw_rule_bdy_ip6(u16 *en_rule,
 		rest = ipa_write_8(attrib->dst_mac_addr[5], rest);
 		rest = ipa_write_8(attrib->dst_mac_addr[4], rest);
 		ihl_ofst_meq32 += 2;
-	}
-
-	if (attrib->attrib_mask & IPA_FLT_L2TP_UDP_INNER_MAC_DST_ADDR) {
-		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ihl_ofst_meq32,
-			ihl_ofst_meq32) || IPA_IS_RAN_OUT_OF_EQ(
-			ipa3_0_ihl_ofst_meq32, ihl_ofst_meq32 + 1)) {
-			IPAHAL_ERR("ran out of ihl_meq32 eq\n");
-			goto err;
-		}
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ihl_ofst_meq32[ihl_ofst_meq32]);
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ihl_ofst_meq32[ihl_ofst_meq32 + 1]);
-		/* populate first ihl meq eq */
-		extra = ipa_write_8(24, extra);
-		rest = ipa_write_8(attrib->dst_mac_addr_mask[3], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr_mask[2], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr_mask[1], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr_mask[0], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr[3], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr[2], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr[1], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr[0], rest);
-		/* populate second ihl meq eq */
-		extra = ipa_write_8(28, extra);
-		rest = ipa_write_16(0, rest);
-		rest = ipa_write_8(attrib->dst_mac_addr_mask[5], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr_mask[4], rest);
-		rest = ipa_write_16(0, rest);
-		rest = ipa_write_8(attrib->dst_mac_addr[5], rest);
-		rest = ipa_write_8(attrib->dst_mac_addr[4], rest);
-		ihl_ofst_meq32 += 2;
-	}
-
-	if (attrib->ext_attrib_mask & IPA_FLT_EXT_L2TP_UDP_INNER_ETHER_TYPE) {
-		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ofst_meq32, ofst_meq32)) {
-			IPAHAL_ERR("ran out of meq32 eq\n");
-			goto err;
-		}
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ofst_meq32[ofst_meq32]);
-		/* 76 => offset of inner ether type in L2TP over UDP */
-		extra = ipa_write_8(76, extra);
-		rest = ipa_write_16(0, rest);
-		rest = ipa_write_16(attrib->ether_type, rest);
-		rest = ipa_write_16(0, rest);
-		rest = ipa_write_16(attrib->ether_type, rest);
-		ofst_meq32++;
-	}
-
-	if (attrib->ext_attrib_mask & IPA_FLT_EXT_L2TP_UDP_TCP_SYN) {
-		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ihl_ofst_meq32,
-			ihl_ofst_meq32) || IPA_IS_RAN_OUT_OF_EQ(
-			ipa3_0_ihl_ofst_meq32, ihl_ofst_meq32 + 1)) {
-			IPAHAL_ERR("ran out of ihl_meq32 eq\n");
-			goto err;
-		}
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ihl_ofst_meq32[ihl_ofst_meq32]);
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ihl_ofst_meq32[ihl_ofst_meq32 + 1]);
-
-		/* populate TCP protocol eq */
-		if (attrib->ether_type == 0x0800) {
-			extra = ipa_write_8(46, extra);
-			rest = ipa_write_32(0xFF0000, rest);
-			rest = ipa_write_32(0x60000, rest);
-		} else {
-			extra = ipa_write_8(42, extra);
-			rest = ipa_write_32(0xFF00, rest);
-			rest = ipa_write_32(0x600, rest);
-		}
-
-		/* populate TCP SYN eq */
-		if (attrib->ether_type == 0x0800) {
-			extra = ipa_write_8(70, extra);
-			rest = ipa_write_32(0x20000, rest);
-			rest = ipa_write_32(0x20000, rest);
-		} else {
-			extra = ipa_write_8(90, extra);
-			rest = ipa_write_32(0x20000, rest);
-			rest = ipa_write_32(0x20000, rest);
-		}
-		ihl_ofst_meq32 += 2;
-	}
-
-	if (attrib->ext_attrib_mask & IPA_FLT_EXT_L2TP_UDP_INNER_NEXT_HDR) {
-		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ihl_ofst_meq32,
-			ihl_ofst_meq32)) {
-			IPAHAL_ERR("ran out of ihl_meq32 eq\n");
-			goto err;
-		}
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ihl_ofst_meq32[ihl_ofst_meq32]);
-
-		/* Populate next header */
-		if (attrib->ether_type == 0x0800) {
-			/* 46 => offset of inner next hdr type in
-			 * L2TP over UDP (IPv4).
-			 * 46 = UDP (8) + L2TP (16) + ETH (14) + 8 bytes
-			 * in Ipv4 header.
-			 */
-			extra = ipa_write_8(46, extra);
-			rest = ipa_write_32(0xFF0000, rest);
-			rest = ipa_write_32((attrib->l2tp_udp_next_hdr << 16),
-				rest);
-		} else {
-			/* 42 => offset of inner next hdr type in
-			 * L2TP over UDP (Ipv6).
-			 * 42 = UDP (8) + L2TP (16) + ETH (14) + 4 bytes
-			 * in Ipv6 header.
-			 */
-			extra = ipa_write_8(42, extra);
-			rest = ipa_write_32(0xFF00, rest);
-			rest = ipa_write_32((attrib->l2tp_udp_next_hdr << 8),
-				rest);
-		}
-
-		ihl_ofst_meq32++;
 	}
 
 	if (attrib->attrib_mask & IPA_FLT_TCP_SYN) {
@@ -1802,21 +1591,6 @@ static int ipa_fltrt_generate_hw_rule_bdy_ip6(u16 *en_rule,
 		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(IPA_METADATA_COMPARE);
 		rest = ipa_write_32(attrib->meta_data_mask, rest);
 		rest = ipa_write_32(attrib->meta_data, rest);
-	}
-
-	if (attrib->ext_attrib_mask & IPA_FLT_EXT_MTU) {
-		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ihl_ofst_rng16,
-				ihl_ofst_rng16)) {
-			IPAHAL_ERR("ran out of ihl_rng16 eq\n");
-			goto err;
-		}
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ihl_ofst_rng16[ihl_ofst_rng16]);
-		/* 132  => (132 - 128) = 4 offset of length in v6 header */
-		extra = ipa_write_8(132, extra);
-		rest = ipa_write_16(attrib->payload_length, rest);
-		rest = ipa_write_16(0, rest);
-		ihl_ofst_rng16++;
 	}
 
 	if (attrib->attrib_mask & IPA_FLT_SRC_PORT) {
@@ -2013,7 +1787,7 @@ static int ipa_fltrt_generate_hw_rule_bdy(enum ipa_ip_type ipt,
 	 * default "rule" means no attributes set -> map to
 	 * OFFSET_MEQ32_0 with mask of 0 and val of 0 and offset 0
 	 */
-	if ((attrib->attrib_mask == 0) && (attrib->ext_attrib_mask == 0)) {
+	if (attrib->attrib_mask == 0) {
 		IPAHAL_DBG_LOW("building default rule\n");
 		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(ipa3_0_ofst_meq32[0]);
 		extra_wrd_i = ipa_write_8(0, extra_wrd_i);  /* offset */
@@ -2335,6 +2109,31 @@ static int ipa_flt_generate_mac_eq(
 	return 0;
 }
 
+static inline int ipa_flt_generat_vlan_eq(
+	const struct ipa_rule_attrib *attrib, u16 *en_rule, u8 *ofst_meq32,
+	struct ipa_ipfltri_rule_eq *eq_atrb)
+{
+	if (attrib->attrib_mask & IPA_FLT_VLAN_ID) {
+		uint32_t vlan_tag;
+
+		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ofst_meq32, *ofst_meq32)) {
+			IPAHAL_ERR("ran out of meq32 eq\n");
+			return -EPERM;
+		}
+		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
+			ipa3_0_ofst_meq32[*ofst_meq32]);
+		/* -6 => offset of 802_1Q tag in L2 hdr */
+		eq_atrb->offset_meq_32[*ofst_meq32].offset = -6;
+		/* filter vlan packets: 0x8100 TPID + required VLAN ID */
+		vlan_tag = (0x8100 << 16) | (attrib->vlan_id & 0xFFF);
+		eq_atrb->offset_meq_32[*ofst_meq32].mask = 0xFFFF0FFF;
+		eq_atrb->offset_meq_32[*ofst_meq32].value = vlan_tag;
+		(*ofst_meq32)++;
+	}
+
+	return 0;
+}
+
 static int ipa_flt_generate_eq_ip4(enum ipa_ip_type ip,
 		const struct ipa_rule_attrib *attrib,
 		struct ipa_ipfltri_rule_eq *eq_atrb)
@@ -2416,55 +2215,6 @@ static int ipa_flt_generate_eq_ip4(enum ipa_ip_type ip,
 			((attrib->dst_mac_addr[5] << 16) & 0xFF0000) |
 			((attrib->dst_mac_addr[4] << 24) & 0xFF000000);
 		ihl_ofst_meq32 += 2;
-	}
-
-	if (attrib->attrib_mask & IPA_FLT_L2TP_UDP_INNER_MAC_DST_ADDR) {
-		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ihl_ofst_meq32,
-			ihl_ofst_meq32) || IPA_IS_RAN_OUT_OF_EQ(
-			ipa3_0_ihl_ofst_meq32, ihl_ofst_meq32 + 1)) {
-			IPAHAL_ERR("ran out of ihl_meq32 eq\n");
-			return -EPERM;
-		}
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ihl_ofst_meq32[ihl_ofst_meq32]);
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ihl_ofst_meq32[ihl_ofst_meq32 + 1]);
-		/* populate the first ihl meq 32 eq */
-		eq_atrb->ihl_offset_meq_32[ihl_ofst_meq32].offset = 24;
-		eq_atrb->ihl_offset_meq_32[ihl_ofst_meq32].mask =
-			(attrib->dst_mac_addr_mask[3] & 0xFF) |
-			((attrib->dst_mac_addr_mask[2] << 8) & 0xFF00) |
-			((attrib->dst_mac_addr_mask[1] << 16) & 0xFF0000) |
-			((attrib->dst_mac_addr_mask[0] << 24) & 0xFF000000);
-		eq_atrb->ihl_offset_meq_32[ihl_ofst_meq32].value =
-			(attrib->dst_mac_addr[3] & 0xFF) |
-			((attrib->dst_mac_addr[2] << 8) & 0xFF00) |
-			((attrib->dst_mac_addr[1] << 16) & 0xFF0000) |
-			((attrib->dst_mac_addr[0] << 24) & 0xFF000000);
-		/* populate the second ihl meq 32 eq */
-		eq_atrb->ihl_offset_meq_32[ihl_ofst_meq32 + 1].offset = 28;
-		eq_atrb->ihl_offset_meq_32[ihl_ofst_meq32 + 1].mask =
-			((attrib->dst_mac_addr_mask[5] << 16) & 0xFF0000) |
-			((attrib->dst_mac_addr_mask[4] << 24) & 0xFF000000);
-		eq_atrb->ihl_offset_meq_32[ihl_ofst_meq32 + 1].value =
-			((attrib->dst_mac_addr[5] << 16) & 0xFF0000) |
-			((attrib->dst_mac_addr[4] << 24) & 0xFF000000);
-		ihl_ofst_meq32 += 2;
-	}
-
-	if (attrib->ext_attrib_mask & IPA_FLT_EXT_L2TP_UDP_INNER_ETHER_TYPE) {
-		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ofst_meq32, ofst_meq32)) {
-			IPAHAL_ERR("ran out of meq32 eq\n");
-			return -EPERM;
-		}
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ofst_meq32[ofst_meq32]);
-		eq_atrb->offset_meq_32[ofst_meq32].offset = 76;
-		eq_atrb->offset_meq_32[ofst_meq32].mask =
-			attrib->ether_type;
-		eq_atrb->offset_meq_32[ofst_meq32].value =
-			attrib->ether_type;
-		ofst_meq32++;
 	}
 
 	if (attrib->attrib_mask & IPA_FLT_TCP_SYN) {
@@ -2562,23 +2312,8 @@ static int ipa_flt_generate_eq_ip4(enum ipa_ip_type ip,
 		}
 	}
 
-	if (attrib->attrib_mask & IPA_FLT_VLAN_ID) {
-		uint32_t vlan_tag;
-
-		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ofst_meq32, ofst_meq32)) {
-			IPAHAL_ERR("ran out of meq32 eq\n");
-			return -EPERM;
-		}
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ofst_meq32[ofst_meq32]);
-		/* -6 => offset of 802_1Q tag in L2 hdr */
-		eq_atrb->offset_meq_32[ofst_meq32].offset = -6;
-		/* filter vlan packets: 0x8100 TPID + required VLAN ID */
-		vlan_tag = (0x8100 << 16) | (attrib->vlan_id & 0xFFF);
-		eq_atrb->offset_meq_32[ofst_meq32].mask = 0xFFFF0FFF;
-		eq_atrb->offset_meq_32[ofst_meq32].value = vlan_tag;
-		ofst_meq32++;
-	}
+	if (ipa_flt_generat_vlan_eq(attrib, en_rule, &ofst_meq32, eq_atrb))
+		return -EPERM;
 
 	if (attrib->attrib_mask & IPA_FLT_TYPE) {
 		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ihl_ofst_meq32,
@@ -2902,57 +2637,6 @@ static int ipa_flt_generate_eq_ip6(enum ipa_ip_type ip,
 		ihl_ofst_meq32 += 2;
 	}
 
-	if (attrib->attrib_mask & IPA_FLT_L2TP_UDP_INNER_MAC_DST_ADDR) {
-		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ihl_ofst_meq32,
-			ihl_ofst_meq32) || IPA_IS_RAN_OUT_OF_EQ(
-			ipa3_0_ihl_ofst_meq32, ihl_ofst_meq32 + 1)) {
-			IPAHAL_ERR_RL("ran out of ihl_meq32 eq\n");
-			return -EPERM;
-		}
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ihl_ofst_meq32[ihl_ofst_meq32]);
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ihl_ofst_meq32[ihl_ofst_meq32 + 1]);
-		/* populate the first ihl meq 32 eq */
-		eq_atrb->ihl_offset_meq_32[ihl_ofst_meq32].offset = 24;
-		eq_atrb->ihl_offset_meq_32[ihl_ofst_meq32].mask =
-			(attrib->dst_mac_addr_mask[3] & 0xFF) |
-			((attrib->dst_mac_addr_mask[2] << 8) & 0xFF00) |
-			((attrib->dst_mac_addr_mask[1] << 16) & 0xFF0000) |
-			((attrib->dst_mac_addr_mask[0] << 24) & 0xFF000000);
-		eq_atrb->ihl_offset_meq_32[ihl_ofst_meq32].value =
-			(attrib->dst_mac_addr[3] & 0xFF) |
-			((attrib->dst_mac_addr[2] << 8) & 0xFF00) |
-			((attrib->dst_mac_addr[1] << 16) & 0xFF0000) |
-			((attrib->dst_mac_addr[0] << 24) & 0xFF000000);
-		/* populate the second ihl meq 32 eq */
-		eq_atrb->ihl_offset_meq_32[ihl_ofst_meq32 + 1].offset = 28;
-		eq_atrb->ihl_offset_meq_32[ihl_ofst_meq32 + 1].mask =
-			((attrib->dst_mac_addr_mask[5] << 16) & 0xFF0000) |
-			((attrib->dst_mac_addr_mask[4] << 24) & 0xFF000000);
-		eq_atrb->ihl_offset_meq_32[ihl_ofst_meq32 + 1].value =
-			((attrib->dst_mac_addr[5] << 16) & 0xFF0000) |
-			((attrib->dst_mac_addr[4] << 24) & 0xFF000000);
-		ihl_ofst_meq32 += 2;
-	}
-
-
-	if (attrib->ext_attrib_mask & IPA_FLT_EXT_L2TP_UDP_INNER_ETHER_TYPE) {
-		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ofst_meq32, ofst_meq32)) {
-			IPAHAL_ERR_RL("ran out of meq32 eq\n");
-			return -EPERM;
-		}
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ofst_meq32[ofst_meq32]);
-		eq_atrb->offset_meq_32[ofst_meq32].offset = 76;
-		eq_atrb->offset_meq_32[ofst_meq32].mask =
-			attrib->ether_type;
-		eq_atrb->offset_meq_32[ofst_meq32].value =
-			attrib->ether_type;
-		ofst_meq32++;
-	}
-
-
 	if (attrib->attrib_mask & IPA_FLT_TCP_SYN) {
 		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ihl_ofst_meq32,
 			ihl_ofst_meq32)) {
@@ -3061,23 +2745,8 @@ static int ipa_flt_generate_eq_ip6(enum ipa_ip_type ip,
 		ofst_meq32++;
 	}
 
-	if (attrib->attrib_mask & IPA_FLT_VLAN_ID) {
-		uint32_t vlan_tag;
-
-		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ofst_meq32, ofst_meq32)) {
-			IPAHAL_ERR("ran out of meq32 eq\n");
-			return -EPERM;
-		}
-		*en_rule |= IPA_GET_RULE_EQ_BIT_PTRN(
-			ipa3_0_ofst_meq32[ofst_meq32]);
-		/* -6 => offset of 802_1Q tag in L2 hdr */
-		eq_atrb->offset_meq_32[ofst_meq32].offset = -6;
-		/* filter vlan packets: 0x8100 TPID + required VLAN ID */
-		vlan_tag = (0x8100 << 16) | (attrib->vlan_id & 0xFFF);
-		eq_atrb->offset_meq_32[ofst_meq32].mask = 0xFFFF0FFF;
-		eq_atrb->offset_meq_32[ofst_meq32].value = vlan_tag;
-		ofst_meq32++;
-	}
+	if (ipa_flt_generat_vlan_eq(attrib, en_rule, &ofst_meq32, eq_atrb))
+		return -EPERM;
 
 	if (attrib->attrib_mask & IPA_FLT_TYPE) {
 		if (IPA_IS_RAN_OUT_OF_EQ(ipa3_0_ihl_ofst_meq32,
@@ -3924,12 +3593,6 @@ u32 ipahal_get_lcl_tbl_addr_alignment(void)
 	return ipahal_fltrt_objs[ipahal_ctx->hw_type].lcladdr_alignment;
 }
 
-/* Get the H/W (flt/rt) prefetch buf size */
-u32 ipahal_get_hw_prefetch_buf_size(void)
-{
-	return ipahal_fltrt_objs[ipahal_ctx->hw_type].prefetech_buf_size;
-}
-
 /*
  * Rule priority is used to distinguish rules order
  * at the integrated table consisting from hashable and
@@ -4294,7 +3957,7 @@ static int ipa_fltrt_alloc_lcl_bdy(
 			params->nhash_bdy.size);
 
 alloc1:
-		params->nhash_bdy.base = dma_alloc_coherent(
+		params->nhash_bdy.base = dma_zalloc_coherent(
 			ipahal_ctx->ipa_pdev, params->nhash_bdy.size,
 			&params->nhash_bdy.phys_base, flag);
 		if (!params->nhash_bdy.base) {
@@ -4306,7 +3969,6 @@ alloc1:
 				params->nhash_bdy.size);
 			return -ENOMEM;
 		}
-		memset(params->nhash_bdy.base, 0, params->nhash_bdy.size);
 	}
 
 	if (!obj->support_hash && params->hash_bdy.size) {
@@ -4330,7 +3992,7 @@ alloc1:
 			params->hash_bdy.size);
 
 alloc2:
-		params->hash_bdy.base = dma_alloc_coherent(
+		params->hash_bdy.base = dma_zalloc_coherent(
 			ipahal_ctx->ipa_pdev, params->hash_bdy.size,
 			&params->hash_bdy.phys_base, flag);
 		if (!params->hash_bdy.base) {
@@ -4342,7 +4004,6 @@ alloc2:
 				params->hash_bdy.size);
 			goto hash_bdy_fail;
 		}
-		memset(params->hash_bdy.base, 0, params->hash_bdy.size);
 	}
 
 	return 0;

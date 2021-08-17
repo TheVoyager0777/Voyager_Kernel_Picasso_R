@@ -1,19 +1,17 @@
 /*
  * Copyright (C) 2018 Google Limited.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This file is released under the GPL.
  */
 
 #include "dm.h"
-#include "dm-bufio.h"
 #include "dm-core.h"
 
 #include <linux/crc32.h>
+#include <linux/dm-bufio.h>
 #include <linux/module.h>
 
 #define DM_MSG_PREFIX "bow"
-#define SECTOR_SIZE 512
 
 struct log_entry {
 	u64 source;
@@ -994,7 +992,7 @@ static int handle_sector0(struct bow_context *bc, struct bio *bio)
 		struct bio * split = bio_split(bio,
 					       bc->block_size >> SECTOR_SHIFT,
 					       GFP_NOIO,
-					       fs_bio_set);
+					       &fs_bio_set);
 		if (!split) {
 			DMERR("Failed to split bio");
 			bio->bi_status = BLK_STS_RESOURCE;

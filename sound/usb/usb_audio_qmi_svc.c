@@ -1,14 +1,6 @@
-/* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -39,6 +31,7 @@
 #define BUS_INTERVAL_FULL_SPEED 1000 /* in us */
 #define BUS_INTERVAL_HIGHSPEED_AND_ABOVE 125 /* in us */
 #define MAX_BINTERVAL_ISOC_EP 16
+#define DEV_RELEASE_WAIT_TIMEOUT 10000 /* in ms */
 
 #define SND_PCM_CARD_NUM_MASK 0xffff0000
 #define SND_PCM_DEV_NUM_MASK 0xff00
@@ -458,6 +451,7 @@ static int prepare_qmi_response(struct snd_usb_substream *subs,
 	struct usb_interface *iface;
 	struct usb_host_interface *alts;
 	struct usb_interface_descriptor *altsd;
+	struct usb_interface_assoc_descriptor *assoc;
 	struct usb_host_endpoint *ep;
 	struct uac_format_type_i_continuous_descriptor *fmt;
 	struct uac_format_type_i_discrete_descriptor *fmt_v1;
@@ -481,6 +475,7 @@ static int prepare_qmi_response(struct snd_usb_substream *subs,
 		goto err;
 	}
 
+	assoc = iface->intf_assoc;
 	pcm_dev_num = (req_msg->usb_token & SND_PCM_DEV_NUM_MASK) >> 8;
 	card_num = (req_msg->usb_token & SND_PCM_CARD_NUM_MASK) >> 16;
 	xfer_buf_len = req_msg->xfer_buff_size;
@@ -546,20 +541,26 @@ static int prepare_qmi_response(struct snd_usb_substream *subs,
 			((struct uac2_ac_header_descriptor *)hdr_ptr)->bcdADC;
 		resp->usb_audio_spec_revision_valid = 1;
 	} else if (protocol == UAC_VERSION_3) {
+		if (assoc->bFunctionSubClass ==
+					UAC3_FUNCTION_SUBCLASS_FULL_ADC_3_0) {
+			uaudio_err("full adc is not supported\n");
+			ret = -EINVAL;
+		}
+
 		switch (le16_to_cpu(get_endpoint(alts, 0)->wMaxPacketSize)) {
-		case BADD_MAXPSIZE_SYNC_MONO_16:
-		case BADD_MAXPSIZE_SYNC_STEREO_16:
-		case BADD_MAXPSIZE_ASYNC_MONO_16:
-		case BADD_MAXPSIZE_ASYNC_STEREO_16: {
-			resp->usb_audio_subslot_size = SUBSLOTSIZE_16_BIT;
+		case UAC3_BADD_EP_MAXPSIZE_SYNC_MONO_16:
+		case UAC3_BADD_EP_MAXPSIZE_SYNC_STEREO_16:
+		case UAC3_BADD_EP_MAXPSIZE_ASYNC_MONO_16:
+		case UAC3_BADD_EP_MAXPSIZE_ASYNC_STEREO_16: {
+			resp->usb_audio_subslot_size = 0x2;
 			break;
 		}
 
-		case BADD_MAXPSIZE_SYNC_MONO_24:
-		case BADD_MAXPSIZE_SYNC_STEREO_24:
-		case BADD_MAXPSIZE_ASYNC_MONO_24:
-		case BADD_MAXPSIZE_ASYNC_STEREO_24: {
-			resp->usb_audio_subslot_size = SUBSLOTSIZE_24_BIT;
+		case UAC3_BADD_EP_MAXPSIZE_SYNC_MONO_24:
+		case UAC3_BADD_EP_MAXPSIZE_SYNC_STEREO_24:
+		case UAC3_BADD_EP_MAXPSIZE_ASYNC_MONO_24:
+		case UAC3_BADD_EP_MAXPSIZE_ASYNC_STEREO_24: {
+			resp->usb_audio_subslot_size = 0x3;
 			break;
 		}
 
@@ -887,17 +888,20 @@ static void uaudio_disconnect_cb(struct snd_usb_audio *chip)
 				QMI_UAUDIO_STREAM_IND_MSG_V01_MAX_MSG_LEN,
 				qmi_uaudio_stream_ind_msg_v01_ei,
 				&disconnect_ind);
-		if (ret < 0) {
-			uaudio_err("qmi send failed wiht err: %d\n", ret);
-			return;
+		if (ret < 0)
+			uaudio_err("qmi send failed with err: %d\n", ret);
+
+		ret = wait_event_interruptible_timeout(dev->disconnect_wq,
+				!atomic_read(&dev->in_use),
+				msecs_to_jiffies(DEV_RELEASE_WAIT_TIMEOUT));
+		if (!ret) {
+			uaudio_err("timeout while waiting for dev_release\n");
+			atomic_set(&dev->in_use, 0);
+		} else if (ret < 0) {
+			uaudio_err("failed with ret %d\n", ret);
+			atomic_set(&dev->in_use, 0);
 		}
 
-		ret = wait_event_interruptible(dev->disconnect_wq,
-				!atomic_read(&dev->in_use));
-		if (ret < 0) {
-			uaudio_dbg("failed with ret %d\n", ret);
-			return;
-		}
 		mutex_lock(&chip->dev_lock);
 	}
 
@@ -1155,11 +1159,13 @@ static void handle_uaudio_stream_req(struct qmi_handle *handle,
 	mutex_unlock(&chip->dev_lock);
 
 response:
-	if (!req_msg->enable && ret != -EINVAL) {
+	if (!req_msg->enable && ret != -EINVAL && ret != -ENODEV) {
 		mutex_lock(&chip->dev_lock);
 		if (info_idx >= 0) {
 			info = &uadev[pcm_card_num].info[info_idx];
-			uaudio_dev_intf_cleanup(uadev[pcm_card_num].udev, info);
+			uaudio_dev_intf_cleanup(
+					uadev[pcm_card_num].udev,
+					info);
 			uaudio_dbg("release resources: intf# %d card# %d\n",
 					subs->interface, pcm_card_num);
 		}
@@ -1231,7 +1237,7 @@ static void uaudio_qmi_bye_cb(struct qmi_handle *handle, unsigned int node)
 	}
 
 	if (svc->client_connected && svc->client_sq.sq_node == node) {
-		uaudio_dbg("node: %u\n", node);
+		uaudio_dbg("node: %d\n", node);
 		queue_work(svc->uaudio_wq, &svc->qmi_disconnect_work);
 		svc->client_sq.sq_node = 0;
 		svc->client_sq.sq_port = 0;

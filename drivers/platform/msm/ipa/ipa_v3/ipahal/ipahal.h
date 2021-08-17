@@ -1,13 +1,6 @@
-/* Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _IPAHAL_H_
@@ -444,7 +437,6 @@ enum ipahal_pkt_status_exception {
 	 */
 	IPAHAL_PKT_STATUS_EXCEPTION_NAT,
 	IPAHAL_PKT_STATUS_EXCEPTION_IPV6CT,
-	IPAHAL_PKT_STATUS_EXCEPTION_UCP,
 	IPAHAL_PKT_STATUS_EXCEPTION_CSUM,
 	IPAHAL_PKT_STATUS_EXCEPTION_MAX,
 };
@@ -563,6 +555,14 @@ enum ipahal_pkt_status_nat_type {
  * @rt_tbl_idx: Index of rt tbl that contains the rule on which was a match
  * @seq_num: Per source endp unique packet sequence number
  * @frag_rule: Frag rule index in H/W frag table in case of frag hit
+ * @frag_rule_idx: Frag rule index value.
+ * @tbl_idx: Table index valid or not.
+ * @src_ip_addr: Source packet IP address.
+ * @dest_ip_addr: Destination packet IP address.
+ * @protocol: Protocal number.
+ * @ip_id: IP packet IP ID number.
+ * @tlated_ip_addr: IP address.
+ * @ip_cksum_diff: IP packet checksum difference.
  */
 struct ipahal_pkt_status {
 	u64 tag_info;
@@ -594,6 +594,30 @@ struct ipahal_pkt_status {
 	u8 rt_tbl_idx;
 	u8 seq_num;
 	u8 frag_rule;
+	u8 frag_rule_idx;
+	bool tbl_idx;
+	u32 src_ip_addr;
+	u32 dest_ip_addr;
+	u8 protocol;
+	u16 ip_id;
+	u32 tlated_ip_addr;
+	u16 ip_cksum_diff;
+
+};
+
+/*
+ * struct ipahal_pkt_status_thin - this struct is used to parse only
+ *  a few fields from the status packet, needed for LAN optimization.
+ * @exception: The first exception that took place.
+ * @metadata: meta data value used by packet
+ * @endp_src_idx: Source end point index.
+ * @ucp: UC Processing flag
+ */
+struct ipahal_pkt_status_thin {
+	enum ipahal_pkt_status_exception exception;
+	u32 metadata;
+	u8 endp_src_idx;
+	bool ucp;
 };
 
 /*
@@ -608,6 +632,17 @@ u32 ipahal_pkt_status_get_size(void);
  */
 void ipahal_pkt_status_parse(const void *unparsed_status,
 	struct ipahal_pkt_status *status);
+
+/*
+ * ipahal_pkt_status_parse_thin() - Parse some of the packet status fields
+ * for specific usage in the LAN rx data path where parsing needs to be done
+ * but only for specific fields.
+ * @unparsed_status: Pointer to H/W format of the packet status as read from HW
+ * @status: Pointer to pre-allocated buffer where the parsed info will be
+ * stored
+ */
+void ipahal_pkt_status_parse_thin(const void *unparsed_status,
+	struct ipahal_pkt_status_thin *status);
 
 /*
  * ipahal_pkt_status_exception_str() - returns string represents exception type

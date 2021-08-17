@@ -1,3 +1,6 @@
+
+menu "Memory Management options"
+
 config SELECT_MEMORY_MODEL
 	def_bool y
 	depends on ARCH_SELECT_MEMORY_MODEL
@@ -114,10 +117,6 @@ config SPARSEMEM_EXTREME
 
 config SPARSEMEM_VMEMMAP_ENABLE
 	bool
-
-config SPARSEMEM_ALLOC_MEM_MAP_TOGETHER
-	def_bool y
-	depends on SPARSEMEM && X86_64
 
 config SPARSEMEM_VMEMMAP
 	bool "Sparse Memory virtual memmap"
@@ -286,7 +285,7 @@ config ARCH_ENABLE_THP_MIGRATION
 	bool
 
 config PHYS_ADDR_T_64BIT
-	def_bool 64BIT || ARCH_PHYS_ADDR_T_64BIT
+	def_bool 64BIT
 
 config BOUNCE
 	bool "Enable bounce buffers"
@@ -297,13 +296,6 @@ config BOUNCE
 	  the full range of memory available to the CPU. Enabled
 	  by default when ZONE_DMA or HIGHMEM is selected, but you
 	  may say n to override this.
-
-# On the 'tile' arch, USB OHCI needs the bounce pool since tilegx will often
-# have more than 4GB of memory, but we don't currently use the IOTLB to present
-# a 32-bit address to OHCI.  So we need to use a bounce pool instead.
-config NEED_BOUNCE_POOL
-	bool
-	default y if TILE && USB_OHCI_HCD
 
 config NR_QUICK
 	int
@@ -332,7 +324,7 @@ config KSM
 	  the many instances by a single page with that content, so
 	  saving memory until one or another app needs to modify the content.
 	  Recommended for use with KVM, or with other duplicative applications.
-	  See Documentation/vm/ksm.txt for more information: KSM is inactive
+	  See Documentation/vm/ksm.rst for more information: KSM is inactive
 	  until a program has madvised that an area is MADV_MERGEABLE, and
 	  root has set /sys/kernel/mm/ksm/run to 1 (if CONFIG_SYSFS is set).
 
@@ -447,10 +439,11 @@ config ARCH_WANTS_THP_SWAP
 
 config THP_SWAP
 	def_bool y
-	depends on TRANSPARENT_HUGEPAGE && ARCH_WANTS_THP_SWAP
+	depends on TRANSPARENT_HUGEPAGE && ARCH_WANTS_THP_SWAP && SWAP
 	help
 	  Swap transparent huge pages in one piece, without splitting.
-	  XXX: For now this only does clustered swap space allocation.
+	  XXX: For now, swap cluster backing transparent huge page
+	  will be split after swapout.
 
 	  For selection by architectures with reasonable THP sizes.
 
@@ -566,13 +559,14 @@ config MEM_SOFT_DIRTY
 	  into a page just as regular dirty bit, but unlike the latter
 	  it can be cleared by hands.
 
-	  See Documentation/vm/soft-dirty.txt for more details.
+	  See Documentation/admin-guide/mm/soft-dirty.rst for more details.
 
 config ZSWAP
 	bool "Compressed cache for swap pages (EXPERIMENTAL)"
 	depends on FRONTSWAP && CRYPTO=y
-	select CRYPTO_LZO
+	select CRYPTO_LZ4
 	select ZPOOL
+	select BTREE
 	default n
 	help
 	  A lightweight compressed cache for swap pages.  It takes
@@ -627,19 +621,6 @@ config ZSMALLOC
 	  returned by an alloc().  This handle must be mapped in order to
 	  access the allocated space.
 
-config PGTABLE_MAPPING
-	bool "Use page table mapping to access object in zsmalloc"
-	depends on ZSMALLOC
-	help
-	  By default, zsmalloc uses a copy-based object mapping method to
-	  access allocations that span two pages. However, if a particular
-	  architecture (ex, ARM) performs VM mapping faster than copying,
-	  then you should select this. This causes zsmalloc to use page table
-	  mapping rather than copying for object mapping.
-
-	  You can check speed with zsmalloc benchmark:
-	  https://github.com/spartacus06/zsmapbench
-
 config ZSMALLOC_STAT
 	bool "Export zsmalloc statistics"
 	depends on ZSMALLOC
@@ -650,21 +631,70 @@ config ZSMALLOC_STAT
 	  information to userspace via debugfs.
 	  If unsure, say N.
 
+config DIRECT_RECLAIM_FILE_PAGES_ONLY
+	bool "Reclaim file pages only on direct reclaim path"
+	depends on ZSWAP
+	default n
+
+config INCREASE_MAXIMUM_SWAPPINESS
+	bool "Allow swappiness to be set up to 200"
+	depends on ZSWAP
+	default n
+
+config FIX_INACTIVE_RATIO
+	bool "Fix active:inactive anon ratio to 1:1"
+	depends on ZSWAP
+	default n
+
+config SWAP_ENABLE_READAHEAD
+	bool "Enable readahead on page swap in"
+	depends on SWAP
+	default y
+	help
+	  When a page fault occurs, adjacent pages of SWAP_CLUSTER_MAX are
+	  also paged in expecting those pages will be used in near future.
+	  This behaviour is good at disk-based system, but not on in-memory
+	  compression (e.g. zram).
+
+config VMAP_LAZY_PURGING_FACTOR
+	int "multiplier to the size of purged vmap areas"
+	default "8" if ARM
+	default "32"
+	help
+	  It is used as a multiplier to the max VA pages purged in a
+	  single attempt. For 32-bit in order to reduce fragmentation
+	  of vmalloc space, we decrease the default value to "8".
+
+config MM_EVENT_STAT
+	bool "Track per-process MM event"
+	depends on MMU
+	help
+	  This option enables per-process mm event stat(e.g., fault, reclaim,
+	  compaction and so on ) with some interval(Default is 0.5sec).
+	  Admin can see the stat from trace file via debugfs(e.g.,
+	  /sys/kernel/debug/tracing/trace)
+
+	  It includes max/average memory allocation latency for the interval
+	  as well as event count so that admin can see what happens in VM side
+	  (how many each event happens and how much processes spent time for
+	  the MM event). If it's too large, that would be not good situation.
+
+	  System can dump the trace into bugreport when user allows the dump.
+
 config GENERIC_EARLY_IOREMAP
 	bool
 
 config MAX_STACK_SIZE_MB
 	int "Maximum user stack size for 32-bit processes (MB)"
 	default 80
-	range 8 256 if METAG
 	range 8 2048
 	depends on STACK_GROWSUP && (!64BIT || COMPAT)
 	help
 	  This is the maximum stack size in Megabytes in the VM layout of 32-bit
 	  user processes when the stack grows upwards (currently only on parisc
-	  and metag arch). The stack will be located at the highest memory
-	  address minus the given value, unless the RLIMIT_STACK hard limit is
-	  changed to a smaller value in which case that is used.
+	  arch). The stack will be located at the highest memory address minus
+	  the given value, unless the RLIMIT_STACK hard limit is changed to a
+	  smaller value in which case that is used.
 
 	  A sane initial value is 80 MB.
 
@@ -677,17 +707,13 @@ config BALANCE_ANON_FILE_RECLAIM
 	  Swapping anonymous pages out to memory can be efficient enough to justify
 	  treating anonymous and file backed pages equally.
 
-# For architectures that support deferred memory initialisation
-config ARCH_SUPPORTS_DEFERRED_STRUCT_PAGE_INIT
-	bool
-
 config DEFERRED_STRUCT_PAGE_INIT
 	bool "Defer initialisation of struct pages to kthreads"
 	default n
-	depends on ARCH_SUPPORTS_DEFERRED_STRUCT_PAGE_INIT
-	depends on NO_BOOTMEM && MEMORY_HOTPLUG
-	depends on !FLATMEM
+	depends on NO_BOOTMEM
+	depends on SPARSEMEM
 	depends on !NEED_PER_CPU_KM
+	depends on 64BIT
 	help
 	  Ordinarily all struct pages are initialised during early boot in a
 	  single thread. On very large machines this can take a considerable
@@ -708,7 +734,8 @@ config IDLE_PAGE_TRACKING
 	  be useful to tune memory cgroup limits and/or for job placement
 	  within a compute cluster.
 
-	  See Documentation/vm/idle_page_tracking.txt for more details.
+	  See Documentation/admin-guide/mm/idle_page_tracking.rst for
+	  more details.
 
 # arch_add_memory() comprehends device memory
 config ARCH_HAS_ZONE_DEVICE
@@ -744,6 +771,9 @@ config ARCH_HAS_HMM
 config MIGRATE_VMA_HELPER
 	bool
 
+config DEV_PAGEMAP_OPS
+	bool
+
 config HMM
 	bool
 	select MMU_NOTIFIER
@@ -764,6 +794,7 @@ config DEVICE_PRIVATE
 	bool "Unaddressable device memory (GPU memory, ...)"
 	depends on ARCH_HAS_HMM
 	select HMM
+	select DEV_PAGEMAP_OPS
 
 	help
 	  Allows creation of struct pages to represent unaddressable device
@@ -774,6 +805,7 @@ config DEVICE_PUBLIC
 	bool "Addressable device memory (like GPU memory)"
 	depends on ARCH_HAS_HMM
 	select HMM
+	select DEV_PAGEMAP_OPS
 
 	help
 	  Allows creation of struct pages to represent addressable device
@@ -818,13 +850,28 @@ config SPECULATIVE_PAGE_FAULT
 	 allocating, it is failing its processing and a classic page fault
 	 is then tried.
 
-config HAVE_LOW_MEMORY_KILLER
-	bool "Have user/kernel space low memory killer"
+config HAVE_USERSPACE_LOW_MEMORY_KILLER
+	bool "Have userspace low memory killer"
 	default n
 	help
-	  Say 'y' if you have a user/kernel low memory killer and thus you
-	  want page allocator to provide sufficient time before it triggers
-	  Out of Memory killer.
+	  The page allocator cannot directly call into a
+	  userspace low memory killer as it can call into the OOM killer.
+	  Therefore, add a timeout mechanism to give the userspace
+	  low memory killer a chance to run.
+
+config GUP_BENCHMARK
+	bool "Enable infrastructure for get_user_pages_fast() benchmarking"
+	default n
+	help
+	  Provides /sys/kernel/debug/gup_benchmark that helps with testing
+	  performance of get_user_pages_fast().
+
+	  See tools/testing/selftests/vm/gup_benchmark.c
+
+config ARCH_HAS_PTE_SPECIAL
+	bool
+
+endmenu
 
 config PROCESS_RECLAIM
 	bool "Enable process reclaim"
@@ -843,11 +890,11 @@ config PROCESS_RECLAIM
 	 Any other value is ignored.
 
 config FORCE_ALLOC_FROM_DMA_ZONE
-	bool "Force certain memory allocators to always return ZONE_DMA memory"
-	depends on ZONE_DMA
+	bool "Force certain memory allocators to always return ZONE_DMA32 memory"
+	depends on ZONE_DMA32
 	help
-	  Ensure certain memory allocators always return memory from ZONE_DMA.
-	  This option helps ensure that clients who require ZONE_DMA memory are
-	  always using ZONE_DMA memory.
+	  Ensure certain memory allocators always return memory from ZONE_DMA32.
+	  This option helps ensure that clients who require ZONE_DMA32 memory are
+	  always using ZONE_DMA32 memory.
 
 	  If unsure, say "n".

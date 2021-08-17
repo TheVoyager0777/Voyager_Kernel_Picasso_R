@@ -1,4 +1,5 @@
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Copyright (c) 2013-2018, 2020 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -18,7 +19,7 @@
 /* #define CONFIG_MSM_ISP_DBG 1 */
 
 #ifdef CONFIG_MSM_ISP_DBG
-#define ISP_DBG(fmt, args...) printk(fmt, ##args)
+#define ISP_DBG(fmt, args...) pr_err(fmt, ##args)
 #else
 #define ISP_DBG(fmt, args...) pr_debug(fmt, ##args)
 #endif

@@ -6,6 +6,7 @@
  * Some ARP specific bits are:
  *
  * Copyright (C) 2002 David S. Miller (davem@redhat.com)
+ * Copyright (C) 2021 XiaoMi, Inc.
  * Copyright (C) 2006-2009 Patrick McHardy <kaber@trash.net>
  *
  */
@@ -202,13 +203,8 @@ unsigned int arpt_do_table(struct sk_buff *skb,
 
 	local_bh_disable();
 	addend = xt_write_recseq_begin();
-	private = table->private;
+	private = READ_ONCE(table->private); /* Address dependency. */
 	cpu     = smp_processor_id();
-	/*
-	 * Ensure we load private-> members after we've fetched the base
-	 * pointer.
-	 */
-	smp_read_barrier_depends();
 	table_base = private->entries;
 	jumpstack  = (struct arpt_entry **)private->jumpstack[cpu];
 
@@ -339,11 +335,6 @@ static int mark_source_chains(const struct xt_table_info *newinfo,
 			     t->verdict < 0) || visited) {
 				unsigned int oldpos, size;
 
-				if ((strcmp(t->target.u.user.name,
-					    XT_STANDARD_TARGET) == 0) &&
-				    t->verdict < -NF_MAX_VERDICT - 1)
-					return 0;
-
 				/* Return: backtrack through the last
 				 * big jump.
 				 */
@@ -377,7 +368,6 @@ static int mark_source_chains(const struct xt_table_info *newinfo,
 					if (!xt_find_jump_offset(offsets, newpos,
 								 newinfo->number))
 						return 0;
-					e = entry0 + newpos;
 				} else {
 					/* ... this is a fallthru */
 					newpos = pos + e->next_offset;
@@ -571,16 +561,9 @@ static int translate_table(struct net *net,
 	if (i != repl->num_entries)
 		goto out_free;
 
-	/* Check hooks all assigned */
-	for (i = 0; i < NF_ARP_NUMHOOKS; i++) {
-		/* Only hooks which are valid */
-		if (!(repl->valid_hooks & (1 << i)))
-			continue;
-		if (newinfo->hook_entry[i] == 0xFFFFFFFF)
-			goto out_free;
-		if (newinfo->underflow[i] == 0xFFFFFFFF)
-			goto out_free;
-	}
+	ret = xt_check_table_hooks(newinfo, repl->valid_hooks);
+	if (ret)
+		goto out_free;
 
 	if (!mark_source_chains(newinfo, repl->valid_hooks, entry0, offsets)) {
 		ret = -ELOOP;
@@ -803,9 +786,8 @@ static int get_info(struct net *net, void __user *user,
 	if (compat)
 		xt_compat_lock(NFPROTO_ARP);
 #endif
-	t = try_then_request_module(xt_find_table_lock(net, NFPROTO_ARP, name),
-				    "arptable_%s", name);
-	if (t) {
+	t = xt_request_find_table_lock(net, NFPROTO_ARP, name);
+	if (!IS_ERR(t)) {
 		struct arpt_getinfo info;
 		const struct xt_table_info *private = t->private;
 #ifdef CONFIG_COMPAT
@@ -834,7 +816,7 @@ static int get_info(struct net *net, void __user *user,
 		xt_table_unlock(t);
 		module_put(t->me);
 	} else
-		ret = -ENOENT;
+		ret = PTR_ERR(t);
 #ifdef CONFIG_COMPAT
 	if (compat)
 		xt_compat_unlock(NFPROTO_ARP);
@@ -859,7 +841,7 @@ static int get_entries(struct net *net, struct arpt_get_entries __user *uptr,
 	get.name[sizeof(get.name) - 1] = '\0';
 
 	t = xt_find_table_lock(net, NFPROTO_ARP, get.name);
-	if (t) {
+	if (!IS_ERR(t)) {
 		const struct xt_table_info *private = t->private;
 
 		if (get.size == private->size)
@@ -871,7 +853,7 @@ static int get_entries(struct net *net, struct arpt_get_entries __user *uptr,
 		module_put(t->me);
 		xt_table_unlock(t);
 	} else
-		ret = -ENOENT;
+		ret = PTR_ERR(t);
 
 	return ret;
 }
@@ -896,10 +878,9 @@ static int __do_replace(struct net *net, const char *name,
 		goto out;
 	}
 
-	t = try_then_request_module(xt_find_table_lock(net, NFPROTO_ARP, name),
-				    "arptable_%s", name);
-	if (!t) {
-		ret = -ENOENT;
+	t = xt_request_find_table_lock(net, NFPROTO_ARP, name);
+	if (IS_ERR(t)) {
+		ret = PTR_ERR(t);
 		goto free_newinfo_counters_untrans;
 	}
 
@@ -920,6 +901,7 @@ static int __do_replace(struct net *net, const char *name,
 	if ((oldinfo->number > oldinfo->initial_entries) &&
 	    (newinfo->number <= oldinfo->initial_entries))
 		module_put(t->me);
+
 
 	/* Get the old counters, and synchronize with replace */
 	get_counters(oldinfo, counters);
@@ -1014,8 +996,8 @@ static int do_add_counters(struct net *net, const void __user *user,
 		return PTR_ERR(paddc);
 
 	t = xt_find_table_lock(net, NFPROTO_ARP, tmp.name);
-	if (!t) {
-		ret = -ENOENT;
+	if (IS_ERR(t)) {
+		ret = PTR_ERR(t);
 		goto free;
 	}
 
@@ -1195,8 +1177,6 @@ static int translate_compat_table(struct net *net,
 	newinfo = xt_alloc_table_info(size);
 	if (!newinfo)
 		goto out_unlock;
-
-	memset(newinfo->entries, 0, size);
 
 	newinfo->number = compatr->num_entries;
 	for (i = 0; i < NF_ARP_NUMHOOKS; i++) {
@@ -1407,7 +1387,7 @@ static int compat_get_entries(struct net *net,
 
 	xt_compat_lock(NFPROTO_ARP);
 	t = xt_find_table_lock(net, NFPROTO_ARP, get.name);
-	if (t) {
+	if (!IS_ERR(t)) {
 		const struct xt_table_info *private = t->private;
 		struct xt_table_info info;
 
@@ -1422,7 +1402,7 @@ static int compat_get_entries(struct net *net,
 		module_put(t->me);
 		xt_table_unlock(t);
 	} else
-		ret = -ENOENT;
+		ret = PTR_ERR(t);
 
 	xt_compat_unlock(NFPROTO_ARP);
 	return ret;
@@ -1657,7 +1637,6 @@ static int __init arp_tables_init(void)
 	if (ret < 0)
 		goto err4;
 
-	pr_info("arp_tables: (C) 2002 David S. Miller\n");
 	return 0;
 
 err4:

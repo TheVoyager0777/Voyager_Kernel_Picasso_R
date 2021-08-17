@@ -1,13 +1,6 @@
-/* Copyright (c) 2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2019, The Linux Foundation. All rights reserved.
  */
 #include "ipa_reg_dump.h"
 #include "ipa_access_control.h"
@@ -41,9 +34,6 @@ static struct map_src_dst_addr_s ipa_regs_to_save_array[] = {
 	GEN_SRC_DST_ADDR_MAP(IPA_STATE,
 			     ipa.gen,
 			     ipa_state),
-	GEN_SRC_DST_ADDR_MAP(IPA_GSI_CONF,
-			     ipa.gen,
-			     ipa_gsi_conf),
 	GEN_SRC_DST_ADDR_MAP(IPA_STATE_RX_ACTIVE,
 			     ipa.gen,
 			     ipa_state_rx_active),
@@ -62,9 +52,12 @@ static struct map_src_dst_addr_s ipa_regs_to_save_array[] = {
 	GEN_SRC_DST_ADDR_MAP(IPA_STATE_DFETCHER,
 			     ipa.gen,
 			     ipa_state_dfetcher),
-	GEN_SRC_DST_ADDR_MAP(IPA_STATE_FETCHER_MASK,
+	GEN_SRC_DST_ADDR_MAP(IPA_STATE_FETCHER_MASK_0,
 			     ipa.gen,
-			     ipa_state_fetcher_mask),
+			     ipa_state_fetcher_mask_0),
+	GEN_SRC_DST_ADDR_MAP(IPA_STATE_FETCHER_MASK_1,
+			     ipa.gen,
+			     ipa_state_fetcher_mask_1),
 	GEN_SRC_DST_ADDR_MAP(IPA_STATE_GSI_AOS,
 			     ipa.gen,
 			     ipa_state_gsi_aos),
@@ -77,9 +70,6 @@ static struct map_src_dst_addr_s ipa_regs_to_save_array[] = {
 	GEN_SRC_DST_ADDR_MAP(IPA_STATE_GSI_TLV,
 			     ipa.gen,
 			     ipa_state_gsi_tlv),
-	GEN_SRC_DST_ADDR_MAP(IPA_TAG_TIMER,
-			     ipa.gen,
-			     ipa_tag_timer),
 	GEN_SRC_DST_ADDR_MAP(IPA_DPL_TIMER_LSB,
 			     ipa.gen,
 			     ipa_dpl_timer_lsb),
@@ -125,6 +115,9 @@ static struct map_src_dst_addr_s ipa_regs_to_save_array[] = {
 	GEN_SRC_DST_ADDR_MAP(IPA_LOG_BUF_HW_CMD_RAM_PTR,
 			     ipa.gen,
 			     ipa_log_buf_hw_cmd_ram_ptr),
+	GEN_SRC_DST_ADDR_MAP(IPA_STATE_DPL_FIFO,
+			     ipa.gen,
+			     ipa_state_dpl_fifo),
 	GEN_SRC_DST_ADDR_MAP(IPA_COMP_HW_VERSION,
 			     ipa.gen,
 			     ipa_comp_hw_version),
@@ -149,9 +142,6 @@ static struct map_src_dst_addr_s ipa_regs_to_save_array[] = {
 	GEN_SRC_DST_ADDR_MAP(IPA_IPV6_ROUTE_INIT_VALUES,
 			     ipa.gen,
 			     ipa_ipv6_route_init_values),
-	GEN_SRC_DST_ADDR_MAP(IPA_BCR,
-			     ipa.gen,
-			     ipa_bcr),
 	GEN_SRC_DST_ADDR_MAP(IPA_BAM_ACTIVATED_PORTS,
 			     ipa.gen,
 			     ipa_bam_activated_ports),
@@ -182,53 +172,86 @@ static struct map_src_dst_addr_s ipa_regs_to_save_array[] = {
 	GEN_SRC_DST_ADDR_MAP(IPA_RSRC_GRP_CFG,
 			     ipa.gen,
 			     ipa_rsrc_grp_cfg),
+	GEN_SRC_DST_ADDR_MAP(IPA_PIPELINE_DISABLE,
+			     ipa.gen,
+			     ipa_pipeline_disable),
 	GEN_SRC_DST_ADDR_MAP(IPA_COMP_CFG,
 			     ipa.gen,
 			     ipa_comp_cfg),
+	GEN_SRC_DST_ADDR_MAP(IPA_STATE_NLO_AGGR,
+			     ipa.gen,
+			     ipa_state_nlo_aggr),
+	GEN_SRC_DST_ADDR_MAP(IPA_NLO_PP_CFG1,
+			     ipa.gen,
+			     ipa_nlo_pp_cfg1),
+	GEN_SRC_DST_ADDR_MAP(IPA_NLO_PP_CFG2,
+			     ipa.gen,
+			     ipa_nlo_pp_cfg2),
+	GEN_SRC_DST_ADDR_MAP(IPA_NLO_PP_ACK_LIMIT_CFG,
+			     ipa.gen,
+			     ipa_nlo_pp_ack_limit_cfg),
+	GEN_SRC_DST_ADDR_MAP(IPA_NLO_PP_DATA_LIMIT_CFG,
+			     ipa.gen,
+			     ipa_nlo_pp_data_limit_cfg),
+	GEN_SRC_DST_ADDR_MAP(IPA_NLO_MIN_DSM_CFG,
+			     ipa.gen,
+			     ipa_nlo_min_dsm_cfg),
+	GEN_SRC_DST_ADDR_MAP(IPA_NLO_VP_FLUSH_REQ,
+			     ipa.gen,
+			     ipa_nlo_vp_flush_req),
+	GEN_SRC_DST_ADDR_MAP(IPA_NLO_VP_FLUSH_COOKIE,
+			     ipa.gen,
+			     ipa_nlo_vp_flush_cookie),
+	GEN_SRC_DST_ADDR_MAP(IPA_NLO_VP_FLUSH_ACK,
+			     ipa.gen,
+			     ipa_nlo_vp_flush_ack),
+	GEN_SRC_DST_ADDR_MAP(IPA_NLO_VP_DSM_OPEN,
+			     ipa.gen,
+			     ipa_nlo_vp_dsm_open),
+	GEN_SRC_DST_ADDR_MAP(IPA_NLO_VP_QBAP_OPEN,
+			     ipa.gen,
+			     ipa_nlo_vp_qbap_open),
 
 	/* Debug Registers */
 	GEN_SRC_DST_ADDR_MAP(IPA_DEBUG_DATA,
 			     ipa.dbg,
 			     ipa_debug_data),
+	GEN_SRC_DST_ADDR_MAP(IPA_STEP_MODE_BREAKPOINTS,
+			     ipa.dbg,
+			     ipa_step_mode_breakpoints),
 	GEN_SRC_DST_ADDR_MAP(IPA_STEP_MODE_STATUS,
 			     ipa.dbg,
 			     ipa_step_mode_status),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_0_CMD, ipa.dbg,
-			     ipa_rx_splt_cmdq_0_cmd),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_0_DATA_RD_0, ipa.dbg,
-			     ipa_rx_splt_cmdq_0_data_rd_0),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_0_DATA_RD_1, ipa.dbg,
-			     ipa_rx_splt_cmdq_0_data_rd_1),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_0_DATA_RD_2, ipa.dbg,
-			     ipa_rx_splt_cmdq_0_data_rd_2),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_0_DATA_RD_3, ipa.dbg,
-			     ipa_rx_splt_cmdq_0_data_rd_3),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_0_STATUS, ipa.dbg,
-			     ipa_rx_splt_cmdq_0_status),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_1_CMD, ipa.dbg,
-			     ipa_rx_splt_cmdq_1_cmd),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_1_DATA_RD_0, ipa.dbg,
-			     ipa_rx_splt_cmdq_1_data_rd_0),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_1_DATA_RD_1, ipa.dbg,
-			     ipa_rx_splt_cmdq_1_data_rd_1),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_1_DATA_RD_2, ipa.dbg,
-			     ipa_rx_splt_cmdq_1_data_rd_2),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_1_DATA_RD_3, ipa.dbg,
-			     ipa_rx_splt_cmdq_1_data_rd_3),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_1_STATUS, ipa.dbg,
-			     ipa_rx_splt_cmdq_1_status),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_2_CMD, ipa.dbg,
-			     ipa_rx_splt_cmdq_2_cmd),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_2_DATA_RD_0, ipa.dbg,
-			     ipa_rx_splt_cmdq_2_data_rd_0),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_2_DATA_RD_1, ipa.dbg,
-			     ipa_rx_splt_cmdq_2_data_rd_1),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_2_DATA_RD_2, ipa.dbg,
-			     ipa_rx_splt_cmdq_2_data_rd_2),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_2_DATA_RD_3, ipa.dbg,
-			     ipa_rx_splt_cmdq_2_data_rd_3),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_SPLT_CMDQ_2_STATUS, ipa.dbg,
-			     ipa_rx_splt_cmdq_2_status),
+
+	IPA_REG_SAVE_RX_SPLT_CMDQ(
+		IPA_RX_SPLT_CMDQ_CMD_n, ipa_rx_splt_cmdq_cmd_n),
+	IPA_REG_SAVE_RX_SPLT_CMDQ(
+		IPA_RX_SPLT_CMDQ_CFG_n, ipa_rx_splt_cmdq_cfg_n),
+	IPA_REG_SAVE_RX_SPLT_CMDQ(
+		IPA_RX_SPLT_CMDQ_DATA_WR_0_n, ipa_rx_splt_cmdq_data_wr_0_n),
+	IPA_REG_SAVE_RX_SPLT_CMDQ(
+		IPA_RX_SPLT_CMDQ_DATA_WR_1_n, ipa_rx_splt_cmdq_data_wr_1_n),
+	IPA_REG_SAVE_RX_SPLT_CMDQ(
+		IPA_RX_SPLT_CMDQ_DATA_WR_2_n, ipa_rx_splt_cmdq_data_wr_2_n),
+	IPA_REG_SAVE_RX_SPLT_CMDQ(
+		IPA_RX_SPLT_CMDQ_DATA_WR_3_n, ipa_rx_splt_cmdq_data_wr_3_n),
+	IPA_REG_SAVE_RX_SPLT_CMDQ(
+		IPA_RX_SPLT_CMDQ_DATA_RD_0_n, ipa_rx_splt_cmdq_data_rd_0_n),
+	IPA_REG_SAVE_RX_SPLT_CMDQ(
+		IPA_RX_SPLT_CMDQ_DATA_RD_1_n, ipa_rx_splt_cmdq_data_rd_1_n),
+	IPA_REG_SAVE_RX_SPLT_CMDQ(
+		IPA_RX_SPLT_CMDQ_DATA_RD_2_n, ipa_rx_splt_cmdq_data_rd_2_n),
+	IPA_REG_SAVE_RX_SPLT_CMDQ(
+		IPA_RX_SPLT_CMDQ_DATA_RD_3_n, ipa_rx_splt_cmdq_data_rd_3_n),
+	IPA_REG_SAVE_RX_SPLT_CMDQ(
+		IPA_RX_SPLT_CMDQ_STATUS_n, ipa_rx_splt_cmdq_status_n),
+
+	GEN_SRC_DST_ADDR_MAP(IPA_RX_HPS_CMDQ_CFG_WR,
+				  ipa.dbg,
+				  ipa_rx_hps_cmdq_cfg_wr),
+	GEN_SRC_DST_ADDR_MAP(IPA_RX_HPS_CMDQ_CFG_RD,
+				  ipa.dbg,
+				  ipa_rx_hps_cmdq_cfg_rd),
 	GEN_SRC_DST_ADDR_MAP(IPA_RX_HPS_CMDQ_CMD,
 			     ipa.dbg,
 			     ipa_rx_hps_cmdq_cmd),
@@ -259,12 +282,6 @@ static struct map_src_dst_addr_s ipa_regs_to_save_array[] = {
 	GEN_SRC_DST_ADDR_MAP(IPA_ACKMNGR_CMDQ_STATUS_EMPTY,
 			     ipa.dbg,
 			     ipa_ackmngr_cmdq_status_empty),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_HPS_CMDQ_CFG_WR,
-			     ipa.dbg,
-			     ipa_rx_hps_cmdq_cfg_wr),
-	GEN_SRC_DST_ADDR_MAP(IPA_RX_HPS_CMDQ_CFG_RD,
-			     ipa.dbg,
-			     ipa_rx_hps_cmdq_cfg_rd),
 
 	/*
 	 * NOTE: That GEN_SRC_DST_ADDR_MAP() not used below.  This is
@@ -327,8 +344,6 @@ static struct map_src_dst_addr_s ipa_regs_to_save_array[] = {
 					 ipa_endp_gsi_cfg_aos_n),
 	IPA_REG_SAVE_CFG_ENTRY_PIPE_ENDP(IPA_ENDP_GSI_CFG1_n,
 					 ipa_endp_gsi_cfg1_n),
-	IPA_REG_SAVE_CFG_ENTRY_PIPE_ENDP(IPA_ENDP_GSI_CFG2_n,
-					 ipa_endp_gsi_cfg2_n),
 	IPA_REG_SAVE_CFG_ENTRY_PIPE_ENDP(IPA_ENDP_FILTER_ROUTER_HSH_CFG_n,
 					 ipa_endp_filter_router_hsh_cfg_n),
 
@@ -337,22 +352,32 @@ static struct map_src_dst_addr_s ipa_regs_to_save_array[] = {
 					    ipa_src_rsrc_grp_01_rsrc_type_n),
 	IPA_REG_SAVE_CFG_ENTRY_SRC_RSRC_GRP(IPA_SRC_RSRC_GRP_23_RSRC_TYPE_n,
 					    ipa_src_rsrc_grp_23_rsrc_type_n),
+	IPA_REG_SAVE_CFG_ENTRY_SRC_RSRC_GRP(IPA_SRC_RSRC_GRP_45_RSRC_TYPE_n,
+					    ipa_src_rsrc_grp_45_rsrc_type_n),
 
 	/* Destination Resource Group Config Registers */
 	IPA_REG_SAVE_CFG_ENTRY_DST_RSRC_GRP(IPA_DST_RSRC_GRP_01_RSRC_TYPE_n,
 					    ipa_dst_rsrc_grp_01_rsrc_type_n),
 	IPA_REG_SAVE_CFG_ENTRY_DST_RSRC_GRP(IPA_DST_RSRC_GRP_23_RSRC_TYPE_n,
 					    ipa_dst_rsrc_grp_23_rsrc_type_n),
+	IPA_REG_SAVE_CFG_ENTRY_DST_RSRC_GRP(IPA_DST_RSRC_GRP_45_RSRC_TYPE_n,
+					    ipa_dst_rsrc_grp_45_rsrc_type_n),
 
 	/* Source Resource Group Count Registers */
 	IPA_REG_SAVE_CFG_ENTRY_SRC_RSRC_CNT_GRP(
 		IPA_SRC_RSRC_GRP_0123_RSRC_TYPE_CNT_n,
 		ipa_src_rsrc_grp_0123_rsrc_type_cnt_n),
+	IPA_REG_SAVE_CFG_ENTRY_SRC_RSRC_CNT_GRP(
+		IPA_SRC_RSRC_GRP_4567_RSRC_TYPE_CNT_n,
+		ipa_src_rsrc_grp_4567_rsrc_type_cnt_n),
 
 	/* Destination Resource Group Count Registers */
 	IPA_REG_SAVE_CFG_ENTRY_DST_RSRC_CNT_GRP(
 		IPA_DST_RSRC_GRP_0123_RSRC_TYPE_CNT_n,
 		ipa_dst_rsrc_grp_0123_rsrc_type_cnt_n),
+	IPA_REG_SAVE_CFG_ENTRY_DST_RSRC_CNT_GRP(
+		IPA_DST_RSRC_GRP_4567_RSRC_TYPE_CNT_n,
+		ipa_dst_rsrc_grp_4567_rsrc_type_cnt_n),
 
 	/*
 	 * =====================================================================
@@ -396,6 +421,9 @@ static struct map_src_dst_addr_s ipa_regs_to_save_array[] = {
 	GEN_SRC_DST_ADDR_MAP(IPA_GSI_TOP_GSI_DEBUG_QSB_LOG_ERR_TRNS_ID,
 			     gsi.debug,
 			     ipa_gsi_top_gsi_debug_qsb_log_err_trns_id),
+
+	IPA_REG_SAVE_CFG_ENTRY_GSI_QSB_DEBUG(
+		GSI_DEBUG_QSB_LOG_LAST_MISC_IDn, qsb_log_last_misc),
 
 	/* GSI IRAM pointers Registers */
 	GEN_SRC_DST_ADDR_MAP(IPA_GSI_TOP_GSI_IRAM_PTR_CH_CMD,
@@ -495,6 +523,12 @@ static struct map_src_dst_addr_s ipa_regs_to_save_array[] = {
 					      ee_n_cntxt_scratch_0),
 	IPA_REG_SAVE_CFG_ENTRY_GSI_GENERAL_EE(EE_n_CNTXT_SCRATCH_1,
 					      ee_n_cntxt_scratch_1),
+	IPA_REG_SAVE_CFG_ENTRY_GSI_GENERAL_EE(EE_n_CNTXT_INTSET,
+					      ee_n_cntxt_intset),
+	IPA_REG_SAVE_CFG_ENTRY_GSI_GENERAL_EE(EE_n_CNTXT_MSI_BASE_LSB,
+					      ee_n_cntxt_msi_base_lsb),
+	IPA_REG_SAVE_CFG_ENTRY_GSI_GENERAL_EE(EE_n_CNTXT_MSI_BASE_MSB,
+					      ee_n_cntxt_msi_base_msb),
 
 	/* GSI Channel Context Registers */
 	IPA_REG_SAVE_CFG_ENTRY_GSI_CH_CNTXT(EE_n_GSI_CH_k_CNTXT_0,
@@ -527,11 +561,8 @@ static struct map_src_dst_addr_s ipa_regs_to_save_array[] = {
 					    ee_n_gsi_ch_k_scratch_2),
 	IPA_REG_SAVE_CFG_ENTRY_GSI_CH_CNTXT(EE_n_GSI_CH_k_SCRATCH_3,
 					    ee_n_gsi_ch_k_scratch_3),
-	IPA_REG_SAVE_CFG_ENTRY_GSI_CH_CNTXT(GSI_DEBUG_EE_n_CH_k_VP_TABLE,
-					    gsi_debug_ee_n_ch_k_vp_table),
-
-	IPA_REG_SAVE_CFG_ENTRY_GSI_QSB_DEBUG(GSI_DEBUG_QSB_LOG_LAST_MISC_IDn,
-					     qsb_log_last_misc),
+	IPA_REG_SAVE_CFG_ENTRY_GSI_CH_CNTXT(GSI_MAP_EE_n_CH_k_VP_TABLE,
+					    gsi_map_ee_n_ch_k_vp_table),
 
 	/* GSI Channel Event Context Registers */
 	IPA_REG_SAVE_CFG_ENTRY_GSI_EVT_CNTXT(EE_n_EV_CH_k_CNTXT_0,
@@ -611,8 +642,6 @@ static struct map_src_dst_addr_s ipa_regs_to_save_array[] = {
 					       ipa_endp_gsi_cfg_aos_n),
 	IPA_REG_SAVE_CFG_ENTRY_PIPE_ENDP_EXTRA(IPA_ENDP_GSI_CFG1_n,
 					       ipa_endp_gsi_cfg1_n),
-	IPA_REG_SAVE_CFG_ENTRY_PIPE_ENDP_EXTRA(IPA_ENDP_GSI_CFG2_n,
-					       ipa_endp_gsi_cfg2_n),
 	IPA_REG_SAVE_CFG_ENTRY_PIPE_ENDP_EXTRA
 		(IPA_ENDP_FILTER_ROUTER_HSH_CFG_n,
 		 ipa_endp_filter_router_hsh_cfg_n),
@@ -667,7 +696,7 @@ static struct reg_access_funcs_s *get_access_funcs(u32 addr)
 
 	for (i = 0; i < ARRAY_SIZE(mem_access_map); i++) {
 		if (addr >= mem_access_map[i].addr_range_begin &&
-		    addr <  mem_access_map[i].addr_range_end) {
+			addr <  mem_access_map[i].addr_range_end) {
 			return mem_access_map[i].access[asub];
 		}
 	}
@@ -724,8 +753,7 @@ void ipa_save_gsi_ver(void)
 		return;
 
 	ipa_reg_save.gsi.fw_ver =
-		IPA_READ_1xVECTOR_REG(IPA_GSI_TOP_GSI_INST_RAM_n, 0) &
-		0x0000FFFF;
+		IPA_READ_1xVECTOR_REG(IPA_GSI_TOP_GSI_INST_RAM_n, 0);
 }
 
 /*
@@ -742,9 +770,8 @@ void ipa_save_registers(void)
 	/* Fetch the number of registers configured to be saved */
 	u32 num_regs = ARRAY_SIZE(ipa_regs_to_save_array);
 	u32 num_uc_per_regs = ARRAY_SIZE(ipa_uc_regs_to_save_array);
-	union ipa_hwio_def_ipa_rsrc_mngr_db_cfg_u ipa_rsrc_mngr_db_cfg;
-	union ipa_hwio_def_ipa_rsrc_mngr_db_rsrc_read_u
-	    ipa_rsrc_mngr_db_rsrc_read;
+	union ipa_hwio_def_ipa_rsrc_mngr_db_cfg_u for_cfg;
+	union ipa_hwio_def_ipa_rsrc_mngr_db_rsrc_read_u for_read;
 
 	if (!ipa3_ctx->do_register_collection_on_crash)
 		return;
@@ -758,9 +785,8 @@ void ipa_save_registers(void)
 	num_regs -= (CONFIG_IPA3_REGDUMP_NUM_EXTRA_ENDP_REGS *
 		     IPA_REG_SAVE_NUM_EXTRA_ENDP_REGS);
 
-	memset(&ipa_rsrc_mngr_db_cfg, 0, sizeof(ipa_rsrc_mngr_db_cfg));
-	memset(&ipa_rsrc_mngr_db_rsrc_read, 0,
-	       sizeof(ipa_rsrc_mngr_db_rsrc_read));
+	memset(&for_cfg, 0, sizeof(for_cfg));
+	memset(&for_read, 0, sizeof(for_read));
 
 	/* Now save all the configured registers */
 	for (i = 0; i < num_regs; i++) {
@@ -769,7 +795,11 @@ void ipa_save_registers(void)
 			in_dword(ipa_regs_to_save_array[i].src_addr);
 	}
 
-	IPA_HW_REG_SAVE_CFG_ENTRY_PIPE_ENDP_ACTIVE();
+	/*
+	 * Set the active flag for all active pipe indexed registers.
+	 */
+	for (i = 0; i < IPA_HW_PIPE_ID_MAX; i++)
+		ipa_reg_save.ipa.pipes[i].active = true;
 
 	/* Now save the per endp registers for the remaining pipes */
 	for (i = 0; i < (CONFIG_IPA3_REGDUMP_NUM_EXTRA_ENDP_REGS *
@@ -808,13 +838,13 @@ void ipa_save_registers(void)
 
 		/* Collecting resource DB information */
 		ipa_hal_save_regs_rsrc_db();
+
+		/* Save IPA testbus */
+		if (ipa3_ctx->do_testbus_collection_on_crash)
+			ipa_hal_save_regs_save_ipa_testbus();
 	}
 
-	/* Save IPA testbus */
-	if (ipa3_ctx->do_testbus_collection_on_crash)
-		ipa_hal_save_regs_save_ipa_testbus();
-
-	/* GSI test bus and QSB log */
+	/* GSI test bus */
 	for (i = 0;
 	     i < ARRAY_SIZE(ipa_reg_save_gsi_ch_test_bus_selector_array);
 	     i++) {
@@ -822,12 +852,13 @@ void ipa_save_registers(void)
 			ipa_reg_save_gsi_ch_test_bus_selector_array[i];
 
 		/* Write test bus selector */
-		HWIO_GSI_TEST_BUS_SEL_OUT
-			(ipa_reg_save_gsi_ch_test_bus_selector_array[i]);
+		IPA_WRITE_SCALER_REG(
+			GSI_TEST_BUS_SEL,
+			ipa_reg_save_gsi_ch_test_bus_selector_array[i]);
 
 		ipa_reg_save.gsi.debug.gsi_test_bus.test_bus_reg[
 		    i].gsi_testbus_reg =
-		    (u32)HWIO_GSI_TEST_BUS_REG_IN;
+		    (u32) IPA_READ_SCALER_REG(GSI_TEST_BUS_REG);
 	}
 
 	ipa_reg_save_rsrc_cnts();
@@ -841,45 +872,47 @@ void ipa_save_registers(void)
 			(u16)IPA_READ_1xVECTOR_REG(GSI_DEBUG_COUNTERn, i);
 
 	for (i = 0; i < IPA_HW_REG_SAVE_GSI_NUM_CH_CNTXT_A7; i++) {
-		u32 phys_ch_idx =
-			ipa_reg_save.gsi.ch_cntxt.a7[
-			    i].gsi_debug_ee_n_ch_k_vp_table.phy_ch;
+		u32 phys_ch_idx = ipa_reg_save.gsi.ch_cntxt.a7[
+			i].gsi_map_ee_n_ch_k_vp_table.phy_ch;
 		u32 n = phys_ch_idx * IPA_REG_SAVE_BYTES_PER_CHNL_SHRAM;
 
 		if (!ipa_reg_save.gsi.ch_cntxt.a7[
-			i].gsi_debug_ee_n_ch_k_vp_table.valid)
+				i].gsi_map_ee_n_ch_k_vp_table.valid)
 			continue;
+
 		ipa_reg_save.gsi.ch_cntxt.a7[
 			i].mcs_channel_scratch.scratch4.shram =
 			IPA_READ_1xVECTOR_REG(
 				GSI_SHRAM_n,
-				n + IPA_REG_SAVE_BYTES_PER_CHNL_SHRAM - 2);
+				n + IPA_GSI_OFFSET_WORDS_SCRATCH4);
+
 		ipa_reg_save.gsi.ch_cntxt.a7[
 			i].mcs_channel_scratch.scratch5.shram =
 			IPA_READ_1xVECTOR_REG(
 				GSI_SHRAM_n,
-				n + IPA_REG_SAVE_BYTES_PER_CHNL_SHRAM - 1);
+				n + IPA_GSI_OFFSET_WORDS_SCRATCH5);
 	}
 
 	for (i = 0; i < IPA_HW_REG_SAVE_GSI_NUM_CH_CNTXT_UC; i++) {
-		u32 phys_ch_idx =
-			ipa_reg_save.gsi.ch_cntxt.uc[
-			    i].gsi_debug_ee_n_ch_k_vp_table.phy_ch;
+		u32 phys_ch_idx = ipa_reg_save.gsi.ch_cntxt.uc[
+			i].gsi_map_ee_n_ch_k_vp_table.phy_ch;
 		u32 n = phys_ch_idx * IPA_REG_SAVE_BYTES_PER_CHNL_SHRAM;
 
 		if (!ipa_reg_save.gsi.ch_cntxt.uc[
-			i].gsi_debug_ee_n_ch_k_vp_table.valid)
+				i].gsi_map_ee_n_ch_k_vp_table.valid)
 			continue;
+
 		ipa_reg_save.gsi.ch_cntxt.uc[
 			i].mcs_channel_scratch.scratch4.shram =
 			IPA_READ_1xVECTOR_REG(
 				GSI_SHRAM_n,
-				n + IPA_REG_SAVE_BYTES_PER_CHNL_SHRAM - 2);
+				n + IPA_GSI_OFFSET_WORDS_SCRATCH4);
+
 		ipa_reg_save.gsi.ch_cntxt.uc[
 			i].mcs_channel_scratch.scratch5.shram =
 			IPA_READ_1xVECTOR_REG(
 				GSI_SHRAM_n,
-				n + IPA_REG_SAVE_BYTES_PER_CHNL_SHRAM - 1);
+				n + IPA_GSI_OFFSET_WORDS_SCRATCH5);
 	}
 
 	/*
@@ -903,28 +936,27 @@ void ipa_save_registers(void)
 				   (ipa3_ctx->reg_collection_base + ofst),
 				   sizeof(ipa_reg_save.pkt_ctntx));
 
-			ipa_rsrc_mngr_db_cfg.value =
+			for_cfg.value =
 				IPA_READ_SCALER_REG(IPA_RSRC_MNGR_DB_CFG);
 
-			ipa_rsrc_mngr_db_cfg.def.rsrc_type_sel = 0;
+			for_cfg.def.rsrc_type_sel = 0;
 
-			IPA_WRITE_SCALER_REG(
+			IPA_MASKED_WRITE_SCALER_REG(
 				IPA_RSRC_MNGR_DB_CFG,
-				ipa_rsrc_mngr_db_cfg.value);
+				for_cfg.value);
 
 			for (i = 0; i < IPA_HW_PKT_CTNTX_MAX; i++) {
-				ipa_rsrc_mngr_db_cfg.def.rsrc_id_sel = i;
+				for_cfg.def.rsrc_id_sel = i;
 
-				IPA_WRITE_SCALER_REG(
+				IPA_MASKED_WRITE_SCALER_REG(
 					IPA_RSRC_MNGR_DB_CFG,
-					ipa_rsrc_mngr_db_cfg.value);
+					for_cfg.value);
 
-				ipa_rsrc_mngr_db_rsrc_read.value =
+				for_read.value =
 					IPA_READ_SCALER_REG(
 						IPA_RSRC_MNGR_DB_RSRC_READ);
 
-				if (ipa_rsrc_mngr_db_rsrc_read.def.rsrc_occupied
-					== true) {
+				if (for_read.def.rsrc_occupied) {
 					ipa_reg_save.pkt_ctntx_active[i] = true;
 					ipa_reg_save.pkt_cntxt_state[i] =
 						(enum ipa_hw_pkt_cntxt_state_e)
@@ -934,6 +966,39 @@ void ipa_save_registers(void)
 		} else {
 			IPAERR("IPA_CTX_ID is not currently accessible\n");
 		}
+	}
+
+	if (ipa3_ctx->do_ram_collection_on_crash) {
+		for (i = 0; i < IPA_IU_SIZE / sizeof(u32); i++) {
+			ipa_reg_save.ipa.ipa_iu_ptr[i] =
+				in_dword(IPA_IU_ADDR + (i * sizeof(u32)));
+		}
+		for (i = 0; i < IPA_SRAM_SIZE / sizeof(u32); i++) {
+			ipa_reg_save.ipa.ipa_sram_ptr[i] =
+				in_dword(IPA_SRAM_ADDR + (i * sizeof(u32)));
+		}
+		for (i = 0; i < IPA_MBOX_SIZE / sizeof(u32); i++) {
+			ipa_reg_save.ipa.ipa_mbox_ptr[i] =
+				in_dword(IPA_MBOX_ADDR + (i * sizeof(u32)));
+		}
+		for (i = 0; i < IPA_HRAM_SIZE / sizeof(u32); i++) {
+			ipa_reg_save.ipa.ipa_hram_ptr[i] =
+				in_dword(IPA_HRAM_ADDR + (i * sizeof(u32)));
+		}
+		for (i = 0; i < IPA_SEQ_SIZE / sizeof(u32); i++) {
+			ipa_reg_save.ipa.ipa_seq_ptr[i] =
+				in_dword(IPA_SEQ_ADDR + (i * sizeof(u32)));
+		}
+		for (i = 0; i < IPA_GSI_SIZE / sizeof(u32); i++) {
+			ipa_reg_save.ipa.ipa_gsi_ptr[i] =
+				in_dword(IPA_GSI_ADDR + (i * sizeof(u32)));
+		}
+		IPALOG_VnP_ADDRS(ipa_reg_save.ipa.ipa_iu_ptr);
+		IPALOG_VnP_ADDRS(ipa_reg_save.ipa.ipa_sram_ptr);
+		IPALOG_VnP_ADDRS(ipa_reg_save.ipa.ipa_mbox_ptr);
+		IPALOG_VnP_ADDRS(ipa_reg_save.ipa.ipa_hram_ptr);
+		IPALOG_VnP_ADDRS(ipa_reg_save.ipa.ipa_seq_ptr);
+		IPALOG_VnP_ADDRS(ipa_reg_save.ipa.ipa_gsi_ptr);
 	}
 
 	ipa_reg_save_anomaly_check();
@@ -961,15 +1026,13 @@ static void ipa_reg_save_gsi_fifo_status(void)
 		gsi_fifo_status_ctrl.def.ipa_gsi_fifo_status_en = 1;
 		gsi_fifo_status_ctrl.def.ipa_gsi_fifo_status_port_sel = i;
 
-		IPA_WRITE_SCALER_REG(IPA_GSI_FIFO_STATUS_CTRL,
+		IPA_MASKED_WRITE_SCALER_REG(IPA_GSI_FIFO_STATUS_CTRL,
 				     gsi_fifo_status_ctrl.value);
 
 		ipa_reg_save.gsi_fifo_status[i].gsi_fifo_status_ctrl.value =
 			IPA_READ_SCALER_REG(IPA_GSI_FIFO_STATUS_CTRL);
 		ipa_reg_save.gsi_fifo_status[i].gsi_tlv_fifo_status.value =
 			IPA_READ_SCALER_REG(IPA_GSI_TLV_FIFO_STATUS);
-		ipa_reg_save.gsi_fifo_status[i].gsi_tlv_pub_fifo_status.value =
-			IPA_READ_SCALER_REG(IPA_GSI_TLV_PUB_FIFO_STATUS);
 		ipa_reg_save.gsi_fifo_status[i].gsi_aos_fifo_status.value =
 			IPA_READ_SCALER_REG(IPA_GSI_AOS_FIFO_STATUS);
 	}
@@ -1052,6 +1115,87 @@ static void ipa_reg_save_rsrc_cnts(void)
 }
 
 /*
+ * FUNCTION:  ipa_reg_save_rsrc_cnts_test_bus
+ *
+ * This function saves the resource counts for all PCIE and DDR
+ * resource groups collected from test bus.
+ *
+ * @param
+ *
+ * @return
+ */
+void ipa_reg_save_rsrc_cnts_test_bus(void)
+{
+	int32_t rsrc_type = 0;
+
+	ipa_reg_save.rsrc_cnts.pcie.resource_group = IPA_HW_PCIE_SRC_RSRP_GRP;
+	ipa_reg_save.rsrc_cnts.ddr.resource_group = IPA_HW_DDR_SRC_RSRP_GRP;
+
+	rsrc_type = 0;
+	ipa_reg_save.rsrc_cnts.pcie.src.pkt_cntxt =
+		IPA_DEBUG_TESTBUS_GET_RSRC_TYPE_CNT(rsrc_type,
+						    IPA_HW_PCIE_SRC_RSRP_GRP);
+
+	ipa_reg_save.rsrc_cnts.ddr.src.pkt_cntxt =
+		IPA_DEBUG_TESTBUS_GET_RSRC_TYPE_CNT(rsrc_type,
+						    IPA_HW_DDR_SRC_RSRP_GRP);
+
+	rsrc_type = 1;
+	ipa_reg_save.rsrc_cnts.pcie.src.descriptor_list =
+		IPA_DEBUG_TESTBUS_GET_RSRC_TYPE_CNT(rsrc_type,
+						    IPA_HW_PCIE_SRC_RSRP_GRP);
+
+	ipa_reg_save.rsrc_cnts.ddr.src.descriptor_list =
+		IPA_DEBUG_TESTBUS_GET_RSRC_TYPE_CNT(rsrc_type,
+						    IPA_HW_DDR_SRC_RSRP_GRP);
+
+	rsrc_type = 2;
+	ipa_reg_save.rsrc_cnts.pcie.src.data_descriptor_buffer =
+		IPA_DEBUG_TESTBUS_GET_RSRC_TYPE_CNT(rsrc_type,
+						    IPA_HW_PCIE_SRC_RSRP_GRP);
+
+	ipa_reg_save.rsrc_cnts.ddr.src.data_descriptor_buffer =
+		IPA_DEBUG_TESTBUS_GET_RSRC_TYPE_CNT(rsrc_type,
+						    IPA_HW_DDR_SRC_RSRP_GRP);
+
+	rsrc_type = 3;
+	ipa_reg_save.rsrc_cnts.pcie.src.hps_dmars =
+		IPA_DEBUG_TESTBUS_GET_RSRC_TYPE_CNT(rsrc_type,
+						    IPA_HW_PCIE_SRC_RSRP_GRP);
+
+	ipa_reg_save.rsrc_cnts.ddr.src.hps_dmars =
+		IPA_DEBUG_TESTBUS_GET_RSRC_TYPE_CNT(rsrc_type,
+						    IPA_HW_DDR_SRC_RSRP_GRP);
+
+	rsrc_type = 4;
+	ipa_reg_save.rsrc_cnts.pcie.src.reserved_acks =
+		IPA_DEBUG_TESTBUS_GET_RSRC_TYPE_CNT(rsrc_type,
+						    IPA_HW_PCIE_SRC_RSRP_GRP);
+
+	ipa_reg_save.rsrc_cnts.ddr.src.reserved_acks =
+		IPA_DEBUG_TESTBUS_GET_RSRC_TYPE_CNT(rsrc_type,
+						    IPA_HW_DDR_SRC_RSRP_GRP);
+
+	rsrc_type = 5;
+	ipa_reg_save.rsrc_cnts.pcie.dst.reserved_sectors =
+		IPA_DEBUG_TESTBUS_GET_RSRC_TYPE_CNT(rsrc_type,
+						    IPA_HW_PCIE_DEST_RSRP_GRP);
+
+	ipa_reg_save.rsrc_cnts.ddr.dst.reserved_sectors =
+		IPA_DEBUG_TESTBUS_GET_RSRC_TYPE_CNT(rsrc_type,
+						    IPA_HW_DDR_DEST_RSRP_GRP);
+
+	rsrc_type = 6;
+	ipa_reg_save.rsrc_cnts.pcie.dst.dps_dmars =
+		IPA_DEBUG_TESTBUS_GET_RSRC_TYPE_CNT(rsrc_type,
+						    IPA_HW_PCIE_DEST_RSRP_GRP);
+
+	ipa_reg_save.rsrc_cnts.ddr.dst.dps_dmars =
+		IPA_DEBUG_TESTBUS_GET_RSRC_TYPE_CNT(rsrc_type,
+						    IPA_HW_DDR_DEST_RSRP_GRP);
+}
+
+/*
  * FUNCTION:  ipa_hal_save_regs_ipa_cmdq
  *
  * This function saves the various IPA CMDQ registers
@@ -1075,7 +1219,7 @@ static void ipa_hal_save_regs_ipa_cmdq(void)
 	for (i = 0; i < IPA_DEBUG_CMDQ_HPS_SELECT_NUM_GROUPS; i++) {
 		rx_hps_cmdq_cmd.def.rd_req = 0;
 		rx_hps_cmdq_cmd.def.cmd_client = i;
-		IPA_WRITE_SCALER_REG(IPA_RX_HPS_CMDQ_CMD,
+		IPA_MASKED_WRITE_SCALER_REG(IPA_RX_HPS_CMDQ_CMD,
 				     rx_hps_cmdq_cmd.value);
 		ipa_reg_save.ipa.dbg.ipa_rx_hps_cmdq_count_arr[i].value =
 			IPA_READ_SCALER_REG(IPA_RX_HPS_CMDQ_COUNT);
@@ -1083,7 +1227,7 @@ static void ipa_hal_save_regs_ipa_cmdq(void)
 			IPA_READ_SCALER_REG(IPA_RX_HPS_CMDQ_STATUS);
 		rx_hps_cmdq_cmd.def.rd_req = 1;
 		rx_hps_cmdq_cmd.def.cmd_client = i;
-		IPA_WRITE_SCALER_REG(IPA_RX_HPS_CMDQ_CMD,
+		IPA_MASKED_WRITE_SCALER_REG(IPA_RX_HPS_CMDQ_CMD,
 				     rx_hps_cmdq_cmd.value);
 		ipa_reg_save.ipa.dbg.ipa_rx_hps_cmdq_data_rd_0_arr[i].value =
 			IPA_READ_SCALER_REG(IPA_RX_HPS_CMDQ_DATA_RD_0);
@@ -1099,7 +1243,7 @@ static void ipa_hal_save_regs_ipa_cmdq(void)
 	for (i = 0; i < IPA_TESTBUS_SEL_EP_MAX + 1; i++) {
 		hps_dps_cmdq_cmd.def.rd_req = 0;
 		hps_dps_cmdq_cmd.def.cmd_client = i;
-		IPA_WRITE_SCALER_REG(IPA_HPS_DPS_CMDQ_CMD,
+		IPA_MASKED_WRITE_SCALER_REG(IPA_HPS_DPS_CMDQ_CMD,
 				     hps_dps_cmdq_cmd.value);
 		ipa_reg_save.ipa.dbg.ipa_hps_dps_cmdq_status_arr[i].value =
 			IPA_READ_SCALER_REG(IPA_HPS_DPS_CMDQ_STATUS);
@@ -1108,7 +1252,7 @@ static void ipa_hal_save_regs_ipa_cmdq(void)
 
 		hps_dps_cmdq_cmd.def.rd_req = 1;
 		hps_dps_cmdq_cmd.def.cmd_client = i;
-		IPA_WRITE_SCALER_REG(IPA_HPS_DPS_CMDQ_CMD,
+		IPA_MASKED_WRITE_SCALER_REG(IPA_HPS_DPS_CMDQ_CMD,
 				     hps_dps_cmdq_cmd.value);
 		ipa_reg_save.ipa.dbg.ipa_hps_dps_cmdq_data_rd_0_arr[i].value =
 			IPA_READ_SCALER_REG(IPA_HPS_DPS_CMDQ_DATA_RD_0);
@@ -1118,7 +1262,7 @@ static void ipa_hal_save_regs_ipa_cmdq(void)
 	for (i = 0; i < IPA_DEBUG_CMDQ_DPS_SELECT_NUM_GROUPS; i++) {
 		dps_tx_cmdq_cmd.def.cmd_client = i;
 		dps_tx_cmdq_cmd.def.rd_req = 0;
-		IPA_WRITE_SCALER_REG(IPA_DPS_TX_CMDQ_CMD,
+		IPA_MASKED_WRITE_SCALER_REG(IPA_DPS_TX_CMDQ_CMD,
 				     dps_tx_cmdq_cmd.value);
 		ipa_reg_save.ipa.dbg.ipa_dps_tx_cmdq_status_arr[i].value =
 			IPA_READ_SCALER_REG(IPA_DPS_TX_CMDQ_STATUS);
@@ -1127,7 +1271,7 @@ static void ipa_hal_save_regs_ipa_cmdq(void)
 
 		dps_tx_cmdq_cmd.def.cmd_client = i;
 		dps_tx_cmdq_cmd.def.rd_req = 1;
-		IPA_WRITE_SCALER_REG(IPA_DPS_TX_CMDQ_CMD,
+		IPA_MASKED_WRITE_SCALER_REG(IPA_DPS_TX_CMDQ_CMD,
 				     dps_tx_cmdq_cmd.value);
 		ipa_reg_save.ipa.dbg.ipa_dps_tx_cmdq_data_rd_0_arr[i].value =
 			IPA_READ_SCALER_REG(IPA_DPS_TX_CMDQ_DATA_RD_0);
@@ -1137,7 +1281,7 @@ static void ipa_hal_save_regs_ipa_cmdq(void)
 	for (i = 0; i < IPA_DEBUG_CMDQ_DPS_SELECT_NUM_GROUPS; i++) {
 		ackmngr_cmdq_cmd.def.rd_req = 0;
 		ackmngr_cmdq_cmd.def.cmd_client = i;
-		IPA_WRITE_SCALER_REG(IPA_ACKMNGR_CMDQ_CMD,
+		IPA_MASKED_WRITE_SCALER_REG(IPA_ACKMNGR_CMDQ_CMD,
 				     ackmngr_cmdq_cmd.value);
 		ipa_reg_save.ipa.dbg.ipa_ackmngr_cmdq_status_arr[i].value =
 			IPA_READ_SCALER_REG(IPA_ACKMNGR_CMDQ_STATUS);
@@ -1146,7 +1290,7 @@ static void ipa_hal_save_regs_ipa_cmdq(void)
 
 		ackmngr_cmdq_cmd.def.rd_req = 1;
 		ackmngr_cmdq_cmd.def.cmd_client = i;
-		IPA_WRITE_SCALER_REG(IPA_ACKMNGR_CMDQ_CMD,
+		IPA_MASKED_WRITE_SCALER_REG(IPA_ACKMNGR_CMDQ_CMD,
 				     ackmngr_cmdq_cmd.value);
 		ipa_reg_save.ipa.dbg.ipa_ackmngr_cmdq_data_rd_arr[i].value =
 			IPA_READ_SCALER_REG(IPA_ACKMNGR_CMDQ_DATA_RD);
@@ -1156,26 +1300,28 @@ static void ipa_hal_save_regs_ipa_cmdq(void)
 	for (i = 0; i < IPA_TESTBUS_SEL_EP_MAX + 1; i++) {
 		prod_ackmngr_cmdq_cmd.def.rd_req = 0;
 		prod_ackmngr_cmdq_cmd.def.cmd_client = i;
-		IPA_WRITE_SCALER_REG(IPA_PROD_ACKMNGR_CMDQ_CMD,
+		IPA_MASKED_WRITE_SCALER_REG(IPA_PROD_ACKMNGR_CMDQ_CMD,
 				     prod_ackmngr_cmdq_cmd.value);
 		ipa_reg_save.ipa.dbg.ipa_prod_ackmngr_cmdq_status_arr[i].value
-			= IPA_READ_SCALER_REG(IPA_PROD_ACKMNGR_CMDQ_STATUS);
+			= IPA_READ_SCALER_REG(
+				IPA_PROD_ACKMNGR_CMDQ_STATUS);
 		ipa_reg_save.ipa.dbg.ipa_prod_ackmngr_cmdq_count_arr[i].value =
 			IPA_READ_SCALER_REG(IPA_PROD_ACKMNGR_CMDQ_COUNT);
 		prod_ackmngr_cmdq_cmd.def.rd_req = 1;
 		prod_ackmngr_cmdq_cmd.def.cmd_client = i;
-		IPA_WRITE_SCALER_REG(IPA_PROD_ACKMNGR_CMDQ_CMD,
+		IPA_MASKED_WRITE_SCALER_REG(IPA_PROD_ACKMNGR_CMDQ_CMD,
 				     prod_ackmngr_cmdq_cmd.value);
 		ipa_reg_save.ipa.dbg.ipa_prod_ackmngr_cmdq_data_rd_arr[
 			i].value =
-			IPA_READ_SCALER_REG(IPA_PROD_ACKMNGR_CMDQ_DATA_RD);
+			IPA_READ_SCALER_REG(
+				IPA_PROD_ACKMNGR_CMDQ_DATA_RD);
 	}
 
 	/* Save NTF_TX CMDQ   */
 	for (i = 0; i < IPA_TESTBUS_SEL_EP_MAX + 1; i++) {
 		ntf_tx_cmdq_cmd.def.rd_req = 0;
 		ntf_tx_cmdq_cmd.def.cmd_client = i;
-		IPA_WRITE_SCALER_REG(IPA_NTF_TX_CMDQ_CMD,
+		IPA_MASKED_WRITE_SCALER_REG(IPA_NTF_TX_CMDQ_CMD,
 				     ntf_tx_cmdq_cmd.value);
 		ipa_reg_save.ipa.dbg.ipa_ntf_tx_cmdq_status_arr[i].value =
 			IPA_READ_SCALER_REG(IPA_NTF_TX_CMDQ_STATUS);
@@ -1183,7 +1329,7 @@ static void ipa_hal_save_regs_ipa_cmdq(void)
 			IPA_READ_SCALER_REG(IPA_NTF_TX_CMDQ_COUNT);
 		ntf_tx_cmdq_cmd.def.rd_req = 1;
 		ntf_tx_cmdq_cmd.def.cmd_client = i;
-		IPA_WRITE_SCALER_REG(IPA_NTF_TX_CMDQ_CMD,
+		IPA_MASKED_WRITE_SCALER_REG(IPA_NTF_TX_CMDQ_CMD,
 				     ntf_tx_cmdq_cmd.value);
 		ipa_reg_save.ipa.dbg.ipa_ntf_tx_cmdq_data_rd_0_arr[i].value =
 			IPA_READ_SCALER_REG(IPA_NTF_TX_CMDQ_DATA_RD_0);
@@ -1201,45 +1347,100 @@ static void ipa_hal_save_regs_ipa_cmdq(void)
  */
 static void ipa_hal_save_regs_save_ipa_testbus(void)
 {
-	int32_t sel_internal, sel_external, sel_ep;
-	union ipa_hwio_def_ipa_debug_data_sel_u debug_data_sel = { { 0 } };
+	s32 sel_internal, sel_external, sel_ep;
+	union ipa_hwio_def_ipa_testbus_sel_u testbus_sel = { { 0 } };
 
-	if (!ipa_reg_save.ipa.testbus) {
+	if (ipa_reg_save.ipa.testbus == NULL) {
 		/*
-		 * Test-bus structure not allocated - exit test-bus
-		 * collection
+		 * Test-bus structure not allocated - exit test-bus collection
 		 */
-		IPAERR("ipa_reg_save.ipa.testbus was not allocated\n");
+		IPADBG("ipa_reg_save.ipa.testbus was not allocated\n");
 		return;
 	}
 
+	/* Enable Test-bus */
+	testbus_sel.value = 0;
+	testbus_sel.def.testbus_en = true;
+
+	IPA_WRITE_SCALER_REG(IPA_TESTBUS_SEL, testbus_sel.value);
+
+	for (sel_external = 0;
+		 sel_external <= IPA_TESTBUS_SEL_EXTERNAL_MAX;
+		 sel_external++) {
+
+		for (sel_internal = 0;
+			 sel_internal <= IPA_TESTBUS_SEL_INTERNAL_MAX;
+			 sel_internal++) {
+
+			testbus_sel.value = 0;
+
+			testbus_sel.def.pipe_select = 0;
+			testbus_sel.def.external_block_select =
+				sel_external;
+			testbus_sel.def.internal_block_select =
+				sel_internal;
+
+			IPA_MASKED_WRITE_SCALER_REG(
+				IPA_TESTBUS_SEL,
+				testbus_sel.value);
+
+			ipa_reg_save.ipa.testbus->global.global[
+				sel_internal][sel_external].testbus_sel.value =
+				testbus_sel.value;
+
+			ipa_reg_save.ipa.testbus->global.global[
+				sel_internal][sel_external].testbus_data.value =
+				IPA_READ_SCALER_REG(IPA_DEBUG_DATA);
+		}
+	}
+
 	/* Collect per EP test bus */
-	for (sel_ep = 0; sel_ep <= IPA_TESTBUS_SEL_EP_MAX; sel_ep++) {
+	for (sel_ep = 0;
+		 sel_ep <= IPA_TESTBUS_SEL_EP_MAX;
+		 sel_ep++) {
+
 		for (sel_external = 0;
-		     sel_external <= IPA_TESTBUS_SEL_EXTERNAL_MAX;
-		     sel_external++) {
+			 sel_external <=
+				 IPA_TESTBUS_SEL_EXTERNAL_MAX;
+			 sel_external++) {
+
 			for (sel_internal = 0;
-			     sel_internal <= IPA_TESTBUS_SEL_INTERNAL_PIPE_MAX;
-			     sel_internal++) {
-				debug_data_sel.value = 0;
-				debug_data_sel.def.pipe_select = sel_ep;
-				debug_data_sel.def.external_block_select =
+				 sel_internal <=
+					 IPA_TESTBUS_SEL_INTERNAL_PIPE_MAX;
+				 sel_internal++) {
+
+				testbus_sel.value = 0;
+
+				testbus_sel.def.pipe_select = sel_ep;
+				testbus_sel.def.external_block_select =
 					sel_external;
-				debug_data_sel.def.internal_block_select =
+				testbus_sel.def.internal_block_select =
 					sel_internal;
-				IPA_WRITE_SCALER_REG(IPA_DEBUG_DATA_SEL,
-						     debug_data_sel.value);
-				ipa_reg_save.ipa.testbus->ep[sel_ep].entry_ep
-				    [sel_external]
-				    [sel_internal].testbus_sel.value =
-				    debug_data_sel.value;
-				ipa_reg_save.ipa.testbus->ep[sel_ep].entry_ep
-				    [sel_external]
-				    [sel_internal].testbus_data.value =
-				    IPA_READ_SCALER_REG(IPA_DEBUG_DATA);
+
+				IPA_MASKED_WRITE_SCALER_REG(
+					IPA_TESTBUS_SEL,
+					testbus_sel.value);
+
+				ipa_reg_save.ipa.testbus->ep[sel_ep].entry_ep[
+					sel_internal][sel_external].
+					testbus_sel.value =
+					testbus_sel.value;
+
+				ipa_reg_save.ipa.testbus->ep[sel_ep].entry_ep[
+					sel_internal][sel_external].
+					testbus_data.value =
+					IPA_READ_SCALER_REG(
+						IPA_DEBUG_DATA);
 			}
 		}
 	}
+
+	/* Disable Test-bus */
+	testbus_sel.value = 0;
+
+	IPA_WRITE_SCALER_REG(
+		IPA_TESTBUS_SEL,
+		testbus_sel.value);
 }
 
 /*
@@ -1279,17 +1480,81 @@ int ipa_reg_save_init(u32 value)
 
 	if (!ipa3_ctx->reg_collection_base) {
 		IPAERR(":register collection ioremap err\n");
-		return -EFAULT;
+		goto alloc_fail1;
 	}
 
-	num_regs -= (CONFIG_IPA3_REGDUMP_NUM_EXTRA_ENDP_REGS *
-		     IPA_REG_SAVE_NUM_EXTRA_ENDP_REGS);
+	num_regs -=
+		(CONFIG_IPA3_REGDUMP_NUM_EXTRA_ENDP_REGS *
+		 IPA_REG_SAVE_NUM_EXTRA_ENDP_REGS);
 
-	for (i = 0; i < (CONFIG_IPA3_REGDUMP_NUM_EXTRA_ENDP_REGS *
-			 IPA_REG_SAVE_NUM_EXTRA_ENDP_REGS); i++)
+	for (i = 0;
+		 i < (CONFIG_IPA3_REGDUMP_NUM_EXTRA_ENDP_REGS *
+			  IPA_REG_SAVE_NUM_EXTRA_ENDP_REGS);
+		 i++)
 		*(ipa_regs_to_save_array[num_regs + i].dst_addr) = 0x0;
 
+	ipa_reg_save.ipa.ipa_gsi_ptr  = NULL;
+	ipa_reg_save.ipa.ipa_seq_ptr  = NULL;
+	ipa_reg_save.ipa.ipa_hram_ptr = NULL;
+	ipa_reg_save.ipa.ipa_mbox_ptr = NULL;
+	ipa_reg_save.ipa.ipa_sram_ptr = NULL;
+	ipa_reg_save.ipa.ipa_iu_ptr   = NULL;
+
+	if (ipa3_ctx->do_ram_collection_on_crash) {
+		ipa_reg_save.ipa.ipa_iu_ptr =
+			alloc_and_init(IPA_IU_SIZE, value);
+		if (!ipa_reg_save.ipa.ipa_iu_ptr) {
+			IPAERR("ipa_iu_ptr memory alloc failed\n");
+			goto alloc_fail2;
+		}
+
+		ipa_reg_save.ipa.ipa_sram_ptr =
+			alloc_and_init(IPA_SRAM_SIZE, value);
+		if (!ipa_reg_save.ipa.ipa_sram_ptr) {
+			IPAERR("ipa_sram_ptr memory alloc failed\n");
+			goto alloc_fail2;
+		}
+
+		ipa_reg_save.ipa.ipa_mbox_ptr =
+			alloc_and_init(IPA_MBOX_SIZE, value);
+		if (!ipa_reg_save.ipa.ipa_mbox_ptr) {
+			IPAERR("ipa_mbox_ptr memory alloc failed\n");
+			goto alloc_fail2;
+		}
+
+		ipa_reg_save.ipa.ipa_hram_ptr =
+			alloc_and_init(IPA_HRAM_SIZE, value);
+		if (!ipa_reg_save.ipa.ipa_hram_ptr) {
+			IPAERR("ipa_hram_ptr memory alloc failed\n");
+			goto alloc_fail2;
+		}
+
+		ipa_reg_save.ipa.ipa_seq_ptr =
+			alloc_and_init(IPA_SEQ_SIZE, value);
+		if (!ipa_reg_save.ipa.ipa_seq_ptr) {
+			IPAERR("ipa_seq_ptr memory alloc failed\n");
+			goto alloc_fail2;
+		}
+
+		ipa_reg_save.ipa.ipa_gsi_ptr =
+			alloc_and_init(IPA_GSI_SIZE, value);
+		if (!ipa_reg_save.ipa.ipa_gsi_ptr) {
+			IPAERR("ipa_gsi_ptr memory alloc failed\n");
+			goto alloc_fail2;
+		}
+	}
+
 	return 0;
+
+alloc_fail2:
+	kfree(ipa_reg_save.ipa.ipa_seq_ptr);
+	kfree(ipa_reg_save.ipa.ipa_hram_ptr);
+	kfree(ipa_reg_save.ipa.ipa_mbox_ptr);
+	kfree(ipa_reg_save.ipa.ipa_sram_ptr);
+	kfree(ipa_reg_save.ipa.ipa_iu_ptr);
+	iounmap(ipa3_ctx->reg_collection_base);
+alloc_fail1:
+	return -ENOMEM;
 }
 
 /*
@@ -1317,14 +1582,16 @@ static void ipa_hal_save_regs_rsrc_db(void)
 		     rsrc_id++) {
 			ipa_rsrc_mngr_db_cfg.def.rsrc_id_sel = rsrc_id;
 			ipa_rsrc_mngr_db_cfg.def.rsrc_type_sel = rsrc_type;
-			IPA_WRITE_SCALER_REG(IPA_RSRC_MNGR_DB_CFG,
+			IPA_MASKED_WRITE_SCALER_REG(IPA_RSRC_MNGR_DB_CFG,
 					     ipa_rsrc_mngr_db_cfg.value);
 			ipa_reg_save.ipa.dbg.ipa_rsrc_mngr_db_rsrc_read_arr
 			    [rsrc_type][rsrc_id].value =
-			    IPA_READ_SCALER_REG(IPA_RSRC_MNGR_DB_RSRC_READ);
+			    IPA_READ_SCALER_REG(
+					IPA_RSRC_MNGR_DB_RSRC_READ);
 			ipa_reg_save.ipa.dbg.ipa_rsrc_mngr_db_list_read_arr
 			    [rsrc_type][rsrc_id].value =
-			    IPA_READ_SCALER_REG(IPA_RSRC_MNGR_DB_LIST_READ);
+			    IPA_READ_SCALER_REG(
+					IPA_RSRC_MNGR_DB_LIST_READ);
 		}
 	}
 }

@@ -1,7 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * FTS Capacitive touch screen controller (FingerTipS)
  *
- * Copyright (C) 2016-2018, STMicroelectronics Limited.
+ * Copyright (C) 2016-2019, STMicroelectronics Limited.
  * Authors: AMG(Analog Mems Group) <marco.cali@st.com>
  *
  *
@@ -77,6 +78,8 @@
 #define LOAD_FW_FROM 0
 #endif
 
+#define FTS_LATEST_VERSION 0x1101
+
 static char tag[8] = "[ FTS ]\0";
 
 int getFirmwareVersion(u16 *fw_vers, u16 *config_id)
@@ -116,6 +119,38 @@ int getFirmwareVersion(u16 *fw_vers, u16 *config_id)
 	return OK;
 }
 
+int getFWdata_nocheck(const char *pathToFile, u8 **data, int *size, int from)
+{
+	const struct firmware *fw = NULL;
+	struct device *dev = getDev();
+	int res;
+
+	if (dev == NULL)
+		return ERROR_OP_NOT_ALLOW;
+
+	logError(0, "%s Read FW from BIN file!\n", tag);
+
+	res = firmware_request_nowarn(&fw, pathToFile, dev);
+	if (res) {
+		logError(1, "%s %s:No File found! ERROR %08X\n",
+			tag, __func__, ERROR_FILE_NOT_FOUND);
+		return ERROR_FILE_NOT_FOUND;
+	}
+
+	*size = fw->size;
+	*data = (u8 *)kmalloc_array((*size), sizeof(u8), GFP_KERNEL);
+	if (*data == NULL) {
+		logError(1, "%s %s:Impossible to allocate! %08X\n", __func__);
+		release_firmware(fw);
+		return ERROR_ALLOC;
+	}
+	memcpy(*data, (u8 *)fw->data, (*size));
+	release_firmware(fw);
+
+	logError(0, "%s %s:Finshed!\n", tag, __func__);
+	return OK;
+}
+
 int getFWdata(const char *pathToFile, u8 **data, int *size, int from)
 {
 	const struct firmware *fw = NULL;
@@ -141,10 +176,14 @@ int getFWdata(const char *pathToFile, u8 **data, int *size, int from)
 #endif
 	default:
 		logError(0, "%s Read FW from BIN file!\n", tag);
+
+		if (ftsInfo.u16_fwVer >= FTS_LATEST_VERSION)
+			return ERROR_FW_NO_UPDATE;
+
 		dev = getDev();
 
 		if (dev != NULL) {
-			res = request_firmware_direct(&fw, pathToFile, dev);
+			res = firmware_request_nowarn(&fw, pathToFile, dev);
 			if (res == 0) {
 				*size = fw->size;
 				*data = (u8 *)kmalloc_array((*size), sizeof(u8),
@@ -218,7 +257,7 @@ int flashProcedure(const char *path, int force, int keep_cx)
 	logError(0, "%s Fw file read COMPLETED!\n", tag);
 
 	logError(0, "%s Starting flashing procedure...\n", tag);
-	res = flash_burn(fw, force, keep_cx);
+	res = flash_burn(&fw, force, keep_cx);
 	if (res < OK && res != (ERROR_FW_NO_UPDATE | ERROR_FLASH_BURN_FAILED)) {
 		logError(1, "%s %s: ERROR %02X\n",
 			tag, __func__, ERROR_FLASH_PROCEDURE);
@@ -452,13 +491,13 @@ int fillMemory(u32 address, u8 *data, int size)
 	return OK;
 }
 
-int flash_burn(Firmware fw, int force_burn, int keep_cx)
+int flash_burn(Firmware *fw, int force_burn, int keep_cx)
 {
 	u8 cmd;
 	int res;
 
-	if (!force_burn && (ftsInfo.u16_fwVer >= fw.fw_ver)
-		&& (ftsInfo.u16_cfgId >= fw.config_id)) {
+	if (!force_burn && (ftsInfo.u16_fwVer >= fw->fw_ver)
+		&& (ftsInfo.u16_cfgId >= fw->config_id)) {
 		logError(0, "Firmware in the chip newer");
 		logError(0, " or equal to the one to burn! ");
 		logError(0, "%s %s:NO UPDATE ERROR %02X\n",
@@ -497,7 +536,7 @@ int flash_burn(Firmware fw, int force_burn, int keep_cx)
 	//Write the lower part of the Program RAM
 	logError(0, "%s 3) PREPARING DATA FOR FLASH BURN:\n", tag);
 
-	res = fillMemory(FLASH_ADDR_CODE, fw.data, fw.data_size);
+	res = fillMemory(FLASH_ADDR_CODE, fw->data, fw->data_size);
 	if (res < 0) {
 		logError(1, "%s Error During filling the memory!%02X\n",
 			tag, ERROR_FLASH_BURN_FAILED);
@@ -566,15 +605,15 @@ int flash_burn(Firmware fw, int force_burn, int keep_cx)
 		return (res | ERROR_FLASH_BURN_FAILED);
 	}
 
-	if ((ftsInfo.u16_fwVer != fw.fw_ver)
-		&& (ftsInfo.u16_cfgId != fw.config_id)) {
+	if ((ftsInfo.u16_fwVer != fw->fw_ver)
+		&& (ftsInfo.u16_cfgId != fw->config_id)) {
 		logError(1, "Firmware in the chip different");
 		logError(1, " from the one that was burn!");
 		logError(1, "%s fw: %x != %x , conf: %x != %x\n",
 			tag, ftsInfo.u16_fwVer,
-			fw.fw_ver,
+			fw->fw_ver,
 			ftsInfo.u16_cfgId,
-			fw.config_id);
+			fw->config_id);
 		return ERROR_FLASH_BURN_FAILED;
 	}
 
@@ -1014,14 +1053,14 @@ int fillFlash(u32 address, u8 *data, int size)
 	return OK;
 }
 
-int flash_burn(struct Firmware fw, int force_burn, int keep_cx)
+int flash_burn(struct Firmware *fw, int force_burn, int keep_cx)
 {
 	int res;
 
-	if (!force_burn && (ftsInfo.u16_fwVer >= fw.fw_ver)
-		&& (ftsInfo.u16_cfgId >= fw.config_id)) {
+	if (!force_burn && (ftsInfo.u16_fwVer >= fw->fw_ver)
+		&& (ftsInfo.u16_cfgId >= fw->config_id)) {
 		for (res = EXTERNAL_RELEASE_INFO_SIZE-1; res >= 0; res--) {
-			if (fw.externalRelease[res] >
+			if (fw->externalRelease[res] >
 				ftsInfo.u8_extReleaseInfo[res])
 				goto start;
 		}
@@ -1038,27 +1077,13 @@ start:
 	logError(0, "%s Programming Procedure for flashing started:\n\n", tag);
 
 	logError(0, "%s 1) SYSTEM RESET:\n", tag);
-	res = fts_system_reset();
-	if (res < 0) {
-		logError(1, "%s system reset FAILED!\n", tag);
-		/**
-		 * if there is no firmware i will not
-		 * get the controller ready event and
-		 * there will be a timeout but i can
-		 * keep going, but if there is an I2C
-		 * error i have to exit
-		 */
-		if (res != (ERROR_SYSTEM_RESET_FAIL | ERROR_TIMEOUT))
-			return (res | ERROR_FLASH_BURN_FAILED);
-	} else
-		logError(0, "%s system reset COMPLETED!\n\n", tag);
 
 	logError(0, "%s 2) WARM BOOT:\n", tag);
 	res = fts_warm_boot();
 	if (res < OK) {
 		logError(1, "%s warm boot FAILED!\n", tag);
 		return (res | ERROR_FLASH_BURN_FAILED);
-	} /*else*/
+	}
 	logError(0, "%s warm boot COMPLETED!\n\n", tag);
 
 	//mdelay(FLASH_WAIT_TIME);
@@ -1097,8 +1122,8 @@ start:
 
 	//mdelay(FLASH_WAIT_TIME);
 	logError(0, "%s 6) LOAD PROGRAM:\n", tag);
-	res = fillFlash(FLASH_ADDR_CODE, &fw.data[0],
-					fw.sec0_size);
+	res = fillFlash(FLASH_ADDR_CODE, (u8 *)(&fw->data[0]),
+					fw->sec0_size);
 	if (res < OK) {
 		logError(1, "%s   load program ERROR %02X\n",
 			tag, ERROR_FLASH_BURN_FAILED);
@@ -1107,7 +1132,7 @@ start:
 	logError(0, "%s   load program DONE!\n", tag);
 	logError(0, "%s 7) LOAD CONFIG:\n", tag);
 	res = fillFlash(FLASH_ADDR_CONFIG,
-		&(fw.data[fw.sec0_size]), fw.sec1_size);
+		&(fw->data[fw->sec0_size]), fw->sec1_size);
 	if (res < OK) {
 		logError(1, "%s   load config ERROR %02X\n",
 			tag, ERROR_FLASH_BURN_FAILED);
@@ -1135,16 +1160,13 @@ start:
 		return (res | ERROR_FLASH_BURN_FAILED);
 	}
 
-	for (res = 0; res < EXTERNAL_RELEASE_INFO_SIZE; res++) {
-		////external release is prined during readChipInfo
-		if (fw.externalRelease[res] != ftsInfo.u8_extReleaseInfo[res]) {
-			pr_err("Firmware in the chip different from");
-			pr_err(" the one that was burn!");
-			logError(1, "%s fw: %x != %x, conf: %x != %x\n",
-				tag, ftsInfo.u16_fwVer, fw.fw_ver,
-				ftsInfo.u16_cfgId, fw.config_id);
-			return ERROR_FLASH_BURN_FAILED;
-		}
+	if ((ftsInfo.u16_fwVer != fw->fw_ver)
+		&& (ftsInfo.u16_cfgId != fw->config_id)) {
+		pr_err("Firmware is different from the old!\n");
+		logError(1, "%s fw: %x != %x, conf: %x != %x\n",
+			tag, ftsInfo.u16_fwVer, fw->fw_ver,
+			ftsInfo.u16_cfgId, fw->config_id);
+		return ERROR_FLASH_BURN_FAILED;
 	}
 
 	logError(0, "%s Final check OK! fw: %02X , conf: %02X\n",

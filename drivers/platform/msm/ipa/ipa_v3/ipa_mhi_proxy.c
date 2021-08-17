@@ -1,13 +1,6 @@
-/* Copyright (c) 2018 - 2019 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/dma-mapping.h>
@@ -737,7 +730,7 @@ static void imp_mhi_shutdown(void)
 				imp_ctx->dev_info.chdb_base, PAGE_SIZE,
 				&iova_p, &pa_p, &size_p);
 
-			iommu_unmap(cb->mapping->domain, iova_p, size_p);
+			iommu_unmap(cb->iommu_domain, iova_p, size_p);
 		}
 	}
 	if (!imp_ctx->in_lpm &&
@@ -848,7 +841,7 @@ static int imp_mhi_probe_cb(struct mhi_device *mhi_dev,
 			imp_ctx->dev_info.chdb_base, PAGE_SIZE,
 			&iova_p, &pa_p, &size_p);
 
-		ret = ipa3_iommu_map(cb->mapping->domain, iova_p, pa_p, size_p,
+		ret = ipa3_iommu_map(cb->iommu_domain, iova_p, pa_p, size_p,
 			IOMMU_READ | IOMMU_WRITE | IOMMU_MMIO);
 		if (ret)
 			goto fail;
@@ -912,6 +905,8 @@ static void imp_mhi_status_cb(struct mhi_device *mhi_dev, enum MHI_CB mhi_cb)
 		}
 		break;
 
+	case MHI_CB_EE_RDDM:
+	case MHI_CB_PENDING_DATA:
 	default:
 		IMP_ERR("unexpected event %d\n", mhi_cb);
 		break;
@@ -1000,7 +995,6 @@ MODULE_DEVICE_TABLE(of, imp_dt_match);
 static struct platform_driver ipa_mhi_proxy_driver = {
 	.driver = {
 		.name = "ipa_mhi_proxy",
-		.owner = THIS_MODULE,
 		.of_match_table = imp_dt_match,
 	},
 	.probe = imp_probe,

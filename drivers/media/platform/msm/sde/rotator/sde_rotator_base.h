@@ -1,13 +1,6 @@
-/* Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef __SDE_ROTATOR_BASE_H__
@@ -45,6 +38,7 @@
 #define SDE_MDP_HW_REV_107	SDE_MDP_REV(1, 0, 7)	/* 8996 v1.0 */
 #define SDE_MDP_HW_REV_300	SDE_MDP_REV(3, 0, 0)	/* 8998 v1.0 */
 #define SDE_MDP_HW_REV_301	SDE_MDP_REV(3, 0, 1)	/* 8998 v1.1 */
+#define SDE_MDP_HW_REV_320	SDE_MDP_REV(3, 2, 0)    /* sdm660 */
 #define SDE_MDP_HW_REV_400	SDE_MDP_REV(4, 0, 0)	/* sdm845 v1.0 */
 #define SDE_MDP_HW_REV_410	SDE_MDP_REV(4, 1, 0)	/* sdm670 v1.0 */
 #define SDE_MDP_HW_REV_500	SDE_MDP_REV(5, 0, 0)	/* sm8150 v1.0 */
@@ -192,7 +186,7 @@ struct reg_bus_client {
 
 struct sde_smmu_client {
 	struct device *dev;
-	struct dma_iommu_mapping *mmu_mapping;
+	struct iommu_domain *rot_domain;
 	struct sde_module_power mp;
 	struct reg_bus_client *reg_bus_clt;
 	bool domain_attached;

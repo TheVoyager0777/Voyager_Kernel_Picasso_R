@@ -11,7 +11,7 @@ endif
 ifeq ($(KERNEL_BUILD), 1)
 	# These are configurable via Kconfig for kernel-based builds
 	# Need to explicitly configure for Android-based builds
-	AUDIO_BLD_DIR := $(shell pwd)/kernel/msm-4.14
+	AUDIO_BLD_DIR := $(shell pwd)/kernel/msm-4.19
 	AUDIO_ROOT := $(AUDIO_BLD_DIR)/techpack/audio
 endif
 
@@ -22,9 +22,23 @@ ifeq ($(KERNEL_BUILD), 0)
 		INCS    +=  -include $(AUDIO_ROOT)/config/sm6150autoconf.h
 	endif
 	ifeq ($(CONFIG_ARCH_TRINKET), y)
-		include $(AUDIO_ROOT)/config/trinketauto.conf
+		include $(AUDIO_ROOT)/config/sm6150auto.conf
 		export
-		INCS    +=  -include $(AUDIO_ROOT)/config/trinketautoconf.h
+		INCS    +=  -include $(AUDIO_ROOT)/config/sm6150autoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_KONA), y)
+		include $(AUDIO_ROOT)/config/konaauto.conf
+		INCS    +=  -include $(AUDIO_ROOT)/config/konaautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_LITO), y)
+		include $(AUDIO_ROOT)/config/litoauto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/litoautoconf.h
+	endif
+	ifeq ($(CONFIG_ARCH_BENGAL), y)
+		include $(AUDIO_ROOT)/config/bengalauto.conf
+		export
+		INCS    +=  -include $(AUDIO_ROOT)/config/bengalautoconf.h
 	endif
 	ifeq ($(CONFIG_ARCH_QCS405), y)
 		include $(AUDIO_ROOT)/config/qcs405auto.conf
@@ -65,6 +79,7 @@ ifdef CONFIG_SND_SOC_BOLERO
 	BOLERO_OBJS += bolero-cdc-utils.o
 	BOLERO_OBJS += bolero-cdc-regmap.o
 	BOLERO_OBJS += bolero-cdc-tables.o
+	BOLERO_OBJS += bolero-clk-rsc.o
 endif
 
 ifdef CONFIG_WSA_MACRO
@@ -124,14 +139,6 @@ KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/asoc/codec
 KBUILD_EXTRA_SYMBOLS +=$(OUT)/obj/vendor/qcom/opensource/audio-kernel/soc/Module.symvers
 endif
 
-ifeq ($(CONFIG_SND_SOC_GCOV), y)
-GCOV_PROFILE := y
-endif
-
-ifdef CONFIG_SND_SOC_FOR_ULTRASOUND_PATH
-	CDEFINES += -DCONFIG_SND_SOC_FOR_ULTRASOUND_PATH
-endif
-
 # Module information used by KBuild framework
 obj-$(CONFIG_SND_SOC_BOLERO) += bolero_cdc_dlkm.o
 bolero_cdc_dlkm-y := $(BOLERO_OBJS)
@@ -147,3 +154,6 @@ tx_macro_dlkm-y := $(TX_OBJS)
 
 obj-$(CONFIG_RX_MACRO) += rx_macro_dlkm.o
 rx_macro_dlkm-y := $(RX_OBJS)
+
+# inject some build related information
+DEFINES += -DBUILD_TIMESTAMP=\"$(shell date -u +'%Y-%m-%dT%H:%M:%SZ')\"

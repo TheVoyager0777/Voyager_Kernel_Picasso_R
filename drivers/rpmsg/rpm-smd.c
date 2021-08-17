@@ -1,14 +1,6 @@
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2012-2019, 2021, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "%s: " fmt, __func__
@@ -688,8 +680,11 @@ int msm_rpm_smd_buffer_request(struct msm_rpm_request *cdata,
 		}
 		slp->buf = PTR_ALIGN(&slp->ubuf[0], sizeof(u32));
 		memcpy(slp->buf, buf, size);
-		if (tr_insert(&tr_root, slp))
+		if (tr_insert(&tr_root, slp)) {
 			pr_err("Error updating sleep request\n");
+			kfree(slp);
+			return -EINVAL;
+		}
 	} else {
 		/* handle unsent requests */
 		tr_update(slp, buf);
@@ -706,24 +701,6 @@ int msm_rpm_smd_buffer_request(struct msm_rpm_request *cdata,
 static struct msm_rpm_driver_data msm_rpm_data = {
 	.smd_open = COMPLETION_INITIALIZER(msm_rpm_data.smd_open),
 };
-
-static int trysend_count = 20;
-module_param(trysend_count, int, 0664);
-static int msm_rpm_trysend_smd_buffer(char *buf, uint32_t size)
-{
-	int ret;
-	int count = 0;
-
-	do {
-		ret = rpmsg_trysend(rpm->rpm_channel, buf, size);
-		if (!ret)
-			break;
-		udelay(10);
-		count++;
-	} while (count < trysend_count);
-
-	return ret;
-}
 
 static int msm_rpm_flush_requests(bool print)
 {
@@ -742,7 +719,7 @@ static int msm_rpm_flush_requests(bool print)
 
 		set_msg_id(s->buf, msm_rpm_get_next_msg_id());
 
-		ret = msm_rpm_trysend_smd_buffer(s->buf, get_buf_len(s->buf));
+		ret = rpmsg_send(rpm->rpm_channel, s->buf, get_buf_len(s->buf));
 
 		WARN_ON(ret != 0);
 		trace_rpm_smd_send_sleep_set(get_msg_id(s->buf), type, id);
@@ -1202,7 +1179,7 @@ static void msm_rpm_log_request(struct msm_rpm_request *cdata)
 	}
 
 	pos += scnprintf(buf + pos, buflen - pos, "\n");
-	printk(buf);
+	pr_info("request info %s\n", buf);
 }
 
 static int msm_rpm_send_data(struct msm_rpm_request *cdata,

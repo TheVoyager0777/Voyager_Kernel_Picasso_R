@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/memory.h>
@@ -25,9 +17,9 @@
 #include <linux/bootmem.h>
 #include <linux/mailbox_client.h>
 #include <linux/mailbox/qmp.h>
-#include <soc/qcom/rpm-smd.h>
 #include <asm/tlbflush.h>
 #include <asm/cacheflush.h>
+#include <soc/qcom/rpm-smd.h>
 
 #define RPM_DDR_REQ 0x726464
 #define AOP_MSG_ADDR_MASK		0xffffffff
@@ -211,9 +203,9 @@ static int send_msg(struct memory_notify *mn, bool online, int count)
 
 		if (ret) {
 			pr_err("PASR: %s %s request addr:0x%llx failed\n",
-				       is_rpm_controller ? "RPM" : "AOP",
-				       online ? "online" : "offline",
-					__pfn_to_phys(start));
+			       is_rpm_controller ? "RPM" : "AOP",
+			       online ? "online" : "offline",
+			       __pfn_to_phys(start));
 			goto undo;
 		}
 
@@ -271,10 +263,10 @@ static bool need_to_send_remote_request(struct memory_notify *mn,
 			if (mem_sec_state[idx] == MEMORY_ONLINE)
 				goto out;
 		}
-		return 1;
+		return true;
 	}
 out:
-	return 0;
+	return false;
 }
 
 /*
@@ -320,8 +312,12 @@ static int mem_change_refresh_state(struct memory_notify *mn,
 		goto out;
 
 	ret = send_msg(mn, online, count);
-	if (ret)
+	if (ret) {
+		/* online failures are critical failures */
+		if (online)
+			BUG_ON(IS_ENABLED(CONFIG_BUG_ON_HW_MEM_ONLINE_FAIL));
 		return -EINVAL;
+	}
 out:
 	mem_sec_state[idx] = state;
 	return 0;
@@ -353,14 +349,14 @@ static int mem_event_callback(struct notifier_block *self,
 
 	if (sec_nr > end_section_nr || sec_nr < start_section_nr) {
 		if (action == MEM_ONLINE || action == MEM_OFFLINE)
-			pr_info("mem-offline: %s mem%d, but not our block. Not performing any action\n",
+			pr_info("mem-offline: %s mem%ld, but not our block. Not performing any action\n",
 				action == MEM_ONLINE ? "Onlined" : "Offlined",
 				sec_nr);
 		return NOTIFY_OK;
 	}
 	switch (action) {
 	case MEM_GOING_ONLINE:
-		pr_debug("mem-offline: MEM_GOING_ONLINE : start = 0x%lx end = 0x%lx",
+		pr_debug("mem-offline: MEM_GOING_ONLINE : start = 0x%llx end = 0x%llx\n",
 				start_addr, end_addr);
 		++mem_info[(sec_nr - start_section_nr + MEMORY_ONLINE *
 			   idx) / sections_per_block].fail_count;
@@ -383,7 +379,7 @@ static int mem_event_callback(struct notifier_block *self,
 			(void *)sec_nr);
 		break;
 	case MEM_GOING_OFFLINE:
-		pr_debug("mem-offline: MEM_GOING_OFFLINE : start = 0x%lx end = 0x%lx",
+		pr_debug("mem-offline: MEM_GOING_OFFLINE : start = 0x%llx end = 0x%llx\n",
 				start_addr, end_addr);
 		++mem_info[(sec_nr - start_section_nr + MEMORY_OFFLINE *
 			   idx) / sections_per_block].fail_count;
@@ -407,7 +403,7 @@ static int mem_event_callback(struct notifier_block *self,
 			(void *)sec_nr);
 		break;
 	case MEM_CANCEL_ONLINE:
-		pr_info("mem-offline: MEM_CANCEL_ONLINE: start = 0x%lx end = 0x%lx",
+		pr_info("mem-offline: MEM_CANCEL_ONLINE: start = 0x%llx end = 0x%llx\n",
 				start_addr, end_addr);
 		mem_change_refresh_state(mn, MEMORY_OFFLINE);
 		break;
@@ -432,7 +428,7 @@ static int mem_online_remaining_blocks(void)
 	start_section_nr = pfn_to_section_nr(memblock_end_pfn);
 	end_section_nr = pfn_to_section_nr(ram_end_pfn);
 
-	if (start_section_nr >= end_section_nr) {
+	if (memblock_end_of_DRAM() >= bootloader_memory_limit) {
 		pr_info("mem-offline: System booted with no zone movable memory blocks. Cannot perform memory offlining\n");
 		return -EINVAL;
 	}
@@ -590,8 +586,9 @@ static int mem_parse_dt(struct platform_device *pdev)
 
 	mailbox.mbox = mbox_request_channel(&mailbox.cl, 0);
 	if (IS_ERR(mailbox.mbox)) {
-		pr_err("mem-offline: failed to get mailbox channel %pK %d\n",
-			mailbox.mbox, PTR_ERR(mailbox.mbox));
+		if (PTR_ERR(mailbox.mbox) != -EPROBE_DEFER)
+			pr_err("mem-offline: failed to get mailbox channel %pK %ld\n",
+				mailbox.mbox, PTR_ERR(mailbox.mbox));
 		return PTR_ERR(mailbox.mbox);
 	}
 
@@ -608,8 +605,9 @@ static int mem_offline_driver_probe(struct platform_device *pdev)
 	unsigned int total_blks;
 	int ret, i;
 
-	if (mem_parse_dt(pdev))
-		return -ENODEV;
+	ret = mem_parse_dt(pdev);
+	if (ret)
+		return ret;
 
 	ret = mem_online_remaining_blocks();
 	if (ret < 0)

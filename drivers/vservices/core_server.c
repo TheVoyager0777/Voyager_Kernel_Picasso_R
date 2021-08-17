@@ -495,7 +495,7 @@ static void message_queue_work(struct work_struct *work)
 		/* Any other error is fatal */
 		if (err < 0) {
 			dev_err(&server->service->dev,
-					"Failed to send pending message type %d: %d - resetting session",
+					"Failed to send pending message type %d: %d - resetting session\n",
 					msg->type, err);
 			vs_service_reset_nosync(server->service);
 			break;
@@ -537,7 +537,7 @@ static ssize_t server_core_create_service_store(struct device *dev,
 		count--;
 	}
 	if (!count) {
-		dev_info(dev, "empty service name");
+		dev_info(dev, "empty service name\n");
 		return -EINVAL;
 	}
 	/* discard trailing whitespace */
@@ -1473,10 +1473,8 @@ static int vs_server_session_probe(struct device *dev)
 	service = __vs_server_core_register_service(session, 0, NULL,
 			VSERVICE_CORE_SERVICE_NAME,
 			VSERVICE_CORE_PROTOCOL_NAME, NULL);
-	if (IS_ERR(service))
-		return PTR_ERR(service);
 
-	return 0;
+    return PTR_ERR_OR_ZERO(service);
 }
 
 static int

@@ -1,15 +1,5 @@
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved. */
 
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
@@ -284,7 +274,7 @@ int mdss_mdp_overlay_req_check(struct msm_fb_data_type *mfd,
 	}
 
 	if (req->dst_rect.w < min_dst_size || req->dst_rect.h < min_dst_size) {
-		pr_err("invalid destination resolution (%dx%d)",
+		pr_err("invalid destination resolution (%dx%d)\n",
 		       req->dst_rect.w, req->dst_rect.h);
 		return -EOVERFLOW;
 	}
@@ -972,7 +962,7 @@ int mdss_mdp_overlay_pipe_setup(struct msm_fb_data_type *mfd,
 		} else if ((mixer_mux == MDSS_MDP_MIXER_MUX_LEFT) &&
 		    ((req->dst_rect.x + req->dst_rect.w) > mixer->width)) {
 			if (req->dst_rect.x >= mixer->width) {
-				pr_err("%pS: err dst_x can't lie in right half",
+				pr_err("%pS:er dst_x can't lie in right half\n",
 					__builtin_return_address(0));
 				pr_err(" flags:0x%x dst x:%d w:%d lm_w:%d\n",
 					req->flags, req->dst_rect.x,
@@ -1517,6 +1507,12 @@ int mdss_mdp_overlay_start(struct msm_fb_data_type *mfd)
 			goto end;
 		}
 		mdss_hw_init(mdss_res);
+		/*
+		 * As splash is not enabled, disable EARLY_MAP setting which was
+		 * enabled through DT before first kickoff.
+		 */
+		mdss_smmu_set_attribute(MDSS_IOMMU_DOMAIN_UNSECURE,
+					 EARLY_MAP, 0);
 		mdss_iommu_ctrl(0);
 	}
 
@@ -1639,7 +1635,7 @@ static int __overlay_queue_pipes(struct msm_fb_data_type *mfd)
 			if (ctl->mdata->mixer_switched) {
 				ret = mdss_mdp_overlay_pipe_setup(mfd,
 					&pipe->req_data, &pipe, NULL, false);
-				pr_debug("resetting DMA pipe for ctl=%d",
+				pr_debug("resetting DMA pipe for ctl=%d\n",
 					 ctl->num);
 			}
 			if (ret) {
@@ -1777,7 +1773,6 @@ static void __overlay_kickoff_requeue(struct msm_fb_data_type *mfd)
 static int mdss_mdp_commit_cb(enum mdp_commit_stage_type commit_stage,
 	void *data)
 {
-	int ret = 0;
 	struct msm_fb_data_type *mfd = (struct msm_fb_data_type *)data;
 	struct mdss_overlay_private *mdp5_data = mfd_to_mdp5_data(mfd);
 	struct mdss_mdp_ctl *ctl;
@@ -1793,11 +1788,11 @@ static int mdss_mdp_commit_cb(enum mdp_commit_stage_type commit_stage,
 		mutex_lock(&mdp5_data->ov_lock);
 		break;
 	default:
-		pr_err("Invalid commit stage %x", commit_stage);
+		pr_err("Invalid commit stage %x\n", commit_stage);
 		break;
 	}
 
-	return ret;
+	return 0;
 }
 
 /**
@@ -1907,12 +1902,12 @@ int mdss_mode_switch(struct msm_fb_data_type *mfd, u32 mode)
 			}
 
 			/*
-			* Configure the mixer parameters before the switch as
-			* the DSC parameter calculation is based on the mixer
-			* ROI. And set it to full ROI as driver expects the
-			* first frame after the resolution switch to be a
-			* full frame update.
-			*/
+			 * Configure the mixer parameters before the switch as
+			 * the DSC parameter calculation is based on the mixer
+			 * ROI. And set it to full ROI as driver expects the
+			 * first frame after the resolution switch to be a
+			 * full frame update.
+			 */
 			if (ctl->mixer_left) {
 				l_roi = (struct mdss_rect) {0, 0,
 					ctl->mixer_left->width,
@@ -2146,7 +2141,7 @@ static int __adjust_pipe_rect(struct mdss_mdp_pipe *pipe,
 
 end:
 	if (ret) {
-		pr_err("pipe:%d dst:{%d,%d,%d,%d} - not cropped for any PU ROI",
+		pr_err("pipe:%d dst:{%d,%d,%d,%d} - not cropped for any PU ROI\n",
 			pipe->num, pipe->dst.x, pipe->dst.y,
 			pipe->dst.w, pipe->dst.h);
 		pr_err("ROI0:{%d,%d,%d,%d} ROI1:{%d,%d,%d,%d}\n",
@@ -2449,7 +2444,7 @@ static int __overlay_secure_ctrl(struct msm_fb_data_type *mfd)
 			ret = mdss_mdp_secure_session_ctrl(1,
 					MDP_SECURE_DISPLAY_OVERLAY_SESSION);
 			if (ret) {
-				pr_err("secure display enable fail:%d", ret);
+				pr_err("secure display enable fail:%d\n", ret);
 				return ret;
 			}
 		}
@@ -2685,7 +2680,6 @@ int mdss_mdp_overlay_kickoff(struct msm_fb_data_type *mfd,
 		}
 	}
 
-	mdss_fb_update_notify_update(mfd);
 commit_fail:
 	ATRACE_BEGIN("overlay_cleanup");
 	mdss_mdp_overlay_cleanup(mfd, &mdp5_data->pipes_destroy, false);
@@ -2804,7 +2798,7 @@ static int __mdss_mdp_overlay_release_all(struct msm_fb_data_type *mfd,
 	mutex_lock(&mdp5_data->ov_lock);
 	mutex_lock(&mdp5_data->list_lock);
 	if (!mfd->ref_cnt && !list_empty(&mdp5_data->pipes_cleanup)) {
-		pr_debug("fb%d:: free pipes present in cleanup list",
+		pr_debug("fb%d:: free pipes present in cleanup list\n",
 			mfd->index);
 		cnt++;
 	}
@@ -3336,7 +3330,7 @@ end:
 	return rc;
 }
 
-static ssize_t dynamic_fps_sysfs_rda_dfps(struct device *dev,
+static ssize_t dynamic_fps_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -3355,7 +3349,7 @@ static ssize_t dynamic_fps_sysfs_rda_dfps(struct device *dev,
 	}
 
 	mutex_lock(&mdp5_data->dfps_lock);
-	ret = snprintf(buf, PAGE_SIZE, "%d\n",
+	ret = scnprintf(buf, PAGE_SIZE, "%d\n",
 		       pdata->panel_info.mipi.frame_rate);
 	pr_debug("%s: '%d'\n", __func__,
 		pdata->panel_info.mipi.frame_rate);
@@ -3549,7 +3543,7 @@ int mdss_mdp_dfps_update_params(struct msm_fb_data_type *mfd,
 }
 
 
-static ssize_t dynamic_fps_sysfs_wta_dfps(struct device *dev,
+static ssize_t dynamic_fps_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	int panel_fps, rc = 0;
@@ -3623,8 +3617,7 @@ static ssize_t dynamic_fps_sysfs_wta_dfps(struct device *dev,
 } /* dynamic_fps_sysfs_wta_dfps */
 
 
-static DEVICE_ATTR(dynamic_fps, 0644, dynamic_fps_sysfs_rda_dfps,
-	dynamic_fps_sysfs_wta_dfps);
+static DEVICE_ATTR_RW(dynamic_fps);
 
 static struct attribute *dynamic_fps_fs_attrs[] = {
 	&dev_attr_dynamic_fps.attr,
@@ -3634,7 +3627,7 @@ static struct attribute_group dynamic_fps_fs_attrs_group = {
 	.attrs = dynamic_fps_fs_attrs,
 };
 
-static ssize_t mdss_mdp_vsync_show_event(struct device *dev,
+static ssize_t vsync_event_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct fb_info *fbi = dev_get_drvdata(dev);
@@ -3656,7 +3649,7 @@ static ssize_t mdss_mdp_vsync_show_event(struct device *dev,
 	return ret;
 }
 
-static ssize_t mdss_mdp_lineptr_show_event(struct device *dev,
+static ssize_t lineptr_event_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct fb_info *fbi = dev_get_drvdata(dev);
@@ -3678,7 +3671,7 @@ static ssize_t mdss_mdp_lineptr_show_event(struct device *dev,
 	return ret;
 }
 
-static ssize_t mdss_mdp_lineptr_show_value(struct device *dev,
+static ssize_t lineptr_value_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct fb_info *fbi = dev_get_drvdata(dev);
@@ -3698,7 +3691,7 @@ static ssize_t mdss_mdp_lineptr_show_value(struct device *dev,
 	return ret;
 }
 
-static ssize_t mdss_mdp_lineptr_set_value(struct device *dev,
+static ssize_t lineptr_value_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct fb_info *fbi = dev_get_drvdata(dev);
@@ -3732,7 +3725,7 @@ static ssize_t mdss_mdp_lineptr_set_value(struct device *dev,
 	return count;
 }
 
-static ssize_t mdss_mdp_bl_show_event(struct device *dev,
+static ssize_t bl_event_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct fb_info *fbi = dev_get_drvdata(dev);
@@ -3744,7 +3737,7 @@ static ssize_t mdss_mdp_bl_show_event(struct device *dev,
 	return ret;
 }
 
-static ssize_t mdss_mdp_hist_show_event(struct device *dev,
+static ssize_t hist_event_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct fb_info *fbi = dev_get_drvdata(dev);
@@ -3756,7 +3749,7 @@ static ssize_t mdss_mdp_hist_show_event(struct device *dev,
 	return ret;
 }
 
-static ssize_t mdss_mdp_ad_show_event(struct device *dev,
+static ssize_t ad_event_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct fb_info *fbi = dev_get_drvdata(dev);
@@ -3768,7 +3761,7 @@ static ssize_t mdss_mdp_ad_show_event(struct device *dev,
 	return ret;
 }
 
-static ssize_t mdss_mdp_ad_bl_show_event(struct device *dev,
+static ssize_t ad_bl_event_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct fb_info *fbi = dev_get_drvdata(dev);
@@ -3807,7 +3800,7 @@ static inline int mdss_mdp_ad_is_supported(struct msm_fb_data_type *mfd)
 	return 1;
 }
 
-static ssize_t mdss_mdp_ad_show(struct device *dev,
+static ssize_t ad_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct fb_info *fbi = dev_get_drvdata(dev);
@@ -3822,7 +3815,7 @@ static ssize_t mdss_mdp_ad_show(struct device *dev,
 	return ret;
 }
 
-static ssize_t mdss_mdp_ad_store(struct device *dev,
+static ssize_t ad_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct fb_info *fbi = dev_get_drvdata(dev);
@@ -3842,7 +3835,7 @@ static ssize_t mdss_mdp_ad_store(struct device *dev,
 	return count;
 }
 
-static ssize_t mdss_mdp_dyn_pu_show(struct device *dev,
+static ssize_t dyn_pu_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct fb_info *fbi = dev_get_drvdata(dev);
@@ -3857,7 +3850,7 @@ static ssize_t mdss_mdp_dyn_pu_show(struct device *dev,
 	return ret;
 }
 
-static ssize_t mdss_mdp_dyn_pu_store(struct device *dev,
+static ssize_t dyn_pu_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct fb_info *fbi = dev_get_drvdata(dev);
@@ -3877,7 +3870,7 @@ static ssize_t mdss_mdp_dyn_pu_store(struct device *dev,
 	return count;
 }
 
-static ssize_t mdss_mdp_panel_disable_show(struct device *dev,
+static ssize_t msm_disable_panel_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret = 0;
@@ -3899,7 +3892,7 @@ static ssize_t mdss_mdp_panel_disable_show(struct device *dev,
 
 	pdata = dev_get_platdata(&mfd->pdev->dev);
 
-	ret = snprintf(buf, PAGE_SIZE, "%d\n",
+	ret = scnprintf(buf, PAGE_SIZE, "%d\n",
 		pdata->panel_disable_mode);
 
 	return ret;
@@ -3953,7 +3946,7 @@ static int mdss_mdp_enable_panel_disable_mode(struct msm_fb_data_type *mfd,
 	return ret;
 }
 
-static ssize_t mdss_mdp_panel_disable_store(struct device *dev,
+static ssize_t msm_disable_panel_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t len)
 {
 	int disable_panel, rc;
@@ -3980,7 +3973,7 @@ static ssize_t mdss_mdp_panel_disable_store(struct device *dev,
 	return len;
 }
 
-static ssize_t mdss_mdp_cmd_autorefresh_show(struct device *dev,
+static ssize_t msm_cmd_autorefresh_en_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret = 0;
@@ -4004,13 +3997,13 @@ static ssize_t mdss_mdp_cmd_autorefresh_show(struct device *dev,
 		pr_err("Panel doesn't support autorefresh\n");
 		ret = -EINVAL;
 	} else {
-		ret = snprintf(buf, PAGE_SIZE, "%d\n",
+		ret = scnprintf(buf, PAGE_SIZE, "%d\n",
 			mdss_mdp_ctl_cmd_get_autorefresh(ctl));
 	}
 	return ret;
 }
 
-static ssize_t mdss_mdp_cmd_autorefresh_store(struct device *dev,
+static ssize_t msm_cmd_autorefresh_en_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t len)
 {
 	int frame_cnt, rc;
@@ -4067,7 +4060,7 @@ static ssize_t mdss_mdp_cmd_autorefresh_store(struct device *dev,
 
 
 /* Print the last CRC Value read for batch mode */
-static ssize_t mdss_mdp_misr_show(struct device *dev,
+static ssize_t msm_misr_en_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret = 0;
@@ -4096,7 +4089,7 @@ static ssize_t mdss_mdp_misr_show(struct device *dev,
  * driver will keep collecting the misr in ftrace during interrupts,
  * until disabled.
  */
-static ssize_t mdss_mdp_misr_store(struct device *dev,
+static ssize_t msm_misr_en_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t len)
 {
 	int enable_misr, rc;
@@ -4169,24 +4162,18 @@ static ssize_t mdss_mdp_misr_store(struct device *dev,
 	return len;
 }
 
-static DEVICE_ATTR(msm_misr_en, 0644,
-	mdss_mdp_misr_show, mdss_mdp_misr_store);
-static DEVICE_ATTR(msm_cmd_autorefresh_en, 0644,
-	mdss_mdp_cmd_autorefresh_show, mdss_mdp_cmd_autorefresh_store);
-static DEVICE_ATTR(msm_disable_panel, 0644,
-	mdss_mdp_panel_disable_show, mdss_mdp_panel_disable_store);
-static DEVICE_ATTR(vsync_event, 0444, mdss_mdp_vsync_show_event, NULL);
-static DEVICE_ATTR(lineptr_event, 0444, mdss_mdp_lineptr_show_event, NULL);
-static DEVICE_ATTR(lineptr_value, 0664,
-		mdss_mdp_lineptr_show_value, mdss_mdp_lineptr_set_value);
-static DEVICE_ATTR(ad, 0664, mdss_mdp_ad_show,
-	mdss_mdp_ad_store);
-static DEVICE_ATTR(dyn_pu, 0664, mdss_mdp_dyn_pu_show,
-	mdss_mdp_dyn_pu_store);
-static DEVICE_ATTR(hist_event, 0444, mdss_mdp_hist_show_event, NULL);
-static DEVICE_ATTR(bl_event, 0444, mdss_mdp_bl_show_event, NULL);
-static DEVICE_ATTR(ad_event, 0444, mdss_mdp_ad_show_event, NULL);
-static DEVICE_ATTR(ad_bl_event, 0444, mdss_mdp_ad_bl_show_event, NULL);
+static DEVICE_ATTR_RW(msm_misr_en);
+static DEVICE_ATTR_RW(msm_cmd_autorefresh_en);
+static DEVICE_ATTR_RW(msm_disable_panel);
+static DEVICE_ATTR_RO(vsync_event);
+static DEVICE_ATTR_RO(lineptr_event);
+static DEVICE_ATTR_RW(lineptr_value);
+static DEVICE_ATTR_RW(ad);
+static DEVICE_ATTR_RW(dyn_pu);
+static DEVICE_ATTR_RO(hist_event);
+static DEVICE_ATTR_RO(bl_event);
+static DEVICE_ATTR_RO(ad_event);
+static DEVICE_ATTR_RO(ad_bl_event);
 
 static struct attribute *mdp_overlay_sysfs_attrs[] = {
 	&dev_attr_vsync_event.attr,
@@ -4288,6 +4275,7 @@ static void mdss_mdp_hw_cursor_blend_config(struct mdss_mdp_mixer *mixer,
 		struct fb_cursor *cursor)
 {
 	u32 blendcfg;
+
 	if (!mixer) {
 		pr_err("mixer not availbale\n");
 		return;
@@ -4360,7 +4348,8 @@ int mdss_mdp_cursor_flush(struct msm_fb_data_type *mfd,
 }
 
 static int mdss_mdp_cursor_pipe_setup(struct msm_fb_data_type *mfd,
-		struct mdp_overlay *req, int cursor_pipe) {
+		struct mdp_overlay *req, int cursor_pipe)
+{
 	struct mdss_mdp_pipe *pipe;
 	struct mdss_overlay_private *mdp5_data = mfd_to_mdp5_data(mfd);
 	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
@@ -4701,6 +4690,7 @@ static int mdss_mdp_hw_cursor_update(struct msm_fb_data_type *mfd,
 
 	if (mfd->cursor_buf && (cursor->set & FB_CUR_SETIMAGE)) {
 		u32 cursor_addr;
+
 		ret = copy_from_user(mfd->cursor_buf, img->data,
 				     img->width * img->height * 4);
 		if (ret) {
@@ -4743,6 +4733,7 @@ static int mdss_mdp_hw_cursor_update(struct msm_fb_data_type *mfd,
 		mdss_mdp_hw_cursor_blend_config(mixer_left, cursor);
 	} else {
 		struct mdss_rect roi_right = roi;
+
 		roi.w = left_lm_w - start_x;
 		if (cursor->set & FB_CUR_SETPOS)
 			mdss_mdp_hw_cursor_setpos(mixer_left, &roi, start_x,
@@ -4768,8 +4759,8 @@ static int mdss_mdp_hw_cursor_update(struct msm_fb_data_type *mfd,
 static int mdss_bl_scale_config(struct msm_fb_data_type *mfd,
 						struct mdp_bl_scale_data *data)
 {
-	int ret = 0;
 	int curr_bl;
+
 	mutex_lock(&mfd->bl_lock);
 	curr_bl = mfd->bl_level;
 	mfd->bl_scale = data->scale;
@@ -4780,7 +4771,7 @@ static int mdss_bl_scale_config(struct msm_fb_data_type *mfd,
 		mdss_fb_set_backlight(mfd, curr_bl);
 
 	mutex_unlock(&mfd->bl_lock);
-	return ret;
+	return 0;
 }
 
 static int mdss_mdp_pp_ioctl(struct msm_fb_data_type *mfd,
@@ -4963,6 +4954,7 @@ static int mdss_fb_set_metadata(struct msm_fb_data_type *mfd,
 	struct mdss_data_type *mdata = mfd_to_mdata(mfd);
 	struct mdss_mdp_ctl *ctl = mfd_to_ctl(mfd);
 	int ret = 0;
+
 	if (!ctl)
 		return  -EPERM;
 	switch (metadata->op) {
@@ -5004,6 +4996,7 @@ static int mdss_fb_get_hw_caps(struct msm_fb_data_type *mfd,
 		struct mdss_hw_caps *caps)
 {
 	struct mdss_data_type *mdata = mfd_to_mdata(mfd);
+
 	caps->mdp_rev = mdata->mdp_rev;
 	caps->vig_pipes = mdata->nvig_pipes;
 	caps->rgb_pipes = mdata->nrgb_pipes;
@@ -6016,6 +6009,7 @@ static int __mdss_mdp_ctl_handoff(struct msm_fb_data_type *mfd,
 		j = MDSS_MDP_SSPP_VIG0;
 		for (; j < MDSS_MDP_SSPP_CURSOR0 && mixercfg; j++) {
 			u32 cfg = j * 3;
+
 			if ((j == MDSS_MDP_SSPP_VIG3) ||
 			    (j == MDSS_MDP_SSPP_RGB3)) {
 				/* Add 2 to account for Cursor & Border bits */
@@ -6275,7 +6269,7 @@ static int __vsync_retire_setup(struct msm_fb_data_type *mfd)
 	snprintf(name, sizeof(name), "mdss_fb%d_retire", mfd->index);
 	mfd->mdp_sync_pt_data.timeline_retire = mdss_create_timeline(name);
 	if (mfd->mdp_sync_pt_data.timeline_retire == NULL) {
-		pr_err("cannot vsync create time line");
+		pr_err("cannot vsync create time line\n");
 		return -ENOMEM;
 	}
 
@@ -6422,13 +6416,6 @@ static void mdss_mdp_signal_retire_fence(struct msm_fb_data_type *mfd,
 	pr_debug("Signaled (%d) pending retire fence\n", retire_cnt);
 }
 
-static bool mdss_mdp_is_twm_en(void)
-{
-	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
-
-	return (mdata && mdata->twm_en);
-}
-
 int mdss_mdp_overlay_init(struct msm_fb_data_type *mfd)
 {
 	struct device *dev = mfd->fbi->dev;
@@ -6471,7 +6458,6 @@ int mdss_mdp_overlay_init(struct msm_fb_data_type *mfd)
 	mdp5_interface->signal_retire_fence = mdss_mdp_signal_retire_fence;
 	mdp5_interface->enable_panel_disable_mode =
 		mdss_mdp_enable_panel_disable_mode;
-	mdp5_interface->is_twm_en = mdss_mdp_is_twm_en;
 
 	/*
 	 * Register footswitch control only for primary fb pm
@@ -6658,7 +6644,6 @@ init_fail:
 
 static int mdss_mdp_overlay_fb_parse_dt(struct msm_fb_data_type *mfd)
 {
-	int rc = 0;
 	struct platform_device *pdev = mfd->pdev;
 	struct mdss_overlay_private *mdp5_mdata = mfd_to_mdp5_data(mfd);
 
@@ -6669,7 +6654,7 @@ static int mdss_mdp_overlay_fb_parse_dt(struct msm_fb_data_type *mfd)
 			pdev->name);
 	}
 
-	return rc;
+	return 0;
 }
 
 static int mdss_mdp_scaler_lut_init(struct mdss_data_type *mdata,
@@ -6695,8 +6680,7 @@ static int mdss_mdp_scaler_lut_init(struct mdss_data_type *mdata,
 	}
 
 	if (!qseed3_lut_tbl->dir_lut) {
-		qseed3_lut_tbl->dir_lut = devm_kzalloc(&mdata->pdev->dev,
-				lut_tbl->dir_lut_size,
+		qseed3_lut_tbl->dir_lut = kzalloc(lut_tbl->dir_lut_size,
 				GFP_KERNEL);
 		if (!qseed3_lut_tbl->dir_lut) {
 			ret = -ENOMEM;
@@ -6705,8 +6689,7 @@ static int mdss_mdp_scaler_lut_init(struct mdss_data_type *mdata,
 	}
 
 	if (!qseed3_lut_tbl->cir_lut) {
-		qseed3_lut_tbl->cir_lut = devm_kzalloc(&mdata->pdev->dev,
-				lut_tbl->cir_lut_size,
+		qseed3_lut_tbl->cir_lut = kzalloc(lut_tbl->cir_lut_size,
 				GFP_KERNEL);
 		if (!qseed3_lut_tbl->cir_lut) {
 			ret = -ENOMEM;
@@ -6715,8 +6698,7 @@ static int mdss_mdp_scaler_lut_init(struct mdss_data_type *mdata,
 	}
 
 	if (!qseed3_lut_tbl->sep_lut) {
-		qseed3_lut_tbl->sep_lut = devm_kzalloc(&mdata->pdev->dev,
-				lut_tbl->sep_lut_size,
+		qseed3_lut_tbl->sep_lut = kzalloc(lut_tbl->sep_lut_size,
 				GFP_KERNEL);
 		if (!qseed3_lut_tbl->sep_lut) {
 			ret = -ENOMEM;
@@ -6754,11 +6736,11 @@ static int mdss_mdp_scaler_lut_init(struct mdss_data_type *mdata,
 	return ret;
 
 fail_free_sep_lut:
-	devm_kfree(&mdata->pdev->dev, qseed3_lut_tbl->sep_lut);
+	kfree(qseed3_lut_tbl->sep_lut);
 fail_free_cir_lut:
-	devm_kfree(&mdata->pdev->dev, qseed3_lut_tbl->cir_lut);
+	kfree(qseed3_lut_tbl->cir_lut);
 fail_free_dir_lut:
-	devm_kfree(&mdata->pdev->dev, qseed3_lut_tbl->dir_lut);
+	kfree(qseed3_lut_tbl->dir_lut);
 err:
 	qseed3_lut_tbl->dir_lut = NULL;
 	qseed3_lut_tbl->cir_lut = NULL;

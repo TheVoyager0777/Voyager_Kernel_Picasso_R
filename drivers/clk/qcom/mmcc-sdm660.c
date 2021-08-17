@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2016-2018, 2020 The Linux Foundation. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -34,7 +26,6 @@
 #include "reset.h"
 #include "vdd-level-660.h"
 
-#define F(f, s, h, m, n) { (f), (s), (2 * (h) - 1), (m), (n) }
 #define F_SLEW(f, s, h, m, n, src_freq) { (f), (s), (2 * (h) - 1), (m), (n), \
 				(src_freq) }
 
@@ -331,6 +322,7 @@ static const char * const mmcc_parent_names_12[] = {
 /* Voteable PLL */
 static struct clk_alpha_pll mmpll0_pll_out_main = {
 	.offset = 0xc000,
+	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr = {
 		.enable_reg = 0x1f0,
 		.enable_mask = BIT(0),
@@ -347,6 +339,7 @@ static struct clk_alpha_pll mmpll0_pll_out_main = {
 
 static struct clk_alpha_pll mmpll6_pll_out_main =  {
 	.offset = 0xf0,
+	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr = {
 		.enable_reg = 0x1f0,
 		.enable_mask = BIT(2),
@@ -377,6 +370,7 @@ static const struct alpha_pll_config mmpll10_config = {
 
 static struct clk_alpha_pll mmpll10_pll_out_main = {
 	.offset = 0x190,
+	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr = {
 		.hw.init = &(struct clk_init_data){
 			.name = "mmpll10_pll_out_main",
@@ -404,6 +398,7 @@ static struct clk_alpha_pll mmpll3_pll_out_main = {
 	.offset = 0x0,
 	.vco_table = mmpll3_vco,
 	.num_vco = ARRAY_SIZE(mmpll3_vco),
+	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr = {
 		.hw.init = &(struct clk_init_data){
 			.name = "mmpll3_pll_out_main",
@@ -428,6 +423,7 @@ static struct clk_alpha_pll mmpll4_pll_out_main = {
 	.offset = 0x50,
 	.vco_table = vco,
 	.num_vco = ARRAY_SIZE(vco),
+	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr = {
 		.hw.init = &(struct clk_init_data){
 			.name = "mmpll4_pll_out_main",
@@ -443,7 +439,7 @@ static struct clk_alpha_pll mmpll4_pll_out_main = {
 static const struct alpha_pll_config mmpll5_config = {
 	.l = 0x2a,
 	.config_ctl_val = 0x4001055b,
-	.alpha_u = 0xf8,
+	.alpha_hi = 0xf8,
 	.alpha_en_mask = BIT(24),
 	.vco_val = 0x2 << 20,
 	.vco_mask = 0x3 << 20,
@@ -454,6 +450,7 @@ static struct clk_alpha_pll mmpll5_pll_out_main = {
 	.offset = 0xa0,
 	.vco_table = vco,
 	.num_vco = ARRAY_SIZE(vco),
+	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr = {
 		.hw.init = &(struct clk_init_data){
 			.name = "mmpll5_pll_out_main",
@@ -478,6 +475,7 @@ static struct clk_alpha_pll mmpll7_pll_out_main = {
 	.offset = 0x140,
 	.vco_table = vco,
 	.num_vco = ARRAY_SIZE(vco),
+	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr = {
 		.hw.init = &(struct clk_init_data){
 			.name = "mmpll7_pll_out_main",
@@ -492,7 +490,7 @@ static struct clk_alpha_pll mmpll7_pll_out_main = {
 
 static const struct alpha_pll_config mmpll8_config = {
 	.l = 0x30,
-	.alpha_u = 0x70,
+	.alpha_hi = 0x70,
 	.alpha_en_mask = BIT(24),
 	.config_ctl_val = 0x4001055b,
 	.vco_val = 0x2 << 20,
@@ -504,6 +502,7 @@ static struct clk_alpha_pll mmpll8_pll_out_main = {
 	.offset = 0x1c0,
 	.vco_table = vco,
 	.num_vco = ARRAY_SIZE(vco),
+	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr = {
 		.hw.init = &(struct clk_init_data){
 			.name = "mmpll8_pll_out_main",
@@ -3051,7 +3050,7 @@ static int mmcc_660_probe(struct platform_device *pdev)
 {
 	int ret = 0;
 	struct regmap *regmap;
-	bool is_sdm630 = 0;
+	bool is_sdm630 = false;
 
 	regmap = qcom_cc_map(pdev, &mmcc_660_desc);
 	if (IS_ERR(regmap))

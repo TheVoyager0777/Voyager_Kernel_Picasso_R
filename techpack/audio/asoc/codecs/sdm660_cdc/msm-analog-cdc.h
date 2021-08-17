@@ -1,13 +1,7 @@
-/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2015-2018, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 #ifndef MSM_ANALOG_CDC_H
 #define MSM_ANALOG_CDC_H
@@ -15,8 +9,8 @@
 #include <sound/soc.h>
 #include <sound/jack.h>
 #include <dsp/q6afe-v2.h>
-#include "../wcd-mbhc-v2.h"
-#include "../wcdcal-hwdep.h"
+#include <asoc/wcd-mbhc-v2.h>
+#include <asoc/wcdcal-hwdep.h>
 #include "sdm660-cdc-registers.h"
 
 #define MICBIAS_EXT_BYP_CAP 0x00
@@ -181,7 +175,7 @@ struct sdm660_cdc_priv {
 	struct device *dev;
 	u32 num_of_supplies;
 	struct regulator_bulk_data *supplies;
-	struct snd_soc_codec *codec;
+	struct snd_soc_component *component;
 	struct work_struct msm_anlg_add_child_devices_work;
 	struct msm_dig_ctrl_platform_data dig_plat_data;
 	/* digital codec data structure */
@@ -209,7 +203,8 @@ struct sdm660_cdc_priv {
 	/* cal info for codec */
 	struct fw_info *fw_data;
 	struct notifier_block audio_ssr_nb;
-	int (*codec_spk_ext_pa_cb)(struct snd_soc_codec *codec, int enable);
+	int (*codec_spk_ext_pa_cb)(struct snd_soc_component *component,
+					int enable);
 	unsigned long status_mask;
 	struct wcd_imped_i_ref imped_i_ref;
 	enum wcd_mbhc_imp_det_pin imped_det_pin;
@@ -219,6 +214,7 @@ struct sdm660_cdc_priv {
 	struct platform_device *pdev_child_devices
 		[ANLG_CDC_CHILD_DEVICES_MAX];
 	int child_count;
+	struct regmap *regmap;
 };
 
 struct sdm660_cdc_pdata {
@@ -227,29 +223,30 @@ struct sdm660_cdc_pdata {
 };
 
 #if IS_ENABLED(CONFIG_SND_SOC_ANALOG_CDC)
-extern int msm_anlg_cdc_mclk_enable(struct snd_soc_codec *codec,
+extern int msm_anlg_cdc_mclk_enable(struct snd_soc_component *component,
 				    int mclk_enable, bool dapm);
-extern int msm_anlg_cdc_hs_detect(struct snd_soc_codec *codec,
+extern int msm_anlg_cdc_hs_detect(struct snd_soc_component *component,
 		    struct wcd_mbhc_config *mbhc_cfg);
-extern void msm_anlg_cdc_hs_detect_exit(struct snd_soc_codec *codec);
+extern void msm_anlg_cdc_hs_detect_exit(struct snd_soc_component *component);
 extern void sdm660_cdc_update_int_spk_boost(bool enable);
 extern void msm_anlg_cdc_spk_ext_pa_cb(
-		int (*codec_spk_ext_pa)(struct snd_soc_codec *codec,
-		int enable), struct snd_soc_codec *codec);
+		int (*codec_spk_ext_pa)(struct snd_soc_component *component,
+		int enable), struct snd_soc_component *component);
 int msm_anlg_codec_info_create_codec_entry(struct snd_info_entry *codec_root,
-					   struct snd_soc_codec *codec);
+					   struct snd_soc_component *component);
 #else /* CONFIG_SND_SOC_ANALOG_CDC */
-static inline int msm_anlg_cdc_mclk_enable(struct snd_soc_codec *codec,
+static inline int msm_anlg_cdc_mclk_enable(struct snd_soc_component *component,
 					   int mclk_enable, bool dapm)
 {
 	return 0;
 }
-static inline int msm_anlg_cdc_hs_detect(struct snd_soc_codec *codec,
+static inline int msm_anlg_cdc_hs_detect(struct snd_soc_component *component,
 				struct wcd_mbhc_config *mbhc_cfg)
 {
 	return 0;
 }
-static inline void msm_anlg_cdc_hs_detect_exit(struct snd_soc_codec *codec)
+static inline void msm_anlg_cdc_hs_detect_exit(
+			struct snd_soc_component *component)
 {
 
 }
@@ -258,14 +255,14 @@ static inline void sdm660_cdc_update_int_spk_boost(bool enable)
 
 }
 static inline void msm_anlg_cdc_spk_ext_pa_cb(
-		int (*codec_spk_ext_pa)(struct snd_soc_codec *codec,
-		int enable), struct snd_soc_codec *codec)
+		int (*codec_spk_ext_pa)(struct snd_soc_component *component,
+		int enable), struct snd_soc_component *codec)
 {
 
 }
 static inline int msm_anlg_codec_info_create_codec_entry(
 					struct snd_info_entry *codec_root,
-					struct snd_soc_codec *codec)
+					struct snd_soc_component *component)
 {
 	return 0;
 }

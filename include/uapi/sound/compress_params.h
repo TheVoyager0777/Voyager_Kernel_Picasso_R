@@ -54,8 +54,6 @@
 
 #include <linux/types.h>
 
-#define SND_DEC_DDP_MAX_PARAMS 18
-
 /* Maximum PCM channels */
 #define MAX_PCM_DECODE_CHANNELS 32
 
@@ -291,6 +289,7 @@ struct snd_enc_wma {
 	__u32 avg_bit_rate;
 };
 
+#define SND_ENC_WMA_EXTENTED_SUPPORT
 
 /**
  * struct snd_enc_vorbis
@@ -365,12 +364,6 @@ struct snd_enc_generic {
 	__s32 reserved[15];	/* Can be used for SND_AUDIOCODEC_BESPOKE */
 } __attribute__((packed, aligned(4)));
 
-struct snd_dec_ddp {
-	__u32 params_length;
-	__u32 params_id[SND_DEC_DDP_MAX_PARAMS];
-	__u32 params_value[SND_DEC_DDP_MAX_PARAMS];
-} __attribute__((packed, aligned(4)));
-
 #define SND_DEC_THD_MAX_PARAMS 8
 struct snd_dec_thd {
 	__u32 params_length;
@@ -385,6 +378,8 @@ struct snd_dec_flac {
 	__u16 min_frame_size;
 	__u16 max_frame_size;
 } __attribute__((packed, aligned(4)));
+
+#define SND_DEC_FLAC_SUPPORTED
 
 struct snd_dec_vorbis {
 	__u32 bit_stream_fmt;
@@ -443,14 +438,12 @@ struct snd_dec_pcm {
 struct snd_dec_amrwb_plus {
 	__u32 bit_stream_fmt;
 };
-
 union snd_codec_options {
 	struct snd_enc_wma wma;
 	struct snd_enc_vorbis vorbis;
 	struct snd_enc_real real;
 	struct snd_enc_flac flac;
 	struct snd_enc_generic generic;
-	struct snd_dec_ddp ddp;
 	struct snd_dec_flac flac_dec;
 	struct snd_dec_vorbis vorbis_dec;
 	struct snd_dec_alac alac;
@@ -543,6 +536,7 @@ struct snd_codec {
 	__u32 reserved[1];
 } __attribute__((packed, aligned(4)));
 
+#define SND_CODEC_COMPRESS_PASSTHROUGH
 
 /** struct snd_codec_metadata
  * @length: Length of the encoded buffer.
@@ -556,8 +550,7 @@ struct snd_codec_metadata {
 	__u32 length;
 	__u32 offset;
 	__u64 timestamp;
-	__u32 flags;
-	__u32 reserved[3];
+	__u32 reserved[4];
 };
 
 #endif

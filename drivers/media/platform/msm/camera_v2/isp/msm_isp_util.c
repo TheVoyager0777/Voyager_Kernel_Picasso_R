@@ -1,4 +1,5 @@
-/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -21,8 +22,6 @@
 #include "msm_camera_io_util.h"
 #include "cam_smmu_api.h"
 #include "msm_isp48.h"
-#define CREATE_TRACE_POINTS
-#include "trace/events/msm_cam.h"
 
 #ifndef UINT16_MAX
 #define UINT16_MAX             (65535U)
@@ -127,7 +126,7 @@ int msm_isp_update_bandwidth(enum msm_isp_hw_client client,
 void msm_isp_deinit_bandwidth_mgr(enum msm_isp_hw_client client)
 {
 	if (client >= MAX_ISP_CLIENT) {
-		pr_err("invalid Client id %d", client);
+		pr_err("invalid Client id %d\n", client);
 		return;
 	}
 	mutex_lock(&bandwidth_mgr_mutex);
@@ -717,14 +716,14 @@ static int msm_isp_proc_cmd_list_unlocked(struct vfe_device *vfe_dev, void *arg)
 	struct msm_vfe_cfg_cmd_list cmd, cmd_next;
 
 	if (!vfe_dev || !arg) {
-		pr_err("%s:%d failed: vfe_dev %pK arg %pK", __func__, __LINE__,
-			vfe_dev, arg);
+		pr_err("%s:%d failed: vfe_dev %pK arg %pK\n",
+			__func__, __LINE__, vfe_dev, arg);
 		return -EINVAL;
 	}
 
 	rc = msm_isp_proc_cmd(vfe_dev, &proc_cmd->cfg_cmd);
 	if (rc < 0)
-		pr_err("%s:%d failed: rc %d", __func__, __LINE__, rc);
+		pr_err("%s:%d failed: rc %d\n", __func__, __LINE__, rc);
 
 	cmd = *proc_cmd;
 
@@ -749,7 +748,7 @@ static int msm_isp_proc_cmd_list_unlocked(struct vfe_device *vfe_dev, void *arg)
 
 		rc = msm_isp_proc_cmd(vfe_dev, &cmd_next.cfg_cmd);
 		if (rc < 0)
-			pr_err("%s:%d failed: rc %d", __func__, __LINE__, rc);
+			pr_err("%s:%d failed: rc %d\n", __func__, __LINE__, rc);
 
 		cmd = cmd_next;
 	}
@@ -794,14 +793,14 @@ static int msm_isp_proc_cmd_list_compat(struct vfe_device *vfe_dev, void *arg)
 	struct msm_vfe_cfg_cmd2 current_cmd;
 
 	if (!vfe_dev || !arg) {
-		pr_err("%s:%d failed: vfe_dev %pK arg %pK", __func__, __LINE__,
-			vfe_dev, arg);
+		pr_err("%s:%d failed: vfe_dev %pK arg %pK\n",
+			__func__, __LINE__, vfe_dev, arg);
 		return -EINVAL;
 	}
 	msm_isp_compat_to_proc_cmd(&current_cmd, &proc_cmd->cfg_cmd);
 	rc = msm_isp_proc_cmd(vfe_dev, &current_cmd);
 	if (rc < 0)
-		pr_err("%s:%d failed: rc %d", __func__, __LINE__, rc);
+		pr_err("%s:%d failed: rc %d\n", __func__, __LINE__, rc);
 
 	cmd = *proc_cmd;
 
@@ -828,7 +827,7 @@ static int msm_isp_proc_cmd_list_compat(struct vfe_device *vfe_dev, void *arg)
 
 		rc = msm_isp_proc_cmd(vfe_dev, &current_cmd);
 		if (rc < 0)
-			pr_err("%s:%d failed: rc %d", __func__, __LINE__, rc);
+			pr_err("%s:%d failed: rc %d\n", __func__, __LINE__, rc);
 
 		cmd = cmd_next;
 	}
@@ -1543,17 +1542,11 @@ int msm_isp_proc_cmd(struct vfe_device *vfe_dev, void *arg)
 	}
 	if (proc_cmd->cmd_len > 0 &&
 			proc_cmd->cmd_len <= UINT16_MAX) {
-		cfg_data = kzalloc(proc_cmd->cmd_len, GFP_KERNEL);
-		if (!cfg_data) {
-			rc = -ENOMEM;
-			goto cfg_data_failed;
-		}
-
-		if (copy_from_user(cfg_data,
-			(void __user *)(proc_cmd->cfg_data),
-			proc_cmd->cmd_len)) {
-			rc = -EFAULT;
-			goto copy_cmd_failed;
+		cfg_data = memdup_user((void __user *)(proc_cmd->cfg_data),
+			proc_cmd->cmd_len);
+		if (IS_ERR(cfg_data)) {
+			kfree(reg_cfg_cmd);
+			return PTR_ERR(cfg_data);
 		}
 	} else {
 		pr_debug("%s: Passed cmd_len as 0\n", __func__);
@@ -1570,9 +1563,8 @@ int msm_isp_proc_cmd(struct vfe_device *vfe_dev, void *arg)
 
 copy_cmd_failed:
 	kfree(cfg_data);
-cfg_data_failed:
-	kfree(reg_cfg_cmd);
 reg_cfg_failed:
+	kfree(reg_cfg_cmd);
 	return rc;
 }
 
@@ -2169,9 +2161,6 @@ static void msm_isp_enqueue_tasklet_cmd(struct vfe_device *vfe_dev,
 		return;
 	}
 	atomic_add(1, &vfe_dev->irq_cnt);
-	trace_msm_cam_isp_status_dump("VFE_IRQ:", vfe_dev->pdev->id,
-		vfe_dev->axi_data.src_info[VFE_PIX_0].frame_id,
-		irq_status0, irq_status1, dual_irq_status);
 	queue_cmd->vfeInterruptStatus0 = irq_status0;
 	queue_cmd->vfeInterruptStatus1 = irq_status1;
 	queue_cmd->vfe_pingpong_status = ping_pong_status;
@@ -2309,9 +2298,7 @@ void msm_isp_do_tasklet(unsigned long data)
 		atomic_sub(1, &vfe_dev->irq_cnt);
 		msm_isp_prepare_tasklet_debug_info(vfe_dev,
 			irq_status0, irq_status1, ts);
-		trace_msm_cam_isp_status_dump("VFE_TASKLET:", vfe_dev->pdev->id,
-			vfe_dev->axi_data.src_info[VFE_PIX_0].frame_id,
-			irq_status0, irq_status1, dual_irq_status);
+
 		irq_ops = &vfe_dev->hw_info->vfe_ops.irq_ops;
 		irq_ops->process_reset_irq(vfe_dev,
 			irq_status0, irq_status1);
@@ -2603,9 +2590,6 @@ void msm_isp_irq_debug_dump(struct vfe_device *vfe_dev)
 		flags);
 	dump_index = vfe_dev->common_data->vfe_irq_dump.current_irq_index;
 	for (i = 0; i < MAX_VFE_IRQ_DEBUG_DUMP_SIZE; i++) {
-		trace_msm_cam_ping_pong_debug_dump(
-			vfe_dev->common_data->vfe_irq_dump.irq_debug[
-				dump_index % MAX_VFE_IRQ_DEBUG_DUMP_SIZE]);
 		dump_index++;
 	}
 	spin_unlock_irqrestore(
@@ -2625,9 +2609,6 @@ void msm_isp_tasklet_debug_dump(struct vfe_device *vfe_dev)
 	flags);
 	dump_index = vfe_dev->common_data->vfe_irq_dump.current_tasklet_index;
 	for (i = 0; i < MAX_VFE_IRQ_DEBUG_DUMP_SIZE; i++) {
-		trace_msm_cam_tasklet_debug_dump(
-			vfe_dev->common_data->vfe_irq_dump.tasklet_debug[
-				dump_index % MAX_VFE_IRQ_DEBUG_DUMP_SIZE]);
 		dump_index++;
 	}
 	spin_unlock_irqrestore(
@@ -2638,8 +2619,6 @@ void msm_isp_tasklet_debug_dump(struct vfe_device *vfe_dev)
 void msm_isp_dump_ping_pong_mismatch(struct vfe_device *vfe_dev)
 {
 
-	trace_msm_cam_string(" ***** msm_isp_dump_irq_debug ****");
 	msm_isp_irq_debug_dump(vfe_dev);
-	trace_msm_cam_string(" ***** msm_isp_dump_taskelet_debug ****");
 	msm_isp_tasklet_debug_dump(vfe_dev);
 }

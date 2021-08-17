@@ -5,6 +5,7 @@
 #include <asm/glue-cache.h>
 
 #ifndef MULTI_CACHE
+
 /*
  * These are private to the dma-mapping API.  Do not use directly.
  * Their sole purpose is to ensure that data held in the cache

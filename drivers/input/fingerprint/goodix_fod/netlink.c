@@ -17,7 +17,7 @@
 int stringlength(char *s);
 void sendnlmsg(char *message);
 static int pid = -1;
-struct sock *nl_sk;
+struct sock *nl_sk = NULL;
 
 void sendnlmsg(char *message)
 {

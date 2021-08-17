@@ -1,13 +1,6 @@
-/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt)	"ALG: %s: " fmt, __func__
@@ -721,7 +714,7 @@ void cap_learning_abort(struct cap_learning *cl)
 	pr_debug("Aborting cap_learning\n");
 	cl->active = false;
 	cl->init_cap_uah = 0;
-	mutex_lock(&cl->lock);
+	mutex_unlock(&cl->lock);
 }
 
 /**
@@ -844,19 +837,18 @@ int soh_profile_update(struct soh_profile *sp, int new_soh)
 	union power_supply_propval pval = {0, };
 	int rc, batt_age_level = 0;
 
-	if (!sp->bms_psy)
+	if (!sp || !sp->bms_psy)
 		return -ENODEV;
 
 	if (new_soh <= 0)
 		return 0;
 
-	if (new_soh != sp->last_soh)
+	if (sp->last_soh <= 0)
+		pr_debug("SOH initialized to %d\n", new_soh);
+	else if (new_soh != sp->last_soh)
 		pr_debug("SOH changed from %d to %d\n", sp->last_soh, new_soh);
 
-	if (sp->last_soh <= 0) {
-		sp->last_soh = new_soh;
-		pr_debug("SOH initialized to %d\n", sp->last_soh);
-	}
+	sp->last_soh = new_soh;
 
 	rc = soh_get_batt_age_level(sp, new_soh, &batt_age_level);
 	if (rc < 0)
@@ -1053,6 +1045,32 @@ static int get_step_chg_current_window(struct ttf *ttf)
 	return curr_window;
 }
 
+static int get_cc2cv_current(struct ttf *ttf, int ibatt_avg, int vbatt_avg,
+				int float_volt_uv)
+{
+	int i_cc2cv = 0;
+
+	switch (ttf->mode) {
+	case TTF_MODE_NORMAL:
+	case TTF_MODE_VBAT_STEP_CHG:
+	case TTF_MODE_OCV_STEP_CHG:
+		i_cc2cv = ibatt_avg * vbatt_avg /
+			max(MILLI_UNIT, float_volt_uv / MILLI_UNIT);
+		break;
+	case TTF_MODE_QNOVO:
+		i_cc2cv = min(
+			ttf->cc_step.arr[MAX_CC_STEPS - 1] / MILLI_UNIT,
+			ibatt_avg * vbatt_avg /
+			max(MILLI_UNIT, float_volt_uv / MILLI_UNIT));
+		break;
+	default:
+		pr_err("TTF mode %d is not supported\n", ttf->mode);
+		break;
+	}
+
+	return i_cc2cv;
+}
+
 static int get_time_to_full_locked(struct ttf *ttf, int *val)
 {
 	struct step_chg_data *step_chg_data = ttf->step_chg_data;
@@ -1115,7 +1133,10 @@ static int get_time_to_full_locked(struct ttf *ttf, int *val)
 
 	/* at least 10 samples are required to produce a stable IBATT */
 	if (ttf->ibatt.size < MAX_TTF_SAMPLES) {
-		*val = -1;
+		if (ttf->clear_ibatt)
+			*val = ttf->last_ttf;
+		else
+			*val = -1;
 		return 0;
 	}
 
@@ -1131,6 +1152,7 @@ static int get_time_to_full_locked(struct ttf *ttf, int *val)
 		return rc;
 	}
 
+	ttf->clear_ibatt = false;
 	ibatt_avg = -ibatt_avg / MILLI_UNIT;
 	vbatt_avg /= MILLI_UNIT;
 
@@ -1174,23 +1196,7 @@ static int get_time_to_full_locked(struct ttf *ttf, int *val)
 	pr_debug("TTF: mode: %d\n", ttf->mode);
 
 	/* estimated battery current at the CC to CV transition */
-	switch (ttf->mode) {
-	case TTF_MODE_NORMAL:
-	case TTF_MODE_VBAT_STEP_CHG:
-	case TTF_MODE_OCV_STEP_CHG:
-		i_cc2cv = ibatt_avg * vbatt_avg /
-			max(MILLI_UNIT, float_volt_uv / MILLI_UNIT);
-		break;
-	case TTF_MODE_QNOVO:
-		i_cc2cv = min(
-			ttf->cc_step.arr[MAX_CC_STEPS - 1] / MILLI_UNIT,
-			ibatt_avg * vbatt_avg /
-			max(MILLI_UNIT, float_volt_uv / MILLI_UNIT));
-		break;
-	default:
-		pr_err("TTF mode %d is not supported\n", ttf->mode);
-		break;
-	}
+	i_cc2cv = get_cc2cv_current(ttf, ibatt_avg, vbatt_avg, float_volt_uv);
 	pr_debug("TTF: i_cc2cv=%d\n", i_cc2cv);
 
 	/* if we are already in CV state then we can skip estimating CC */
@@ -1407,7 +1413,8 @@ static void ttf_work(struct work_struct *work)
 {
 	struct ttf *ttf = container_of(work,
 				struct ttf, ttf_work.work);
-	int rc, ibatt_now, vbatt_now, ttf_now, charge_status, ibatt_avg;
+	int rc, ibatt_now, vbatt_now, ttf_now, charge_status, ibatt_avg,
+		msoc = 0, charge_done;
 	ktime_t ktime_now;
 
 	mutex_lock(&ttf->lock);
@@ -1416,8 +1423,24 @@ static void ttf_work(struct work_struct *work)
 		pr_err("failed to get charge_status rc=%d\n", rc);
 		goto end_work;
 	}
-	if (charge_status != POWER_SUPPLY_STATUS_CHARGING &&
-			charge_status != POWER_SUPPLY_STATUS_DISCHARGING)
+
+	rc =  ttf->get_ttf_param(ttf->data, TTF_CHG_DONE, &charge_done);
+	if (rc < 0) {
+		pr_err("failed to get charge_done rc=%d\n", rc);
+		goto end_work;
+	}
+
+	rc =  ttf->get_ttf_param(ttf->data, TTF_MSOC, &msoc);
+	if (rc < 0) {
+		pr_err("failed to get msoc, rc=%d\n", rc);
+		goto end_work;
+	}
+	pr_debug("TTF: charge_status:%d charge_done:%d msoc:%d\n",
+			charge_status, charge_done, msoc);
+	/* Do not schedule ttf work if SOC is 100% or charge teminated. */
+	if (charge_done ||
+		((msoc == 100) &&
+			(charge_status == POWER_SUPPLY_STATUS_CHARGING)))
 		goto end_work;
 
 	rc =  ttf->get_ttf_param(ttf->data, TTF_IBAT, &ibatt_now);
@@ -1452,6 +1475,7 @@ static void ttf_work(struct work_struct *work)
 			pr_debug("Clear Ibatt buffer, Ibatt_avg=%d Ibatt_now=%d\n",
 					ibatt_avg, ibatt_now);
 			ttf_circ_buf_clr(&ttf->ibatt);
+			ttf->clear_ibatt = true;
 		}
 
 		rc = get_time_to_full_locked(ttf, &ttf_now);
@@ -1461,7 +1485,7 @@ static void ttf_work(struct work_struct *work)
 		}
 
 		/* keep the wake lock and prime the IBATT and VBATT buffers */
-		if (ttf_now < 0) {
+		if (ttf_now < 0 || ttf->clear_ibatt) {
 			/* delay for one FG cycle */
 			schedule_delayed_work(&ttf->ttf_work,
 					msecs_to_jiffies(1000));
@@ -1521,15 +1545,18 @@ int ttf_get_time_to_empty(struct ttf *ttf, int *val)
 		return 0;
 	}
 
+	mutex_lock(&ttf->lock);
 	rc = ttf_circ_buf_median(&ttf->ibatt, &ibatt_avg);
 	if (rc < 0) {
 		/* try to get instantaneous current */
 		rc = ttf->get_ttf_param(ttf->data, TTF_IBAT, &ibatt_avg);
 		if (rc < 0) {
 			pr_err("failed to get battery current, rc=%d\n", rc);
+			mutex_unlock(&ttf->lock);
 			return rc;
 		}
 	}
+	mutex_unlock(&ttf->lock);
 
 	ibatt_avg /= MILLI_UNIT;
 	/* clamp ibatt_avg to 100mA */

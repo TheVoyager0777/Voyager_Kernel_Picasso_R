@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2013-2018, 2019-2020, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "bw-hwmon: " fmt
@@ -70,6 +62,7 @@ struct hwmon_node {
 	ktime_t hist_max_ts;
 	bool sampled;
 	bool mon_started;
+	bool init_pending;
 	struct list_head list;
 	void *orig_data;
 	struct bw_hwmon *hw;
@@ -94,7 +87,7 @@ static ssize_t show_##name(struct device *dev,				\
 {									\
 	struct devfreq *df = to_devfreq(dev);				\
 	struct hwmon_node *hw = df->data;				\
-	return snprintf(buf, PAGE_SIZE, "%u\n", hw->name);		\
+	return scnprintf(buf, PAGE_SIZE, "%u\n", hw->name);		\
 }
 
 #define store_attr(name, _min, _max) \
@@ -129,8 +122,8 @@ static ssize_t show_list_##name(struct device *dev,			\
 	unsigned int i, cnt = 0;					\
 									\
 	for (i = 0; i < n && hw->name[i]; i++)				\
-		cnt += snprintf(buf + cnt, PAGE_SIZE, "%u ", hw->name[i]);\
-	cnt += snprintf(buf + cnt, PAGE_SIZE, "\n");			\
+		cnt += scnprintf(buf + cnt, PAGE_SIZE, "%u ", hw->name[i]);\
+	cnt += scnprintf(buf + cnt, PAGE_SIZE, "\n");			\
 	return cnt;							\
 }
 
@@ -547,8 +540,15 @@ static int start_monitor(struct devfreq *df, bool init)
 	unsigned long mbps;
 	int ret;
 
-	node->prev_ts = ktime_get();
+	if (init && df->dev_suspended) {
+		node->init_pending = true;
+		return 0;
+	} else if (!init && node->init_pending) {
+		init = true;
+		node->init_pending = false;
+	}
 
+	node->prev_ts = ktime_get();
 	if (init) {
 		node->prev_ab = 0;
 		node->resume_freq = 0;
@@ -588,7 +588,8 @@ static void stop_monitor(struct devfreq *df, bool init)
 
 	if (init) {
 		devfreq_monitor_stop(df);
-		hw->stop_hwmon(hw);
+		if (!df->dev_suspended)
+			hw->stop_hwmon(hw);
 	} else {
 		devfreq_monitor_suspend(df);
 		hw->suspend_hwmon(hw);
@@ -712,21 +713,22 @@ static int devfreq_bw_hwmon_get_freq(struct devfreq *df,
 {
 	struct hwmon_node *node = df->data;
 
+	if (!node)
+		return -EINVAL;
+
 	/* Suspend/resume sequence */
-	if (node && !node->mon_started) {
+	if (!node->mon_started || df->dev_suspended) {
 		*freq = node->resume_freq;
 		*node->dev_ab = node->resume_ab;
 		return 0;
 	}
-	if (!node)
-		return -ENODEV;
 
 	get_bw_and_set_irq(node, freq, node->dev_ab);
 
 	return 0;
 }
 
-static ssize_t store_throttle_adj(struct device *dev,
+static ssize_t throttle_adj_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct devfreq *df = to_devfreq(dev);
@@ -749,7 +751,7 @@ static ssize_t store_throttle_adj(struct device *dev,
 		return ret;
 }
 
-static ssize_t show_throttle_adj(struct device *dev,
+static ssize_t throttle_adj_show(struct device *dev,
 			struct device_attribute *attr, char *buf)
 {
 	struct devfreq *df = to_devfreq(dev);
@@ -764,8 +766,7 @@ static ssize_t show_throttle_adj(struct device *dev,
 	return snprintf(buf, PAGE_SIZE, "%u\n", val);
 }
 
-static DEVICE_ATTR(throttle_adj, 0644, show_throttle_adj,
-						store_throttle_adj);
+static DEVICE_ATTR_RW(throttle_adj);
 
 static ssize_t sample_ms_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t count)
@@ -801,7 +802,7 @@ static DEVICE_ATTR_RW(sample_ms);
 
 gov_attr(guard_band_mbps, 0U, 2000U);
 gov_attr(decay_rate, 0U, 100U);
-gov_attr(io_percent, 1U, 100U);
+gov_attr(io_percent, 1U, 400U);
 gov_attr(bw_step, 50U, 1000U);
 gov_attr(up_scale, 0U, 500U);
 gov_attr(up_thres, 1U, 100U);
@@ -887,6 +888,15 @@ static int devfreq_bw_hwmon_ev_handler(struct devfreq *df,
 		 * is happening.
 		 */
 		hw = node->hw;
+
+		if (!node->mon_started || df->dev_suspended) {
+			devfreq_interval_update(df, &sample_ms);
+			break;
+		}
+		mutex_lock(&node->mon_lock);
+		node->mon_started = false;
+		mutex_unlock(&node->mon_lock);
+
 		hw->suspend_hwmon(hw);
 		devfreq_interval_update(df, &sample_ms);
 		ret = hw->resume_hwmon(hw);
@@ -895,6 +905,9 @@ static int devfreq_bw_hwmon_ev_handler(struct devfreq *df,
 				"Unable to resume HW monitor (%d)\n", ret);
 			goto out;
 		}
+		mutex_lock(&node->mon_lock);
+		node->mon_started = true;
+		mutex_unlock(&node->mon_lock);
 		break;
 
 	case DEVFREQ_GOV_SUSPEND:

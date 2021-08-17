@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "%s: " fmt, __func__
@@ -33,6 +25,7 @@
 #include <linux/regmap.h>
 #include <linux/uaccess.h>
 #include <linux/sched.h>
+#include <linux/slab.h>
 #include <soc/qcom/scm.h>
 #include <dt-bindings/clock/qcom,cpu-osm.h>
 
@@ -917,12 +910,12 @@ static int clk_osm_get_lut(struct platform_device *pdev,
 
 	num_rows = total_elems / NUM_FIELDS;
 
-	fmax_temp = devm_kzalloc(&pdev->dev, num_rows * sizeof(unsigned long),
+	fmax_temp = kcalloc(num_rows, sizeof(unsigned long),
 					GFP_KERNEL);
 	if (!fmax_temp)
 		return -ENOMEM;
 
-	array = devm_kzalloc(&pdev->dev, prop_len, GFP_KERNEL);
+	array = kzalloc(prop_len, GFP_KERNEL);
 	if (!array)
 		return -ENOMEM;
 
@@ -982,8 +975,8 @@ static int clk_osm_get_lut(struct platform_device *pdev,
 
 	osm_clks_init[c->cluster_num].num_rate_max = k;
 exit:
-	devm_kfree(&pdev->dev, fmax_temp);
-	devm_kfree(&pdev->dev, array);
+	kfree(fmax_temp);
+	kfree(array);
 	return rc;
 }
 
@@ -993,7 +986,7 @@ static int clk_osm_parse_dt_configs(struct platform_device *pdev)
 	u32 *array;
 	int i, rc = 0;
 
-	array = devm_kzalloc(&pdev->dev, MAX_CLUSTER_CNT * sizeof(u32),
+	array = kcalloc(MAX_CLUSTER_CNT, sizeof(u32),
 			     GFP_KERNEL);
 	if (!array)
 		return -ENOMEM;
@@ -1219,7 +1212,7 @@ static int clk_osm_parse_dt_configs(struct platform_device *pdev)
 	perfcl_clk.pc_fsm_en = pwrcl_clk.pc_fsm_en =
 		of_property_read_bool(of, "qcom,pc-fsm-en");
 
-	devm_kfree(&pdev->dev, array);
+	kfree(array);
 
 	perfcl_clk.secure_init = pwrcl_clk.secure_init =
 		of_property_read_bool(pdev->dev.of_node, "qcom,osm-no-tz");
@@ -1277,7 +1270,7 @@ static int clk_osm_resources_init(struct platform_device *pdev)
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "osm");
 	if (!res) {
 		dev_err(&pdev->dev,
-			"Unable to get platform resource for osm");
+			"Unable to get platform resource for osm\n");
 		return -ENOMEM;
 	}
 
@@ -1432,7 +1425,7 @@ static int clk_osm_resources_init(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to map %s debug register\n",
 						clk_panic_reg_names[2]);
 		return -ENOMEM;
-	};
+	}
 
 	perfcl_clk.debug_regs[0] = devm_ioremap(&pdev->dev,
 						perfcl_clk.pbases[OSM_BASE] +
@@ -1461,7 +1454,7 @@ static int clk_osm_resources_init(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Failed to map %s debug register\n",
 						clk_panic_reg_names[2]);
 		return -ENOMEM;
-	};
+	}
 
 	vdd_pwrcl = devm_regulator_get(&pdev->dev, "vdd-pwrcl");
 	if (IS_ERR(vdd_pwrcl)) {
@@ -1715,7 +1708,7 @@ static int clk_osm_set_cc_policy(struct platform_device *pdev)
 	u32 *array;
 	struct device_node *of = pdev->dev.of_node;
 
-	array = devm_kzalloc(&pdev->dev, MAX_CLUSTER_CNT * sizeof(u32),
+	array = kcalloc(MAX_CLUSTER_CNT, sizeof(u32),
 			     GFP_KERNEL);
 	if (!array)
 		return -ENOMEM;
@@ -1796,7 +1789,7 @@ static int clk_osm_set_cc_policy(struct platform_device *pdev)
 	/* Wait for the writes to complete */
 	clk_osm_mb(&perfcl_clk, OSM_BASE);
 
-	devm_kfree(&pdev->dev, array);
+	kfree(array);
 	return 0;
 }
 
@@ -1826,7 +1819,7 @@ static int clk_osm_set_llm_freq_policy(struct platform_device *pdev)
 	u32 *array;
 	int rc = 0, val, regval;
 
-	array = devm_kzalloc(&pdev->dev, MAX_CLUSTER_CNT * sizeof(u32),
+	array = kcalloc(MAX_CLUSTER_CNT, sizeof(u32),
 			     GFP_KERNEL);
 	if (!array)
 		return -ENOMEM;
@@ -1891,7 +1884,7 @@ static int clk_osm_set_llm_freq_policy(struct platform_device *pdev)
 	/* Wait for the write to complete */
 	clk_osm_mb(&perfcl_clk, OSM_BASE);
 
-	devm_kfree(&pdev->dev, array);
+	kfree(array);
 	return 0;
 }
 
@@ -1901,7 +1894,7 @@ static int clk_osm_set_llm_volt_policy(struct platform_device *pdev)
 	u32 *array;
 	int rc = 0, val, regval;
 
-	array = devm_kzalloc(&pdev->dev, MAX_CLUSTER_CNT * sizeof(u32),
+	array = kcalloc(MAX_CLUSTER_CNT, sizeof(u32),
 			     GFP_KERNEL);
 	if (!array)
 		return -ENOMEM;
@@ -1966,7 +1959,7 @@ static int clk_osm_set_llm_volt_policy(struct platform_device *pdev)
 	/* Wait for the writes to complete */
 	clk_osm_mb(&perfcl_clk, OSM_BASE);
 
-	devm_kfree(&pdev->dev, array);
+	kfree(array);
 	return 0;
 }
 
@@ -2579,7 +2572,7 @@ static int debugfs_set_trace_enable(void *data, u64 val)
 	c->trace_en = val ? true : false;
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(debugfs_trace_enable_fops,
+DEFINE_DEBUGFS_ATTRIBUTE(debugfs_trace_enable_fops,
 			debugfs_get_trace_enable,
 			debugfs_set_trace_enable,
 			"%llu\n");
@@ -2605,7 +2598,7 @@ static int debugfs_set_wdog_trace(void *data, u64 val)
 
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(debugfs_trace_wdog_enable_fops,
+DEFINE_DEBUGFS_ATTRIBUTE(debugfs_trace_wdog_enable_fops,
 			debugfs_get_wdog_trace,
 			debugfs_set_wdog_trace,
 			"%llu\n");
@@ -2689,9 +2682,9 @@ static ssize_t debugfs_trace_method_get(struct file *file, char __user *buf,
 	mutex_lock(&debug_buf_mutex);
 
 	if (c->trace_method == PERIODIC_PACKET)
-		len = snprintf(debug_buf, sizeof(debug_buf), "periodic\n");
+		len = scnprintf(debug_buf, sizeof(debug_buf), "periodic\n");
 	else if (c->trace_method == XOR_PACKET)
-		len = snprintf(debug_buf, sizeof(debug_buf), "xor\n");
+		len = scnprintf(debug_buf, sizeof(debug_buf), "xor\n");
 
 	rc = simple_read_from_buffer((void __user *) buf, count, ppos,
 				     (void *) debug_buf, len);
@@ -2741,7 +2734,7 @@ static int debugfs_set_trace_packet_id(void *data, u64 val)
 	c->trace_id = val;
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(debugfs_trace_packet_id_fops,
+DEFINE_DEBUGFS_ATTRIBUTE(debugfs_trace_packet_id_fops,
 			debugfs_get_trace_packet_id,
 			debugfs_set_trace_packet_id,
 			"%llu\n");
@@ -2769,7 +2762,7 @@ static int debugfs_set_trace_periodic_timer(void *data, u64 val)
 	c->trace_periodic_timer = val;
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(debugfs_trace_periodic_timer_fops,
+DEFINE_DEBUGFS_ATTRIBUTE(debugfs_trace_periodic_timer_fops,
 			debugfs_get_trace_periodic_timer,
 			debugfs_set_trace_periodic_timer,
 			"%llu\n");
@@ -2790,7 +2783,7 @@ static int debugfs_set_perf_state_met_irq(void *data, u64 val)
 			  DCVS_PERF_STATE_MET_INTR_EN);
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(debugfs_perf_state_met_irq_fops,
+DEFINE_DEBUGFS_ATTRIBUTE(debugfs_perf_state_met_irq_fops,
 			debugfs_get_perf_state_met_irq,
 			debugfs_set_perf_state_met_irq,
 			"%llu\n");
@@ -2812,7 +2805,7 @@ static int debugfs_set_perf_state_deviation_irq(void *data, u64 val)
 			  DCVS_PERF_STATE_DEVIATION_INTR_EN);
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(debugfs_perf_state_deviation_irq_fops,
+DEFINE_DEBUGFS_ATTRIBUTE(debugfs_perf_state_deviation_irq_fops,
 			debugfs_get_perf_state_deviation_irq,
 			debugfs_set_perf_state_deviation_irq,
 			"%llu\n");
@@ -2834,7 +2827,7 @@ static int debugfs_set_perf_state_deviation_corrected_irq(void *data, u64 val)
 		      DCVS_PERF_STATE_DEVIATION_CORRECTED_INTR_EN);
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(debugfs_perf_state_deviation_corrected_irq_fops,
+DEFINE_DEBUGFS_ATTRIBUTE(debugfs_perf_state_deviation_corrected_irq_fops,
 			debugfs_get_perf_state_deviation_corrected_irq,
 			debugfs_set_perf_state_deviation_corrected_irq,
 			"%llu\n");
@@ -2873,7 +2866,7 @@ static int debugfs_set_debug_reg(void *data, u64 val)
 
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(debugfs_acd_debug_reg_fops,
+DEFINE_DEBUGFS_ATTRIBUTE(debugfs_acd_debug_reg_fops,
 			debugfs_get_debug_reg,
 			debugfs_set_debug_reg,
 			"0x%llx\n");
@@ -2907,7 +2900,7 @@ static int debugfs_set_debug_reg_addr(void *data, u64 val)
 	c->acd_debugfs_addr = val;
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(debugfs_acd_debug_reg_addr_fops,
+DEFINE_DEBUGFS_ATTRIBUTE(debugfs_acd_debug_reg_addr_fops,
 			debugfs_get_debug_reg_addr,
 			debugfs_set_debug_reg_addr,
 			"%llu\n");
@@ -3129,7 +3122,7 @@ static int clk_cpu_osm_driver_probe(struct platform_device *pdev)
 {
 	int rc = 0, cpu, i;
 	int speedbin = 0, pvs_ver = 0;
-	bool is_sdm630 = 0;
+	bool is_sdm630 = false;
 	u32 pte_efuse;
 	int num_clks = ARRAY_SIZE(osm_qcom_clk_hws);
 	struct clk *clk;
@@ -3163,12 +3156,12 @@ static int clk_cpu_osm_driver_probe(struct platform_device *pdev)
 	clk_data = devm_kzalloc(&pdev->dev, sizeof(struct clk_onecell_data),
 								GFP_KERNEL);
 	if (!clk_data)
-		goto exit;
+		return -ENOMEM;
 
 	clk_data->clks = devm_kzalloc(&pdev->dev, (num_clks *
 					sizeof(struct clk *)), GFP_KERNEL);
 	if (!clk_data->clks)
-		goto clk_err;
+		return -ENOMEM;
 
 	clk_data->clk_num = num_clks;
 
@@ -3271,21 +3264,21 @@ static int clk_cpu_osm_driver_probe(struct platform_device *pdev)
 	/* Policy tuning */
 	rc = clk_osm_set_cc_policy(pdev);
 	if (rc < 0) {
-		dev_err(&pdev->dev, "cc policy setup failed");
+		dev_err(&pdev->dev, "cc policy setup failed\n");
 		goto exit;
 	}
 
 	/* LLM Freq Policy Tuning */
 	rc = clk_osm_set_llm_freq_policy(pdev);
 	if (rc < 0) {
-		dev_err(&pdev->dev, "LLM Frequency Policy setup failed");
+		dev_err(&pdev->dev, "LLM Frequency Policy setup failed\n");
 		goto exit;
 	}
 
 	/* LLM Voltage Policy Tuning */
 	rc = clk_osm_set_llm_volt_policy(pdev);
 	if (rc < 0) {
-		dev_err(&pdev->dev, "Failed to set LLM voltage Policy");
+		dev_err(&pdev->dev, "Failed to set LLM voltage Policy\n");
 		goto exit;
 	}
 
@@ -3345,7 +3338,7 @@ static int clk_cpu_osm_driver_probe(struct platform_device *pdev)
 								clk_data);
 	if (rc) {
 		dev_err(&pdev->dev, "Unable to register CPU clocks\n");
-			goto provider_err;
+			goto exit;
 	}
 
 	/*
@@ -3428,14 +3421,9 @@ static int clk_cpu_osm_driver_probe(struct platform_device *pdev)
 
 exit2:
 	clk_disable_unprepare(sys_apcsaux_clk_gcc.hw.clk);
-provider_err:
-	if (clk_data)
-		devm_kfree(&pdev->dev, clk_data->clks);
-clk_err:
-	devm_kfree(&pdev->dev, clk_data);
 exit:
 	dev_err(&pdev->dev, "OSM driver failed to initialize, rc=%d\n", rc);
-	panic("Unable to Setup OSM");
+	return rc;
 }
 
 static const struct of_device_id match_table[] = {
@@ -3449,7 +3437,6 @@ static struct platform_driver clk_cpu_osm_driver = {
 	.driver = {
 		.name = "clk-cpu-osm",
 		.of_match_table = match_table,
-		.owner = THIS_MODULE,
 	},
 };
 

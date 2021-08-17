@@ -1,15 +1,8 @@
-/* QTI crypto Driver
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * QTI crypto Driver
  *
- * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  */
 
 #ifndef __CRYPTO_MSM_QCEDEVI_H
@@ -48,7 +41,7 @@ struct	qcedev_sha_ctxt {
 	uint32_t	auth_data[4];
 	uint8_t	digest[QCEDEV_MAX_SHA_DIGEST];
 	uint32_t	diglen;
-	uint8_t	trailing_buf[64];
+	uint8_t	trailing_buf[QCEDEV_MAX_SHA_BLOCK_SIZE];
 	uint32_t	trailing_buf_len;
 	uint8_t	first_blk;
 	uint8_t	last_blk;

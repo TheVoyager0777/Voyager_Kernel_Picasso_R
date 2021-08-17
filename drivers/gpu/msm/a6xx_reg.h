@@ -1,14 +1,6 @@
-/* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _A6XX_REG_H
@@ -66,6 +58,7 @@
 #define A6XX_CP_SQE_INSTR_BASE_LO        0x830
 #define A6XX_CP_SQE_INSTR_BASE_HI        0x831
 #define A6XX_CP_MISC_CNTL                0x840
+#define A6XX_CP_APRIV_CNTL               0X844
 #define A6XX_CP_ROQ_THRESHOLDS_1         0x8C1
 #define A6XX_CP_ROQ_THRESHOLDS_2         0x8C2
 #define A6XX_CP_MEM_POOL_SIZE            0x8C3
@@ -398,9 +391,41 @@
 #define A6XX_RBBM_PERFCTR_RBBM_SEL_2             0x509
 #define A6XX_RBBM_PERFCTR_RBBM_SEL_3             0x50A
 #define A6XX_RBBM_PERFCTR_GPU_BUSY_MASKED        0x50B
+#define A6XX_RBBM_PERFCTR_MHUB_0_LO              0x512
+#define A6XX_RBBM_PERFCTR_MHUB_0_HI              0x513
+#define A6XX_RBBM_PERFCTR_MHUB_1_LO              0x514
+#define A6XX_RBBM_PERFCTR_MHUB_1_HI              0x515
+#define A6XX_RBBM_PERFCTR_MHUB_2_LO              0x516
+#define A6XX_RBBM_PERFCTR_MHUB_2_HI              0x517
+#define A6XX_RBBM_PERFCTR_MHUB_3_LO              0x518
+#define A6XX_RBBM_PERFCTR_MHUB_3_HI              0x519
+#define A6XX_RBBM_PERFCTR_FCHE_0_LO              0x51A
+#define A6XX_RBBM_PERFCTR_FCHE_0_HI              0x51B
+#define A6XX_RBBM_PERFCTR_FCHE_1_LO              0x51C
+#define A6XX_RBBM_PERFCTR_FCHE_1_HI              0x51D
+#define A6XX_RBBM_PERFCTR_FCHE_2_LO              0x51E
+#define A6XX_RBBM_PERFCTR_FCHE_2_HI              0x51F
+#define A6XX_RBBM_PERFCTR_FCHE_3_LO              0x520
+#define A6XX_RBBM_PERFCTR_FCHE_3_HI              0x521
+#define A6XX_RBBM_PERFCTR_GLC_0_LO               0x522
+#define A6XX_RBBM_PERFCTR_GLC_0_HI               0x523
+#define A6XX_RBBM_PERFCTR_GLC_1_LO               0x524
+#define A6XX_RBBM_PERFCTR_GLC_1_HI               0x525
+#define A6XX_RBBM_PERFCTR_GLC_2_LO               0x526
+#define A6XX_RBBM_PERFCTR_GLC_2_HI               0x527
+#define A6XX_RBBM_PERFCTR_GLC_3_LO               0x528
+#define A6XX_RBBM_PERFCTR_GLC_3_HI               0x529
+#define A6XX_RBBM_PERFCTR_GLC_4_LO               0x52A
+#define A6XX_RBBM_PERFCTR_GLC_4_HI               0x52B
+#define A6XX_RBBM_PERFCTR_GLC_5_LO               0x52C
+#define A6XX_RBBM_PERFCTR_GLC_5_HI               0x52D
+#define A6XX_RBBM_PERFCTR_GLC_6_LO               0x52E
+#define A6XX_RBBM_PERFCTR_GLC_6_HI               0x52F
+#define A6XX_RBBM_PERFCTR_GLC_7_LO               0x530
+#define A6XX_RBBM_PERFCTR_GLC_7_HI               0x531
 
 #define A6XX_RBBM_ISDB_CNT                       0x533
-#define A6XX_RBBM_NC_MODE_CNTL                   0x534
+#define A6XX_RBBM_NC_MODE_CNTL                   0X534
 
 #define A6XX_RBBM_SECVID_TRUST_CNTL              0xF400
 #define A6XX_RBBM_SECVID_TSB_TRUSTED_BASE_LO     0xF800
@@ -534,30 +559,15 @@
 #define A6XX_RBBM_CLOCK_MODE_HLSQ	 0x0011b
 #define A6XX_RBBM_CLOCK_DELAY_HLSQ       0x0011c
 #define A6XX_RBBM_CLOCK_HYST_HLSQ        0x0011d
-
-/* ISDB SP0 and SP1 registers */
-#define A6XX_SP0_ISDB_ISDB_EN                           0xf40001
-#define A6XX_SP0_ISDB_ISDB_BRKPT_CFG                    0xf40005
-#define A6XX_SP0_ISDB_ISDB_SHADER_ID_CFG                0xf40006
-#define A6XX_SP0_ISDB_ISDB_WAVE_ID_CFG                  0xf40007
-#define A6XX_SP0_ISDB_ISDB_SAC_CFG                      0xf40024
-#define A6XX_SP0_ISDB_ISDB_SAC_ADDR_0                   0xf40020
-#define A6XX_SP0_ISDB_ISDB_SAC_ADDR_1                   0xf40021
-#define A6XX_SP0_ISDB_ISDB_SAC_MASK_0                   0xf40022
-#define A6XX_SP0_ISDB_ISDB_SAC_MASK_1                   0xf40023
-#define A6XX_HLSQ_ISDB_ISDB_HLSQ_ISDB_CL_WGID_CTRL      0xf44000
-#define A6XX_HLSQ_ISDB_ISDB_HLSQ_ISDB_CL_WGID_X         0xf44001
-#define A6XX_HLSQ_ISDB_ISDB_HLSQ_ISDB_CL_WGID_Y         0xf44002
-#define A6XX_HLSQ_ISDB_ISDB_HLSQ_ISDB_CL_WGID_Z         0xf44003
-#define A6XX_SP1_ISDB_ISDB_EN                           0xf40401
-#define A6XX_SP1_ISDB_ISDB_SAC_CFG                      0xf40424
-#define A6XX_SP1_ISDB_ISDB_SAC_ADDR_0                   0xf40420
-#define A6XX_SP1_ISDB_ISDB_SAC_ADDR_1                   0xf40421
-#define A6XX_SP1_ISDB_ISDB_SAC_MASK_0                   0xf40422
-#define A6XX_SP1_ISDB_ISDB_SAC_MASK_1                   0xf40423
-#define A6XX_SP1_ISDB_ISDB_SHADER_ID_CFG                0xf40406
-#define A6XX_SP1_ISDB_ISDB_WAVE_ID_CFG                  0xf40407
-#define A6XX_SP1_ISDB_ISDB_BRKPT_CFG                    0xf40405
+#define A6XX_RBBM_CLOCK_CNTL_FCHE        0x00123
+#define A6XX_RBBM_CLOCK_DELAY_FCHE       0x00124
+#define A6XX_RBBM_CLOCK_HYST_FCHE        0x00125
+#define A6XX_RBBM_CLOCK_CNTL_GLC         0x0012B
+#define A6XX_RBBM_CLOCK_DELAY_GLC        0x00129
+#define A6XX_RBBM_CLOCK_HYST_GLC         0x0012A
+#define A6XX_RBBM_CLOCK_CNTL_MHUB        0x00126
+#define A6XX_RBBM_CLOCK_DELAY_MHUB       0x00127
+#define A6XX_RBBM_CLOCK_HYST_MHUB        0x00128
 
 /* DBGC_CFG registers */
 #define A6XX_DBGC_CFG_DBGBUS_SEL_A                  0x600
@@ -677,6 +687,22 @@
 #define A6XX_RB_RB_SUB_BLOCK_SEL_CNTL_HOST  0x8E3B
 #define A6XX_RB_RB_SUB_BLOCK_SEL_CNTL_CD    0x8E3D
 #define A6XX_RB_CONTEXT_SWITCH_GMEM_SAVE_RESTORE 0x8E50
+#define A6XX_RB_PERFCTR_GLC_SEL_0            0x8E90
+#define A6XX_RB_PERFCTR_GLC_SEL_1            0x8E91
+#define A6XX_RB_PERFCTR_GLC_SEL_2            0x8E92
+#define A6XX_RB_PERFCTR_GLC_SEL_3            0x8E93
+#define A6XX_RB_PERFCTR_GLC_SEL_4            0x8E94
+#define A6XX_RB_PERFCTR_GLC_SEL_5            0x8E95
+#define A6XX_RB_PERFCTR_GLC_SEL_6            0x8E96
+#define A6XX_RB_PERFCTR_GLC_SEL_7            0x8E97
+#define A6XX_RB_PERFCTR_MHUB_SEL_0           0x8EA0
+#define A6XX_RB_PERFCTR_MHUB_SEL_1           0x8EA1
+#define A6XX_RB_PERFCTR_MHUB_SEL_2           0x8EA2
+#define A6XX_RB_PERFCTR_MHUB_SEL_3           0x8EA3
+#define A6XX_RB_PERFCTR_FCHE_SEL_0           0x8EB0
+#define A6XX_RB_PERFCTR_FCHE_SEL_1           0x8EB1
+#define A6XX_RB_PERFCTR_FCHE_SEL_2           0x8EB2
+#define A6XX_RB_PERFCTR_FCHE_SEL_3           0x8EB3
 
 /* PC registers */
 #define A6XX_PC_DBG_ECO_CNTL                0x9E00
@@ -783,6 +809,11 @@
 /* TP registers */
 #define A6XX_TPL1_ADDR_MODE_CNTL            0xB601
 #define A6XX_TPL1_NC_MODE_CNTL              0xB604
+#define A6XX_TPL1_BICUBIC_WEIGHTS_TABLE_0   0xB608
+#define A6XX_TPL1_BICUBIC_WEIGHTS_TABLE_1   0xB609
+#define A6XX_TPL1_BICUBIC_WEIGHTS_TABLE_2   0xB60A
+#define A6XX_TPL1_BICUBIC_WEIGHTS_TABLE_3   0xB60B
+#define A6XX_TPL1_BICUBIC_WEIGHTS_TABLE_4   0xB60C
 #define A6XX_TPL1_PERFCTR_TP_SEL_0          0xB610
 #define A6XX_TPL1_PERFCTR_TP_SEL_1          0xB611
 #define A6XX_TPL1_PERFCTR_TP_SEL_2          0xB612
@@ -860,6 +891,7 @@
 
 #define A6XX_GBIF_PERF_PWR_CNT_EN         0x3cc0
 #define A6XX_GBIF_PERF_CNT_SEL            0x3cc2
+#define A6XX_GBIF_PERF_PWR_CNT_SEL        0x3cc3
 #define A6XX_GBIF_PERF_CNT_LOW0           0x3cc4
 #define A6XX_GBIF_PERF_CNT_LOW1           0x3cc5
 #define A6XX_GBIF_PERF_CNT_LOW2           0x3cc6
@@ -971,6 +1003,7 @@
 #define A6XX_GMU_CM3_SYSRESET			0x1F800
 #define A6XX_GMU_CM3_BOOT_CONFIG		0x1F801
 #define A6XX_GMU_CX_GMU_WFI_CONFIG		0x1F802
+#define A6XX_GMU_CX_GMU_WDOG_CTRL		0x1F813
 #define A6XX_GMU_CM3_FW_BUSY			0x1F81A
 #define A6XX_GMU_CM3_FW_INIT_RESULT		0x1F81C
 #define A6XX_GMU_CM3_CFG			0x1F82D
@@ -1000,6 +1033,7 @@
 #define A6XX_GMU_RPMH_HYST_CTRL			0x1F8E9
 #define A6XX_GPU_GMU_CX_GMU_RPMH_POWER_STATE    0x1F8EC
 #define A6XX_GPU_GMU_CX_GMU_PWR_COL_CP_MSG      0x1F900
+#define A6XX_GPU_GMU_CX_GMU_PWR_COL_CP_RESP     0x1F901
 #define A6XX_GMU_BOOT_KMD_LM_HANDSHAKE		0x1F9F0
 #define A6XX_GMU_LLM_GLM_SLEEP_CTRL		0x1F957
 #define A6XX_GMU_LLM_GLM_SLEEP_STATUS		0x1F958
@@ -1043,6 +1077,8 @@
 /* LM registers */
 #define A6XX_GPU_GMU_CX_GMU_PWR_THRESHOLD       0x1F94D
 
+/* FAL10 veto register */
+#define A6XX_GPU_GMU_CX_GMU_CX_FAL_INTF         0x1F8F0
 
 #define A6XX_GMU_AO_INTERRUPT_EN		0x23B03
 #define A6XX_GMU_AO_HOST_INTERRUPT_CLR		0x23B04
@@ -1056,6 +1092,7 @@
 #define A6XX_GPU_GMU_AO_GPU_CX_BUSY_MASK	0x23B0E
 #define A6XX_GMU_AO_AHB_FENCE_CTRL		0x23B10
 #define A6XX_GMU_AHB_FENCE_STATUS		0x23B13
+#define A6XX_GMU_AHB_FENCE_STATUS_CLR           0x23B14
 #define A6XX_GMU_RBBM_INT_UNMASKED_STATUS	0x23B15
 #define A6XX_GMU_AO_SPARE_CNTL			0x23B16
 
@@ -1065,7 +1102,6 @@
 #define A6XX_GMU_AO_RGMU_GLM_HW_CRC_DISABLE	0x23B82
 
 /* GMU RSC control registers */
-#define A6XX_GPU_RSCC_RSC_STATUS0_DRV0		0x23404
 #define A6XX_GMU_RSCC_CONTROL_REQ		0x23B07
 #define A6XX_GMU_RSCC_CONTROL_ACK		0x23B08
 
@@ -1079,23 +1115,24 @@
 #define A6XX_GPU_CC_CX_GDSCR                   0x2441B
 
 /* GPU RSC sequencer registers */
-#define	A6XX_RSCC_PDC_SEQ_START_ADDR			0x23408
-#define A6XX_RSCC_PDC_MATCH_VALUE_LO			0x23409
-#define A6XX_RSCC_PDC_MATCH_VALUE_HI			0x2340A
-#define A6XX_RSCC_PDC_SLAVE_ID_DRV0			0x2340B
-#define A6XX_RSCC_HIDDEN_TCS_CMD0_ADDR			0x2340D
-#define A6XX_RSCC_HIDDEN_TCS_CMD0_DATA			0x2340E
-#define A6XX_RSCC_TIMESTAMP_UNIT0_TIMESTAMP_L_DRV0	0x23482
-#define A6XX_RSCC_TIMESTAMP_UNIT0_TIMESTAMP_H_DRV0	0x23483
-#define A6XX_RSCC_TIMESTAMP_UNIT1_EN_DRV0		0x23489
-#define A6XX_RSCC_TIMESTAMP_UNIT1_OUTPUT_DRV0		0x2348C
-#define A6XX_RSCC_OVERRIDE_START_ADDR			0x23500
-#define A6XX_RSCC_SEQ_BUSY_DRV0				0x23501
-#define A6XX_RSCC_SEQ_MEM_0_DRV0			0x23580
-#define A6XX_RSCC_TCS0_DRV0_STATUS			0x23746
-#define A6XX_RSCC_TCS1_DRV0_STATUS                      0x237EE
-#define A6XX_RSCC_TCS2_DRV0_STATUS                      0x23896
-#define A6XX_RSCC_TCS3_DRV0_STATUS                      0x2393E
+#define A6XX_GPU_RSCC_RSC_STATUS0_DRV0			0x00004
+#define A6XX_RSCC_PDC_SEQ_START_ADDR			0x00008
+#define A6XX_RSCC_PDC_MATCH_VALUE_LO			0x00009
+#define A6XX_RSCC_PDC_MATCH_VALUE_HI			0x0000A
+#define A6XX_RSCC_PDC_SLAVE_ID_DRV0			0x0000B
+#define A6XX_RSCC_HIDDEN_TCS_CMD0_ADDR			0x0000D
+#define A6XX_RSCC_HIDDEN_TCS_CMD0_DATA			0x0000E
+#define A6XX_RSCC_TIMESTAMP_UNIT0_TIMESTAMP_L_DRV0	0x00082
+#define A6XX_RSCC_TIMESTAMP_UNIT0_TIMESTAMP_H_DRV0	0x00083
+#define A6XX_RSCC_TIMESTAMP_UNIT1_EN_DRV0		0x00089
+#define A6XX_RSCC_TIMESTAMP_UNIT1_OUTPUT_DRV0		0x0008C
+#define A6XX_RSCC_OVERRIDE_START_ADDR			0x00100
+#define A6XX_RSCC_SEQ_BUSY_DRV0				0x00101
+#define A6XX_RSCC_SEQ_MEM_0_DRV0			0x00180
+#define A6XX_RSCC_TCS0_DRV0_STATUS			0x00346
+#define A6XX_RSCC_TCS1_DRV0_STATUS                      0x003EE
+#define A6XX_RSCC_TCS2_DRV0_STATUS                      0x00496
+#define A6XX_RSCC_TCS3_DRV0_STATUS                      0x0053E
 
 /* GPU PDC sequencer registers in AOSS.RPMh domain */
 #define PDC_GPU_ENABLE_PDC			0x1140
@@ -1131,6 +1168,13 @@
  * start the PDC SEQ offset at zero.
  */
 #define PDC_GPU_SEQ_MEM_0			0x0
+
+/*
+ * Legacy RSCC register range was a part of the GMU register space
+ * now we are using a separate section for RSCC regsiters. Add the
+ * offset for backward compatibility.
+ */
+#define RSCC_OFFSET_LEGACY			0x23400
 
 /* RGMU(PCC) registers in A6X_GMU_CX_0_NON_CONTEXT_DEC domain */
 #define A6XX_RGMU_CX_INTR_GEN_EN		0x1F80F

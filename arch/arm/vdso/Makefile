@@ -27,10 +27,10 @@ CFLAGS_REMOVE_vdso.o = -pg
 CFLAGS_REMOVE_vgettimeofday.o = -pg -Os
 CFLAGS_vgettimeofday.o = -O2
 
-# Disable gcov, kasan, ubsan and kcov profiling for VDSO code
+# Disable gcov profiling for VDSO code
 GCOV_PROFILE := n
-KASAN_SANITIZE := n
-UBSAN_SANITIZE := n
+
+# Prevents link failures: __sanitizer_cov_trace_pc() is not linked in.
 KCOV_INSTRUMENT := n
 
 # Force dependency

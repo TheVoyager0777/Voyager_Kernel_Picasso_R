@@ -1,15 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+ * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
  */
 #include <linux/init.h>
 #include <linux/kernel.h>
@@ -112,7 +103,7 @@ struct msm_mdf_smmu {
 	uint8_t device_status;
 	uint64_t sid;
 	struct dma_iommu_mapping *mapping;
-	dma_addr_t pa;
+	u64 pa;
 	size_t pa_len;
 };
 
@@ -183,6 +174,9 @@ static int msm_mdf_dma_buf_map(struct msm_mdf_mem *mem,
 			       struct msm_mdf_smmu *smmu)
 {
 	int rc = 0;
+	dma_addr_t pa = 0;
+
+	smmu->pa = 0;
 
 	if (!smmu)
 		return -EINVAL;
@@ -207,7 +201,7 @@ static int msm_mdf_dma_buf_map(struct msm_mdf_mem *mem,
 				return -ENODEV;
 		}
 
-		smmu->pa = dma_map_single_attrs(smmu->cb_dev, mem->va,
+		pa = dma_map_single_attrs(smmu->cb_dev, mem->va,
 			mem->size, DMA_BIDIRECTIONAL, DMA_ATTR_SKIP_CPU_SYNC);
 		if (dma_mapping_error(smmu->cb_dev, smmu->pa)) {
 			rc = -ENOMEM;
@@ -215,13 +209,14 @@ static int msm_mdf_dma_buf_map(struct msm_mdf_mem *mem,
 				__func__, rc);
 			goto err;
 		}
+		smmu->pa |= pa;
 		smmu->pa_len = mem->size;
 
 		/* Append the SMMU SID information to the IOVA address */
 		if (smmu->sid)
 			smmu->pa |= smmu->sid;
 	} else {
-		smmu->pa = mem->dma_addr;
+		smmu->pa |= mem->dma_addr;
 		smmu->pa_len = mem->size;
 	}
 	pr_err("%s: pa=%pa, pa_len=%zd\n", __func__,
@@ -312,7 +307,7 @@ static int msm_mdf_map_memory_to_subsys(struct msm_mdf_mem *mem,
 
 	/* Map mdf shared memory to ADSP */
 	if (!strcmp("adsp", smmu->subsys)) {
-		rc = q6core_map_memory_regions((phys_addr_t *)&smmu->pa,
+		rc = q6core_map_mdf_memory_regions((uint64_t *)&smmu->pa,
 				ADSP_MEMORY_MAP_MDF_SHMEM_4K_POOL,
 				(uint32_t *)&smmu->pa_len, 1, &mem->map_handle);
 		if (rc)  {
@@ -323,7 +318,7 @@ static int msm_mdf_map_memory_to_subsys(struct msm_mdf_mem *mem,
 		if (mem->map_handle) {
 			/* Map mdf shared memory to remote DSPs */
 			rc = q6core_map_mdf_shared_memory(mem->map_handle,
-					(phys_addr_t *)&smmu->pa, smmu->proc_id,
+					(uint64_t *)&smmu->pa, smmu->proc_id,
 					(uint32_t *)&smmu->pa_len, 1);
 			if (rc)  {
 				pr_err("%s: q6core_map_mdf_shared_memory failed, rc = %d\n",
@@ -601,7 +596,7 @@ static int msm_mdf_cb_probe(struct device *dev)
 			dev_err(dev,
 				"%s: qcom,smmu-sid-mask missing in DT node, using default\n",
 				__func__);
-			smmu_sid_mask = 0xFFFFFFFFFFFFFFFF;
+			smmu_sid_mask = 0xF;
 		}
 
 		rc = of_parse_phandle_with_args(dev->of_node, "iommus",
@@ -699,6 +694,7 @@ static struct platform_driver msm_mdf_driver = {
 		.name = "msm-mdf",
 		.owner = THIS_MODULE,
 		.of_match_table = msm_mdf_match_table,
+		.suppress_bind_attrs = true,
 	},
 };
 

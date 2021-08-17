@@ -7,9 +7,12 @@ static struct ts_spi_info owner;
 static ssize_t ts_xsfer_state_show(struct device *dev, struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
+
 	mutex_lock(&owner.lock);
-	ret = snprintf(buf, PAGE_SIZE, "[%s] used:%d, tmp:%d\n", owner.name, owner.used, owner.tmp);
+	ret = snprintf(buf, PAGE_SIZE, "[%s] used:%d, tmp:%d\n",
+			owner.name, owner.used, owner.tmp);
 	mutex_unlock(&owner.lock);
+
 	return ret;
 }
 
@@ -68,15 +71,19 @@ int32_t get_ts_xsfer(const char *name)
 		PDEBUG("name can't be empty\n");
 		return -EINVAL;
 	}
+
 	mutex_lock(&owner.lock);
+
 	if (owner.used) {
 		PDEBUG("ts_xsfer belong to %s, others can't get it\n", owner.name);
 		mutex_unlock(&owner.lock);
 		return -EPERM;
 	}
 	owner.used = true;
-	owner.name = name;
+	strlcpy(owner.name, name, NAME_MAX_LENS);
+
 	mutex_unlock(&owner.lock);
+
 	return 0;
 }
 EXPORT_SYMBOL_GPL(get_ts_xsfer);
@@ -84,10 +91,10 @@ EXPORT_SYMBOL_GPL(get_ts_xsfer);
 
 void put_ts_xsfer(const char *name)
 {
-	if (name && !strcmp(name, owner.name)) {
+	if (name && !strncmp(name, owner.name, NAME_MAX_LENS)) {
 		mutex_lock(&owner.lock);
 		owner.used = false;
-		owner.name = NULL;
+		owner.name[0] = '\0';
 		mutex_unlock(&owner.lock);
 	} else {
 		PDEBUG("must released by owner\n");
@@ -99,6 +106,8 @@ EXPORT_SYMBOL_GPL(put_ts_xsfer);
 
 const char *get_owner_name(void)
 {
+	if (owner.name[0] == '\0')
+		return NULL;
 	return owner.name;
 }
 EXPORT_SYMBOL_GPL(get_owner_name);
@@ -118,7 +127,7 @@ struct spi_device *test_then_get_spi(const char *name)
 		owner.used = true;
 		ret = owner.client;
 		if (name)
-			owner.name = name;
+			strlcpy(owner.name, name, NAME_MAX_LENS);
 	}
 	mutex_unlock(&owner.lock);
 
@@ -131,7 +140,7 @@ static int32_t ts_spi_probe(struct spi_device *client)
 	int32_t ret;
 	PDEBUG("Start probe\n");
 	mutex_init(&owner.lock);
-	owner.name = NULL;
+	owner.name[0] == '\0';
 	owner.used = false;
 	owner.tmp = false;
 	owner.client = client;
@@ -150,6 +159,7 @@ static int32_t ts_spi_probe(struct spi_device *client)
 static int32_t ts_spi_remove(struct spi_device *client)
 {
 	PDEBUG("touch_xsfer will be remove, touch must stop spi xsfer\n");
+	sysfs_remove_file(&client->dev.kobj, &dev_attr_ts_xsfer_state.attr);
 	return 0;
 }
 

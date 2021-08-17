@@ -1,13 +1,6 @@
-/* Copyright (c) 2017 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2017 The Linux Foundation. All rights reserved.
  */
 
 #include <linux/device.h>
@@ -182,7 +175,6 @@ static const struct of_device_id sdam_match_table[] = {
 static struct platform_driver sdam_driver = {
 	.driver = {
 		.name = "qcom,spmi-sdam",
-		.owner = THIS_MODULE,
 		.of_match_table = sdam_match_table,
 	},
 	.probe		= sdam_probe,

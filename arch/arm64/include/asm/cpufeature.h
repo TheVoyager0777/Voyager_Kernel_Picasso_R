@@ -24,12 +24,6 @@
 #define MAX_CPU_FEATURES	(8 * sizeof(elf_hwcap))
 #define cpu_feature(x)		ilog2(HWCAP_ ## x)
 
-#define ARM64_SSBD_UNKNOWN		-1
-#define ARM64_SSBD_FORCE_DISABLE	0
-#define ARM64_SSBD_KERNEL		1
-#define ARM64_SSBD_FORCE_ENABLE		2
-#define ARM64_SSBD_MITIGATED		3
-
 #ifndef __ASSEMBLY__
 
 #include <linux/bug.h>
@@ -65,6 +59,9 @@ enum ftr_type {
 
 #define FTR_VISIBLE	true	/* Feature visible to the user space */
 #define FTR_HIDDEN	false	/* Feature is hidden from the user */
+
+#define FTR_VISIBLE_IF_IS_ENABLED(config)		\
+	(IS_ENABLED(config) ? FTR_VISIBLE : FTR_HIDDEN)
 
 struct arm64_ftr_bits {
 	bool		sign;	/* Value is signed ? */
@@ -310,6 +307,10 @@ struct arm64_cpu_capabilities {
 	union {
 		struct {	/* To be used for erratum handling only */
 			struct midr_range midr_range;
+			const struct arm64_midr_revidr {
+				u32 midr_rv;		/* revision/variant */
+				u32 revidr_mask;
+			} * const fixed_revs;
 		};
 
 		const struct midr_range *midr_range_list;
@@ -321,6 +322,18 @@ struct arm64_cpu_capabilities {
 			bool sign;
 			unsigned long hwcap;
 		};
+		/*
+		 * A list of "matches/cpu_enable" pair for the same
+		 * "capability" of the same "type" as described by the parent.
+		 * Only matches(), cpu_enable() and fields relevant to these
+		 * methods are significant in the list. The cpu_enable is
+		 * invoked only if the corresponding entry "matches()".
+		 * However, if a cpu_enable() method is associated
+		 * with multiple matches(), care should be taken that either
+		 * the match criteria are mutually exclusive, or that the
+		 * method is robust against being called multiple times.
+		 */
+		const struct arm64_cpu_capabilities *match_list;
 	};
 };
 
@@ -451,6 +464,13 @@ static inline bool id_aa64pfr0_32bit_el0(u64 pfr0)
 	return val == ID_AA64PFR0_EL0_32BIT_64BIT;
 }
 
+static inline bool id_aa64pfr0_sve(u64 pfr0)
+{
+	u32 val = cpuid_feature_extract_unsigned_field(pfr0, ID_AA64PFR0_SVE_SHIFT);
+
+	return val > 0;
+}
+
 void __init setup_cpu_features(void);
 void check_local_cpu_capabilities(void);
 
@@ -482,6 +502,23 @@ static inline bool system_uses_ttbr0_pan(void)
 	return IS_ENABLED(CONFIG_ARM64_SW_TTBR0_PAN) &&
 		!cpus_have_const_cap(ARM64_HAS_PAN);
 }
+
+static inline bool system_supports_sve(void)
+{
+	return IS_ENABLED(CONFIG_ARM64_SVE) &&
+		cpus_have_const_cap(ARM64_SVE);
+}
+
+static inline bool system_supports_cnp(void)
+{
+	return false;
+}
+
+#define ARM64_SSBD_UNKNOWN		-1
+#define ARM64_SSBD_FORCE_DISABLE	0
+#define ARM64_SSBD_KERNEL		1
+#define ARM64_SSBD_FORCE_ENABLE		2
+#define ARM64_SSBD_MITIGATED		3
 
 static inline int arm64_get_ssbd_state(void)
 {

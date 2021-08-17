@@ -1,13 +1,5 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/err.h>
@@ -172,6 +164,45 @@ static int msm_qti_pp_put_eq_band_count_audio_mixer(
 		eq_idx, value);
 	eq_data[eq_idx].num_bands = value;
 	return 0;
+}
+
+static int msm_qti_pp_put_dtmf_module_enable
+		(struct snd_kcontrol *kcontrol,
+				struct snd_ctl_elem_value *ucontrol)
+{
+	u16 fe_id = 0;
+	struct msm_pcm_routing_fdai_data fe_dai;
+	struct audio_client *ac = NULL;
+	struct param_hdr_v3 param_hdr;
+	int ret = 0;
+	u32 flag = ucontrol->value.integer.value[0];
+
+	fe_id = ((struct soc_multi_mixer_control *)
+			kcontrol->private_value)->shift;
+	if (fe_id >= MSM_FRONTEND_DAI_MM_SIZE) {
+		pr_err("%s: invalid FE %d\n", __func__, fe_id);
+		return -EINVAL;
+	}
+
+	msm_pcm_routing_get_fedai_info(fe_id, SESSION_TYPE_RX, &fe_dai);
+	ac = q6asm_get_audio_client(fe_dai.strm_id);
+
+	if (ac == NULL) {
+		pr_err("%s ac is null.\n", __func__);
+		ret = -EINVAL;
+		goto done;
+	}
+
+	param_hdr.module_id = AUDPROC_MODULE_ID_DTMF_DETECTION;
+	param_hdr.instance_id = INSTANCE_ID_0;
+	param_hdr.param_id = AUDPROC_PARAM_ID_ENABLE;
+	param_hdr.param_size = 4;
+
+	ret = q6asm_pack_and_set_pp_param_in_band(ac,
+			param_hdr, (u8 *)&flag);
+
+done:
+	return ret;
 }
 
 static int msm_qti_pp_get_eq_band_audio_mixer(struct snd_kcontrol *kcontrol,
@@ -833,6 +864,32 @@ static int msm_qti_pp_put_channel_map_mixer(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
+static int msm_qti_pp_get_channel_map_capture(struct snd_kcontrol *kcontrol,
+					    struct snd_ctl_elem_value *ucontrol)
+{
+	char channel_map[PCM_FORMAT_MAX_NUM_CHANNEL_V8] = {0};
+	int i;
+
+	adm_get_multi_ch_map(channel_map, ADM_PATH_LIVE_REC);
+	for (i = 0; i < PCM_FORMAT_MAX_NUM_CHANNEL_V8; i++)
+		ucontrol->value.integer.value[i] =
+			(unsigned int) channel_map[i];
+	return 0;
+}
+
+static int msm_qti_pp_put_channel_map_capture(struct snd_kcontrol *kcontrol,
+					    struct snd_ctl_elem_value *ucontrol)
+{
+	char channel_map[PCM_FORMAT_MAX_NUM_CHANNEL_V8];
+	int i;
+
+	for (i = 0; i < PCM_FORMAT_MAX_NUM_CHANNEL_V8; i++)
+		channel_map[i] = (char)(ucontrol->value.integer.value[i]);
+	adm_set_multi_ch_map(channel_map, ADM_PATH_LIVE_REC);
+
+	return 0;
+}
+
 /* Audio Sphere functions */
 
 static void msm_qti_pp_asphere_init_state(void)
@@ -1466,9 +1523,17 @@ static const struct snd_kcontrol_new sec_auxpcm_lb_vol_mixer_controls[] = {
 };
 
 static const struct snd_kcontrol_new multi_ch_channel_map_mixer_controls[] = {
-	SOC_SINGLE_MULTI_EXT("Playback Device Channel Map", SND_SOC_NOPM, 0, 34,
-	0, PCM_FORMAT_MAX_NUM_CHANNEL_V8, msm_qti_pp_get_channel_map_mixer,
+	SOC_SINGLE_MULTI_EXT("Playback Device Channel Map", SND_SOC_NOPM,
+	0, PCM_MAX_CHMAP_ID, 0, PCM_FORMAT_MAX_NUM_CHANNEL_V8,
+	msm_qti_pp_get_channel_map_mixer,
 	msm_qti_pp_put_channel_map_mixer),
+};
+
+static const struct snd_kcontrol_new multi_ch_channel_map_capture_controls[] = {
+	SOC_SINGLE_MULTI_EXT("Capture Device Channel Map", SND_SOC_NOPM,
+	0, PCM_MAX_CHMAP_ID, 0, PCM_FORMAT_MAX_NUM_CHANNEL_V8,
+	msm_qti_pp_get_channel_map_capture,
+	msm_qti_pp_put_channel_map_capture),
 };
 
 
@@ -1620,67 +1685,93 @@ static const struct snd_kcontrol_new asphere_mixer_controls[] = {
 	0xFFFFFFFF, 0, 2, msm_qti_pp_asphere_get, msm_qti_pp_asphere_set),
 };
 
+static const struct snd_kcontrol_new dtmf_detect_enable_mixer_controls[] = {
+	SOC_SINGLE_EXT("MultiMedia1 DTMF Detect Enable", SND_SOC_NOPM,
+	MSM_FRONTEND_DAI_MULTIMEDIA1, 1, 0, NULL,
+	msm_qti_pp_put_dtmf_module_enable),
+	SOC_SINGLE_EXT("MultiMedia6 DTMF Detect Enable", SND_SOC_NOPM,
+	MSM_FRONTEND_DAI_MULTIMEDIA6, 1, 0, NULL,
+	msm_qti_pp_put_dtmf_module_enable),
+	SOC_SINGLE_EXT("MultiMedia21 DTMF Detect Enable", SND_SOC_NOPM,
+	MSM_FRONTEND_DAI_MULTIMEDIA21, 1, 0, NULL,
+	msm_qti_pp_put_dtmf_module_enable),
+};
+
 #ifdef CONFIG_QTI_PP
-void msm_qti_pp_add_controls(struct snd_soc_platform *platform)
+void msm_qti_pp_add_controls(struct snd_soc_component *component)
 {
-	snd_soc_add_platform_controls(platform, int_fm_vol_mixer_controls,
+	snd_soc_add_component_controls(component, int_fm_vol_mixer_controls,
 			ARRAY_SIZE(int_fm_vol_mixer_controls));
 
-	snd_soc_add_platform_controls(platform, pri_mi2s_lb_vol_mixer_controls,
+	snd_soc_add_component_controls(component,
+			pri_mi2s_lb_vol_mixer_controls,
 			ARRAY_SIZE(pri_mi2s_lb_vol_mixer_controls));
 
-	snd_soc_add_platform_controls(platform, sec_mi2s_lb_vol_mixer_controls,
+	snd_soc_add_component_controls(component,
+			sec_mi2s_lb_vol_mixer_controls,
 			ARRAY_SIZE(sec_mi2s_lb_vol_mixer_controls));
 
-	snd_soc_add_platform_controls(platform, tert_mi2s_lb_vol_mixer_controls,
+	snd_soc_add_component_controls(component,
+			tert_mi2s_lb_vol_mixer_controls,
 			ARRAY_SIZE(tert_mi2s_lb_vol_mixer_controls));
 
-	snd_soc_add_platform_controls(platform, slimbus_7_lb_vol_mixer_controls,
+	snd_soc_add_component_controls(component,
+			slimbus_7_lb_vol_mixer_controls,
 			ARRAY_SIZE(slimbus_7_lb_vol_mixer_controls));
 
-	snd_soc_add_platform_controls(platform, slimbus_8_lb_vol_mixer_controls,
+	snd_soc_add_component_controls(component,
+			slimbus_8_lb_vol_mixer_controls,
 			ARRAY_SIZE(slimbus_8_lb_vol_mixer_controls));
 
-	snd_soc_add_platform_controls(platform, int_hfp_vol_mixer_controls,
+	snd_soc_add_component_controls(component, int_hfp_vol_mixer_controls,
 			ARRAY_SIZE(int_hfp_vol_mixer_controls));
 
-	snd_soc_add_platform_controls(platform, int_icc_vol_mixer_controls,
+	snd_soc_add_component_controls(component, int_icc_vol_mixer_controls,
 			ARRAY_SIZE(int_icc_vol_mixer_controls));
 
-	snd_soc_add_platform_controls(platform,
+	snd_soc_add_component_controls(component,
 			pri_auxpcm_lb_vol_mixer_controls,
 			ARRAY_SIZE(pri_auxpcm_lb_vol_mixer_controls));
 
-	snd_soc_add_platform_controls(platform,
+	snd_soc_add_component_controls(component,
 				sec_auxpcm_lb_vol_mixer_controls,
 			ARRAY_SIZE(sec_auxpcm_lb_vol_mixer_controls));
 
-	snd_soc_add_platform_controls(platform,
+	snd_soc_add_component_controls(component,
 				multi_ch_channel_map_mixer_controls,
 			ARRAY_SIZE(multi_ch_channel_map_mixer_controls));
 
-	snd_soc_add_platform_controls(platform, get_rms_controls,
+	snd_soc_add_component_controls(component, get_rms_controls,
 			ARRAY_SIZE(get_rms_controls));
 
-	snd_soc_add_platform_controls(platform, eq_enable_mixer_controls,
+	snd_soc_add_component_controls(component,
+				multi_ch_channel_map_capture_controls,
+			ARRAY_SIZE(multi_ch_channel_map_capture_controls));
+
+
+	snd_soc_add_component_controls(component, eq_enable_mixer_controls,
 			ARRAY_SIZE(eq_enable_mixer_controls));
 
-	snd_soc_add_platform_controls(platform, eq_band_mixer_controls,
+	snd_soc_add_component_controls(component, eq_band_mixer_controls,
 			ARRAY_SIZE(eq_band_mixer_controls));
 
-	snd_soc_add_platform_controls(platform, eq_coeff_mixer_controls,
+	snd_soc_add_component_controls(component, eq_coeff_mixer_controls,
 			ARRAY_SIZE(eq_coeff_mixer_controls));
 
-	snd_soc_add_platform_controls(platform, asphere_mixer_controls,
+	snd_soc_add_component_controls(component, asphere_mixer_controls,
 			ARRAY_SIZE(asphere_mixer_controls));
 
-	snd_soc_add_platform_controls(platform, msm_multichannel_ec_controls,
+	snd_soc_add_component_controls(component, msm_multichannel_ec_controls,
 			ARRAY_SIZE(msm_multichannel_ec_controls));
 
-	snd_soc_add_platform_controls(platform, ec_ffecns_controls,
+	snd_soc_add_component_controls(component, dsp_bit_width_controls,
+			ARRAY_SIZE(dsp_bit_width_controls));
+
+	snd_soc_add_component_controls(component, ec_ffecns_controls,
 			ARRAY_SIZE(ec_ffecns_controls));
 
-	snd_soc_add_platform_controls(platform, dsp_bit_width_controls,
-			ARRAY_SIZE(dsp_bit_width_controls));
+	snd_soc_add_component_controls(component,
+				dtmf_detect_enable_mixer_controls,
+			ARRAY_SIZE(dtmf_detect_enable_mixer_controls));
 }
 #endif /* CONFIG_QTI_PP */

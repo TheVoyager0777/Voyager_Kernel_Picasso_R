@@ -1,14 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/atomic.h>
@@ -278,7 +271,7 @@ static int msm_rtb_probe(struct platform_device *pdev)
 		msm_rtb.size = size;
 	}
 
-	if (msm_rtb.size <= 0 || msm_rtb.size > SZ_1M)
+	if (msm_rtb.size <= 0 || msm_rtb.size > SZ_2M)
 		return -EINVAL;
 
 	msm_rtb.rtb = dma_alloc_coherent(&pdev->dev, msm_rtb.size,
@@ -299,7 +292,8 @@ static int msm_rtb_probe(struct platform_device *pdev)
 	md_entry.virt_addr = (uintptr_t)msm_rtb.rtb;
 	md_entry.phys_addr = msm_rtb.phys;
 	md_entry.size = msm_rtb.size;
-	if (msm_minidump_add_region(&md_entry))
+	md_entry.id = MINIDUMP_DEFAULT_ID;
+	if (msm_minidump_add_region(&md_entry) < 0)
 		pr_info("Failed to add RTB in Minidump\n");
 
 #if defined(CONFIG_QCOM_RTB_SEPARATE_CPUS)
@@ -333,15 +327,4 @@ static struct platform_driver msm_rtb_driver = {
 		.of_match_table = msm_match_table
 	},
 };
-
-static int __init msm_rtb_init(void)
-{
-	return platform_driver_register(&msm_rtb_driver);
-}
-
-static void __exit msm_rtb_exit(void)
-{
-	platform_driver_unregister(&msm_rtb_driver);
-}
-module_init(msm_rtb_init)
-module_exit(msm_rtb_exit)
+module_platform_driver(msm_rtb_driver);

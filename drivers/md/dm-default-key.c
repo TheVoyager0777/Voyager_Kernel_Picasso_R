@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (C) 2017 Google, Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/blk-crypto.h>
@@ -11,8 +10,6 @@
 #define DM_MSG_PREFIX		"default-key"
 
 #define DM_DEFAULT_KEY_MAX_WRAPPED_KEY_SIZE 128
-
-#define SECTOR_SIZE			(1 << SECTOR_SHIFT)
 
 static const struct dm_default_key_cipher {
 	const char *name;

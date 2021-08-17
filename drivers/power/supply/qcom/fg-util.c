@@ -1,13 +1,6 @@
-/* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/of.h>
@@ -1650,6 +1643,7 @@ static const struct file_operations fg_alg_flags_fops = {
 int fg_debugfs_create(struct fg_dev *fg)
 {
 	int rc;
+	struct dentry *file;
 
 	pr_debug("Creating debugfs file-system\n");
 	fg->dfs_root = debugfs_create_dir("fg", NULL);
@@ -1660,6 +1654,13 @@ int fg_debugfs_create(struct fg_dev *fg)
 			pr_err("error creating fg dfs root rc=%ld\n",
 			       (long)fg->dfs_root);
 		return -ENODEV;
+	}
+
+	file = debugfs_create_u32("debug_mask", 0600, fg->dfs_root,
+			fg->debug_mask);
+	if (IS_ERR_OR_NULL(file)) {
+		pr_err("failed to create debug_mask\n");
+		goto err_remove_fs;
 	}
 
 	rc = fg_sram_debugfs_create(fg);
@@ -1706,3 +1707,4 @@ void fg_relax(struct fg_dev *fg, int awake_reason)
 
 	spin_unlock(&fg->awake_lock);
 }
+

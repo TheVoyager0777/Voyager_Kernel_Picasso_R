@@ -1,15 +1,4 @@
-/* Copyright (c) 2011-2017, 2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
-
+/* SPDX-License-Identifier: GPL-2.0 */
 /* Smart-Peripheral-Switch (SPS) API. */
 
 #ifndef _SPS_H_
@@ -211,8 +200,6 @@ enum sps_option {
 	SPS_O_NO_EP_SYNC = 0x40000000,
 	/* Allow partial polling duing IRQ mode */
 	SPS_O_HYBRID = 0x80000000,
-	/* Allow dummy BAM connection */
-	SPS_O_DUMMY_PEER = 0x00000400,
 };
 
 /**
@@ -366,7 +353,7 @@ struct sps_command_element {
 };
 
 /*
- * BAM device's security configuation
+ * BAM device's security configuration
  */
 struct sps_bam_pipe_sec_config_props {
 	u32 pipe_mask;
@@ -423,7 +410,7 @@ struct sps_bam_sec_config_props {
  * perform the configuration. The global (top-level) BAM interrupt will be
  * assigned to the EE of the processor that manages the BAM.
  *
- * @p_sec_config_props - BAM device's security configuation
+ * @p_sec_config_props - BAM device's security configuration
  *
  */
 struct sps_bam_props {
@@ -455,7 +442,7 @@ struct sps_bam_props {
 	u32 data_mem_id;
 
 	/* Feedback to BAM user */
-	void (*callback)(enum sps_callback_case, void *);
+	void (*callback)(enum sps_callback_case, void *user);
 	void *user;
 
 	/* Security properties */
@@ -492,7 +479,7 @@ struct sps_bam_props {
  *
  */
 struct sps_mem_buffer {
-	void __iomem *base;
+	void *base;
 	phys_addr_t phys_base;
 	unsigned long iova;
 	u32 size;

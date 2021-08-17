@@ -43,8 +43,13 @@ __END__;
 
 #define FONTDATAMAX 1536
 
+<<<<<<< HEAD
+static const unsigned char fontdata_mini_4x6[FONTDATAMAX] = {
+
+=======
 static const struct font_data fontdata_mini_4x6 = {
 	{ 0, 0, FONTDATAMAX, 0 }, {
+>>>>>>> 20912a8acc7e (Merge android-4.19-stable.157 (8ee67bc) into msm-4.19)
 	/*{*/
 	  	/*   Char 0: ' '  */
 	0xee,	/*=  [*** ]       */
@@ -2145,14 +2150,14 @@ static const struct font_data fontdata_mini_4x6 = {
 	0xee,	/*=   [*** ]        */
 	0x00,	/*=   [    ]        */
 	/*}*/
-} };
+};
 
 const struct font_desc font_mini_4x6 = {
 	.idx	= MINI4x6_IDX,
 	.name	= "MINI4x6",
 	.width	= 4,
 	.height	= 6,
-	.data	= fontdata_mini_4x6.data,
+	.data	= fontdata_mini_4x6,
 	.pref	= 3,
 };
 

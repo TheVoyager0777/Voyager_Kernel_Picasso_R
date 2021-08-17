@@ -1,15 +1,5 @@
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved. */
 
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
@@ -509,6 +499,7 @@ u32 mdss_mdp_perf_calc_smp_size(struct mdss_mdp_pipe *pipe,
 	 */
 	if (calc_smp_size && !mdata->has_pixel_ram) {
 		u32 calc_smp_total;
+
 		calc_smp_total = mdss_mdp_smp_calc_num_blocks(pipe);
 		calc_smp_total *= mdata->smp_mb_size;
 
@@ -558,7 +549,7 @@ static void mdss_mdp_get_bw_vote_mode(void *data,
 		break;
 	default:
 		break;
-	};
+	}
 
 	pr_debug("mode=0x%lx\n", *(perf->bw_vote_mode));
 
@@ -1183,9 +1174,8 @@ int mdss_mdp_perf_calc_pipe(struct mdss_mdp_pipe *pipe,
 	pr_debug("bw:%llu bw_nocr:%llu clk:%d\n", perf->bw_overlap,
 		perf->bw_overlap_nocr, perf->mdp_clk_rate);
 
-	if (pipe->flags & MDP_SOLID_FILL) {
+	if (pipe->flags & MDP_SOLID_FILL)
 		perf->bw_overlap = 0;
-	}
 
 	if (mixer->ctl->intf_num == MDSS_MDP_NO_INTF ||
 		mdata->disable_prefill ||
@@ -1358,12 +1348,13 @@ static void mdss_mdp_perf_calc_mixer(struct mdss_mdp_mixer *mixer,
 	memset(v_region, 0, sizeof(u32) * MAX_PIPES_PER_LM * 2);
 
 	/*
-	* Apply this logic only for 8x26 to reduce clock rate
-	* for single video playback use case
-	*/
+	 * Apply this logic only for 8x26 to reduce clock rate
+	 * for single video playback use case
+	 */
 	if (IS_MDSS_MAJOR_MINOR_SAME(mdata->mdp_rev, MDSS_MDP_HW_REV_101)
 		 && mixer->type == MDSS_MDP_MIXER_TYPE_INTF) {
 		u32 npipes = 0;
+
 		for (i = 0; i < num_pipes; i++) {
 			pipe = pipe_list[i];
 			if (pipe) {
@@ -1454,6 +1445,7 @@ static void mdss_mdp_perf_calc_mixer(struct mdss_mdp_mixer *mixer,
 		int j;
 		u64 bw_max_region = 0;
 		u32 y0, y1;
+
 		pr_debug("v_region[%d]%d\n", i, v_region[i]);
 		if (v_region[i] == v_region[i-1])
 			continue;
@@ -1561,7 +1553,7 @@ static bool mdss_mdp_video_mode_intf_connected(struct mdss_mdp_ctl *ctl)
 	struct mdss_data_type *mdata;
 
 	if (!ctl || !ctl->mdata)
-		return 0;
+		return false;
 
 	mdata = ctl->mdata;
 	for (i = 0; i < mdata->nctl; i++) {
@@ -1748,6 +1740,7 @@ int mdss_mdp_perf_bw_check(struct mdss_mdp_ctl *ctl,
 
 	for (i = 0; i < mdata->nctl; i++) {
 		struct mdss_mdp_ctl *temp = mdata->ctl_off + i;
+
 		if (temp->power_state == MDSS_PANEL_POWER_ON  &&
 				(temp->intf_type != MDSS_MDP_NO_INTF))
 			bw_sum_of_intfs += temp->bw_pending;
@@ -2121,6 +2114,7 @@ static inline u64 __calc_bus_ib_quota(struct mdss_data_type *mdata,
 		perf->bw_vote_mode) &&
 		(bus_ib_quota >= PERF_SINGLE_PIPE_BW_FLOOR)) {
 		struct mult_factor ib_factor_vscaling;
+
 		ib_factor_vscaling.numer = 2;
 		ib_factor_vscaling.denom = 1;
 		bus_ib_quota = apply_fudge_factor(bus_ib_quota,
@@ -2251,6 +2245,7 @@ static int mdss_mdp_select_clk_lvl(struct mdss_data_type *mdata,
 			u32 clk_rate)
 {
 	int i;
+
 	for (i = 0; i < mdata->nclk_lvl; i++) {
 		if (clk_rate > mdata->clock_levels[i]) {
 			continue;
@@ -2279,6 +2274,7 @@ u32 mdss_mdp_get_mdp_clk_rate(struct mdss_data_type *mdata)
 
 	for (i = 0; i < mdata->nctl; i++) {
 		struct mdss_mdp_ctl *ctl;
+
 		ctl = mdata->ctl_off + i;
 		if (mdss_mdp_ctl_is_power_on(ctl)) {
 			clk_rate = max(ctl->cur_perf.mdp_clk_rate,
@@ -2295,8 +2291,10 @@ u32 mdss_mdp_get_mdp_clk_rate(struct mdss_data_type *mdata)
 static bool is_traffic_shaper_enabled(struct mdss_data_type *mdata)
 {
 	uint i;
+
 	for (i = 0; i < mdata->nctl; i++) {
 		struct mdss_mdp_ctl *ctl;
+
 		ctl = mdata->ctl_off + i;
 		if (mdss_mdp_ctl_is_power_on(ctl))
 			if (ctl->traffic_shaper_enabled)
@@ -2410,7 +2408,7 @@ static void mdss_mdp_ctl_perf_update(struct mdss_mdp_ctl *ctl,
 		if ((params_changed && (new->mdp_clk_rate > old->mdp_clk_rate))
 			 || (!params_changed &&
 			 (new->mdp_clk_rate < old->mdp_clk_rate) &&
-			(false == is_traffic_shaper_enabled(mdata)))) {
+			(!is_traffic_shaper_enabled(mdata)))) {
 			old->mdp_clk_rate = new->mdp_clk_rate;
 			update_clk = 1;
 		}
@@ -3485,9 +3483,9 @@ void mdss_mdp_ctl_dsc_setup(struct mdss_mdp_ctl *ctl,
 	struct mdss_panel_info *spinfo;
 
 	/*
-	* Check for dynamic resolution switch from DSC On to DSC Off
-	* and disable DSC
-	*/
+	 * Check for dynamic resolution switch from DSC On to DSC Off
+	 * and disable DSC
+	 */
 	if ((ctl->pending_mode_switch == SWITCH_RESOLUTION) &&
 	    ctl->is_master &&
 	    (!is_dsc_compression(pinfo))) {
@@ -3690,7 +3688,7 @@ int mdss_mdp_ctl_setup(struct mdss_mdp_ctl *ctl)
 	u32 width, height;
 	int split_fb, rc = 0;
 	u32 max_mixer_width;
-	bool dsc_merge_enabled = 0;
+	bool dsc_merge_enabled = false;
 	struct mdss_panel_info *pinfo;
 
 	if (!ctl || !ctl->panel_data) {
@@ -3914,9 +3912,9 @@ skip_intf_reconfig:
 		}
 
 		/*
-		* If we are transitioning from  DSC On + DSC Merge to DSC Off
-		* the 3D mux needs to be enabled
-		*/
+		 * If we are transitioning from  DSC On + DSC Merge to DSC Off
+		 * the 3D mux needs to be enabled
+		 */
 		if (!is_dsc_compression(&pdata->panel_info) &&
 		    ctl->mixer_left &&
 		    ctl->mixer_left->dsc_enabled &&
@@ -3926,9 +3924,9 @@ skip_intf_reconfig:
 		}
 
 		/*
-		* If we are transitioning from DSC Off to DSC On + DSC Merge
-		* the 3D mux needs to be disabled
-		*/
+		 * If we are transitioning from DSC Off to DSC On + DSC Merge
+		 * the 3D mux needs to be disabled
+		 */
 		if (is_dsc_compression(&pdata->panel_info) &&
 		    ctl->mixer_left &&
 		    !ctl->mixer_left->dsc_enabled &&
@@ -5288,7 +5286,7 @@ int mdss_mdp_mixer_addr_setup(struct mdss_data_type *mdata,
 	/*
 	 * Duplicate the last writeback mixer for concurrent line and block mode
 	 * operations
-	*/
+	 */
 	if ((type == MDSS_MDP_MIXER_TYPE_WRITEBACK) &&
 			(mdata->wfd_mode == MDSS_MDP_WFD_SHARED))
 		head[len] = head[len - 1];
@@ -5352,7 +5350,7 @@ int mdss_mdp_ctl_addr_setup(struct mdss_data_type *mdata,
 		 * Allocate a virtual ctl to be able to perform simultaneous
 		 * line mode and block mode operations on the same
 		 * writeback block
-		*/
+		 */
 		head[len] = head[len - 1];
 		head[len].num = head[len - 1].num;
 	}
@@ -5370,10 +5368,8 @@ int mdss_mdp_wb_addr_setup(struct mdss_data_type *mdata,
 	total = num_block_wb + num_intf_wb;
 	wb = devm_kzalloc(&mdata->pdev->dev, sizeof(struct mdss_mdp_writeback) *
 			total, GFP_KERNEL);
-	if (!wb) {
-		pr_err("unable to setup wb: kzalloc fail\n");
+	if (!wb)
 		return -ENOMEM;
-	}
 
 	for (i = 0; i < total; i++) {
 		wb[i].num = i;
@@ -5487,7 +5483,6 @@ int mdss_mdp_async_ctl_flush(struct msm_fb_data_type *mfd,
 	struct mdss_overlay_private *mdp5_data = mfd_to_mdp5_data(mfd);
 	struct mdss_mdp_ctl *ctl = mdp5_data->ctl;
 	struct mdss_mdp_ctl *sctl = mdss_mdp_get_split_ctl(ctl);
-	int ret = 0;
 
 	mutex_lock(&ctl->flush_lock);
 
@@ -5496,7 +5491,7 @@ int mdss_mdp_async_ctl_flush(struct msm_fb_data_type *mfd,
 		mdss_mdp_ctl_write(sctl, MDSS_MDP_REG_CTL_FLUSH, flush_bits);
 
 	mutex_unlock(&ctl->flush_lock);
-	return ret;
+	return 0;
 }
 
 int mdss_mdp_mixer_pipe_update(struct mdss_mdp_pipe *pipe,
@@ -6194,6 +6189,7 @@ void mdss_mdp_ctl_notifier_unregister(struct mdss_mdp_ctl *ctl,
 	struct notifier_block *notifier)
 {
 	struct mdss_mdp_ctl *sctl;
+
 	blocking_notifier_chain_unregister(&ctl->notifier_head, notifier);
 
 	sctl = mdss_mdp_get_split_ctl(ctl);
@@ -6213,6 +6209,7 @@ int mdss_mdp_get_ctl_mixers(u32 fb_num, u32 *mixer_id)
 	struct mdss_mdp_ctl *ctl;
 	struct mdss_data_type *mdata;
 	u32 mixer_cnt = 0;
+
 	mutex_lock(&mdss_mdp_ctl_lock);
 	mdata = mdss_mdp_get_mdata();
 	for (i = 0; i < mdata->nctl; i++) {

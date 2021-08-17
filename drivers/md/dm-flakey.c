@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2003 Sistina Software (UK) Limited.
- * Copyright (C) 2021 XiaoMi, Inc.
  * Copyright (C) 2004, 2010-2011 Red Hat, Inc. All rights reserved.
  *
  * This file is released under the GPL.
@@ -214,7 +213,7 @@ static int flakey_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 	devname = dm_shift_arg(&as);
 
 	r = -EINVAL;
-	if (sscanf(dm_shift_arg(&as), "%llu%c", &tmpll, &dummy) != 1) {
+	if (sscanf(dm_shift_arg(&as), "%llu%c", &tmpll, &dummy) != 1 || tmpll != (sector_t)tmpll) {
 		ti->error = "Invalid device sector";
 		goto bad;
 	}

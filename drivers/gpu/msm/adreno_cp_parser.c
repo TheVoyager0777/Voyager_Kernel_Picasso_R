@@ -1,23 +1,14 @@
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  */
 
-#include "kgsl.h"
-#include "kgsl_sharedmem.h"
-#include "kgsl_snapshot.h"
+#include <linux/slab.h>
 
 #include "adreno.h"
-#include "adreno_pm4types.h"
-#include "a3xx_reg.h"
 #include "adreno_cp_parser.h"
+#include "adreno_pm4types.h"
+#include "adreno_snapshot.h"
 
 #define MAX_IB_OBJS 1000
 #define NUM_SET_DRAW_GROUPS 32
@@ -161,6 +152,8 @@ static int adreno_ib_add(struct kgsl_process_private *process,
 		adreno_ib_init_ib_obj(gpuaddr, size, type, entry,
 			&(ib_obj_list->obj_list[ib_obj_list->num_objs]));
 		ib_obj_list->num_objs++;
+		/* Skip reclaim for the memdesc until it is dumped */
+		entry->memdesc.priv |= KGSL_MEMDESC_SKIP_RECLAIM;
 	}
 	return 0;
 }
@@ -340,16 +333,12 @@ static int ib_add_type0_entries(struct kgsl_device *device,
 	struct adreno_ib_object_list *ib_obj_list,
 	struct ib_parser_variables *ib_parse_vars)
 {
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	int ret = 0;
 	int i;
 	int vfd_end;
 	unsigned int mask;
 	/* First up the visiblity stream buffer */
-	if (adreno_is_a4xx(adreno_dev))
-		mask = 0xFFFFFFFC;
-	else
-		mask = 0xFFFFFFFF;
+	mask = 0xFFFFFFFF;
 	for (i = ADRENO_CP_ADDR_VSC_PIPE_DATA_ADDRESS_0;
 		i < ADRENO_CP_ADDR_VSC_PIPE_DATA_LENGTH_7; i++) {
 		if (ib_parse_vars->cp_addr_regs[i]) {
@@ -365,9 +354,7 @@ static int ib_add_type0_entries(struct kgsl_device *device,
 		}
 	}
 
-	vfd_end = adreno_is_a4xx(adreno_dev) ?
-		ADRENO_CP_ADDR_VFD_FETCH_INSTR_1_31 :
-		ADRENO_CP_ADDR_VFD_FETCH_INSTR_1_15;
+	vfd_end = ADRENO_CP_ADDR_VFD_FETCH_INSTR_1_15;
 	for (i = ADRENO_CP_ADDR_VFD_FETCH_INSTR_1_0;
 		i <= vfd_end; i++) {
 		if (ib_parse_vars->cp_addr_regs[i]) {
@@ -803,7 +790,7 @@ static int adreno_cp_parse_ib2(struct kgsl_device *device,
 
 	/* Save current IB2 statically */
 	if (ib2base == gpuaddr)
-		kgsl_snapshot_push_object(process, gpuaddr, dwords);
+		kgsl_snapshot_push_object(device, process, gpuaddr, dwords);
 	/*
 	 * only try to find sub objects iff this IB has
 	 * not been processed already

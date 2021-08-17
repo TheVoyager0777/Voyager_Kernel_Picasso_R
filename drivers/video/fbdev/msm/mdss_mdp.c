@@ -1,17 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * MDSS MDP Interface (used by framebuffer core)
  *
  * Copyright (c) 2007-2018, 2020, The Linux Foundation. All rights reserved.
  * Copyright (C) 2007 Google Incorporated
  *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #define pr_fmt(fmt)	"%s: " fmt, __func__
@@ -31,7 +24,6 @@
 #include <linux/pm.h>
 #include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
-#include <linux/regulator/rpm-smd-regulator.h>
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/sched.h>
@@ -165,7 +157,7 @@ u32 invalid_mdp107_wb_output_fmts[] = {
  * @arg: requested argument to the handler
  */
 struct intr_callback {
-	void (*func)(void *);
+	void (*func)(void *p);
 	void *arg;
 };
 
@@ -1111,7 +1103,7 @@ int mdss_mdp_set_intr_callback_nosync(u32 intr_type, u32 intf_num,
 
 static inline void mdss_mdp_intr_done(int index)
 {
-	void (*fnc)(void *);
+	void (*fnc)(void *p);
 	void *arg;
 
 	spin_lock(&mdss_mdp_intr_lock);
@@ -1280,6 +1272,7 @@ static int mdss_mdp_clk_update(u32 clk_idx, u32 enable)
 int mdss_mdp_vsync_clk_enable(int enable, bool locked)
 {
 	int ret = 0;
+
 	pr_debug("clk enable=%d\n", enable);
 
 	if (!locked)
@@ -1825,6 +1818,7 @@ static inline int mdss_mdp_irq_clk_register(struct mdss_data_type *mdata,
 					    char *clk_name, int clk_idx)
 {
 	struct clk *tmp;
+
 	if (clk_idx >= MDSS_MAX_CLK) {
 		pr_err("invalid clk index %d\n", clk_idx);
 		return -EINVAL;
@@ -2037,6 +2031,7 @@ static u32 mdss_get_props(void)
 {
 	u32 props = 0;
 	void __iomem *props_base = ioremap(0xFC4B8114, 4);
+
 	if (props_base) {
 		props = readl_relaxed(props_base);
 		iounmap(props_base);
@@ -2098,6 +2093,7 @@ static void mdss_mdp_hw_rev_caps_init(struct mdss_data_type *mdata)
 		mdss_mdp_format_flag_removal(invalid_mdp107_wb_output_fmts,
 			ARRAY_SIZE(invalid_mdp107_wb_output_fmts),
 			VALID_MDP_WB_INTF_FORMAT);
+		/* fall-through */
 	case MDSS_MDP_HW_REV_107_2:
 		mdata->max_target_zorder = 7; /* excluding base layer */
 		mdata->max_cursor_size = 128;
@@ -2497,6 +2493,7 @@ void mdss_mdp_footswitch_ctrl_splash(int on)
 {
 	int ret;
 	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
+
 	if (mdata != NULL) {
 		if (on) {
 			mdata->handoff_pending = true;
@@ -2717,7 +2714,7 @@ static void mdss_mdp_update_wb_info(struct mdss_data_type *mdata,
 #undef SPRINT
 }
 
-ssize_t mdss_mdp_show_capabilities(struct device *dev,
+ssize_t caps_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct mdss_data_type *mdata = dev_get_drvdata(dev);
@@ -2835,7 +2832,7 @@ ssize_t mdss_mdp_show_capabilities(struct device *dev,
 	return cnt;
 }
 
-static ssize_t mdss_mdp_read_max_limit_bw(struct device *dev,
+static ssize_t bw_mode_bitmap_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	struct mdss_data_type *mdata = dev_get_drvdata(dev);
@@ -2869,10 +2866,10 @@ static ssize_t mdss_mdp_read_max_limit_bw(struct device *dev,
 		pipe_bw_settings++;
 	}
 
-	return cnt;
+	return 0;
 }
 
-static ssize_t mdss_mdp_store_max_limit_bw(struct device *dev,
+static ssize_t bw_mode_bitmap_store(struct device *dev,
 		struct device_attribute *attr, const char *buf, size_t len)
 {
 	struct mdss_data_type *mdata = dev_get_drvdata(dev);
@@ -2889,55 +2886,12 @@ static ssize_t mdss_mdp_store_max_limit_bw(struct device *dev,
 	return len;
 }
 
-static ssize_t mdss_mdp_store_twm(struct device *dev,
-		struct device_attribute *attr, const char *buf, size_t len)
-{
-	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
-	u32 data = -1;
-	ssize_t rc = 0;
-
-	if (!mdata) {
-		pr_err("Invalid mdata structure\n");
-		return -EINVAL;
-	}
-
-	rc = kstrtoint(buf, 10, &data);
-	if (rc) {
-		pr_err("kstrtoint failed. rc=%zd\n", rc);
-		return rc;
-	}
-	mdata->twm_en = data ? true : false;
-	pr_err("TWM :  %s\n", (mdata->twm_en) ?
-		"ENABLED" : "DISABLED");
-	return len;
-}
-
-static ssize_t mdss_mdp_show_twm(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct mdss_data_type *mdata = mdss_mdp_get_mdata();
-	ssize_t ret = 0;
-
-	if (!mdata) {
-		pr_err("Invalid mdata structure\n");
-		return -EINVAL;
-	}
-
-	pr_err("TWM :  %s\n", (mdata->twm_en) ?
-		"ENABLED" : "DISABLED");
-	ret = snprintf(buf, PAGE_SIZE, "%d\n", mdata->twm_en);
-	return ret;
-}
-
-static DEVICE_ATTR(caps, 0444, mdss_mdp_show_capabilities, NULL);
-static DEVICE_ATTR(bw_mode_bitmap, 0664,
-		mdss_mdp_read_max_limit_bw, mdss_mdp_store_max_limit_bw);
-static DEVICE_ATTR(twm_enable, 0664, mdss_mdp_show_twm, mdss_mdp_store_twm);
+static DEVICE_ATTR_RO(caps);
+static DEVICE_ATTR_RW(bw_mode_bitmap);
 
 static struct attribute *mdp_fs_attrs[] = {
 	&dev_attr_caps.attr,
 	&dev_attr_bw_mode_bitmap.attr,
-	&dev_attr_twm_enable.attr,
 	NULL
 };
 
@@ -3223,7 +3177,7 @@ static int mdss_mdp_probe(struct platform_device *pdev)
 		 * If multiple displays are enabled in LK, ctrl_splash off will
 		 * be called multiple times during splash_cleanup. Need to
 		 * enable it symmetrically
-		*/
+		 */
 		for (i = 1; i < num_of_display_on; i++)
 			mdss_mdp_footswitch_ctrl_splash(true);
 	}
@@ -3482,6 +3436,7 @@ static int  mdss_mdp_parse_dt_pipe_clk_ctrl(struct platform_device *pdev,
 	arr = of_get_property(pdev->dev.of_node, prop_name, &len);
 	if (arr) {
 		int i, j;
+
 		len /= sizeof(u32);
 		for (i = 0, j = 0; i < len; j++) {
 			struct mdss_mdp_pipe *pipe = NULL;
@@ -3642,8 +3597,6 @@ static int mdss_mdp_parse_dt_pipe_helper(struct platform_device *pdev,
 
 	return cnt;
 parse_fail:
-	devm_kfree(&pdev->dev, pipe_list);
-
 	return rc;
 }
 
@@ -3678,7 +3631,7 @@ static int mdss_mdp_parse_dt_pipe(struct platform_device *pdev)
 		nfids  += mdss_mdp_parse_dt_prop_len(pdev,
 				"qcom,mdss-pipe-dma-fetch-id");
 		if (npipes != nfids) {
-			pr_err("device tree err: unequal number of pipes and smp ids");
+			pr_err("device tree err: unequal number of pipes and smp ids\n");
 			return -EINVAL;
 		}
 	}
@@ -3911,10 +3864,8 @@ static int mdss_mdp_cdm_addr_setup(struct mdss_data_type *mdata,
 
 	head = devm_kzalloc(&mdata->pdev->dev, sizeof(struct mdss_mdp_cdm) *
 				len, GFP_KERNEL);
-	if (!head) {
-		pr_err("%s: no memory for CDM info\n", __func__);
+	if (!head)
 		return -ENOMEM;
-	}
 
 	for (i = 0; i < len; i++) {
 		head[i].num = i;
@@ -4384,6 +4335,7 @@ static void mdss_mdp_parse_max_bw_array(const u32 *arr,
 		struct mdss_max_bw_settings *max_bw_settings, int count)
 {
 	int i;
+
 	for (i = 0; i < count; i++) {
 		max_bw_settings->mdss_max_bw_mode = be32_to_cpu(arr[i*2]);
 		max_bw_settings->mdss_max_bw_val = be32_to_cpu(arr[(i*2)+1]);
@@ -4410,11 +4362,8 @@ static void mdss_mdp_parse_max_bandwidth(struct platform_device *pdev)
 
 	max_bw_settings = devm_kzalloc(&pdev->dev, sizeof(*max_bw_settings)
 			* max_bw_settings_cnt, GFP_KERNEL);
-	if (!max_bw_settings) {
-		pr_err("Memory allocation failed for max_bw_settings\n");
+	if (!max_bw_settings)
 		return;
-	}
-
 	mdss_mdp_parse_max_bw_array(max_bw, max_bw_settings,
 			max_bw_settings_cnt);
 
@@ -4707,6 +4656,7 @@ static int mdss_mdp_parse_dt_ppb_off(struct platform_device *pdev)
 	struct mdss_data_type *mdata = platform_get_drvdata(pdev);
 	u32 len, index;
 	const u32 *arr;
+
 	arr = of_get_property(pdev->dev.of_node, "qcom,mdss-ppb-ctl-off", &len);
 	if (arr) {
 		mdata->nppb_ctl = len / sizeof(u32);
@@ -4757,10 +4707,8 @@ static int mdss_mdp_parse_dt_bus_scale(struct platform_device *pdev)
 		pr_err("Error. qcom,mdss-num-nrt-paths prop not found.rc=%d\n",
 			rc);
 		return rc;
-	} else {
-		rc = 0;
 	}
-
+	rc = 0;
 	mdata->bus_scale_table = msm_bus_cl_get_pdata(pdev);
 	if (IS_ERR_OR_NULL(mdata->bus_scale_table)) {
 		rc = PTR_ERR(mdata->bus_scale_table);
@@ -4817,6 +4765,7 @@ static int mdss_mdp_parse_dt_handler(struct platform_device *pdev,
 		char *prop_name, u32 *offsets, int len)
 {
 	int rc;
+
 	rc = of_property_read_u32_array(pdev->dev.of_node, prop_name,
 					offsets, len);
 	if (rc) {
@@ -4978,7 +4927,7 @@ bool force_on_xin_clk(u32 bit_off, u32 clk_ctl_reg_off, bool enable)
 
 	clk_forced_on = !(force_on_mask & val);
 
-	if (true == enable)
+	if (enable)
 		val |= force_on_mask;
 	else
 		val &= ~force_on_mask;
@@ -5518,6 +5467,7 @@ static int mdss_mdp_runtime_resume(struct device *dev)
 {
 	struct mdss_data_type *mdata = dev_get_drvdata(dev);
 	bool device_on = true;
+
 	if (!mdata)
 		return -ENODEV;
 
@@ -5535,6 +5485,7 @@ static int mdss_mdp_runtime_resume(struct device *dev)
 static int mdss_mdp_runtime_idle(struct device *dev)
 {
 	struct mdss_data_type *mdata = dev_get_drvdata(dev);
+
 	if (!mdata)
 		return -ENODEV;
 
@@ -5547,6 +5498,7 @@ static int mdss_mdp_runtime_suspend(struct device *dev)
 {
 	struct mdss_data_type *mdata = dev_get_drvdata(dev);
 	bool device_on = false;
+
 	if (!mdata)
 		return -ENODEV;
 	dev_dbg(dev, "pm_runtime: suspending. active overlay cnt=%d\n",
@@ -5578,6 +5530,7 @@ static const struct dev_pm_ops mdss_mdp_pm_ops = {
 static int mdss_mdp_remove(struct platform_device *pdev)
 {
 	struct mdss_data_type *mdata = platform_get_drvdata(pdev);
+
 	if (!mdata)
 		return -ENODEV;
 	pm_runtime_disable(&pdev->dev);

@@ -34,7 +34,7 @@ config DEBUG_DMA_BUF_REF
 	depends on STACKDEPOT
 	depends on DMA_SHARED_BUFFER
 	default n
-	---help---
+	help
 	  Save stack traces for every call to dma_buf_get and dma_buf_put, to
 	  help debug memory leaks. Potential leaks may be found by manually
 	  matching the get/put call stacks.  This feature consumes extra memory

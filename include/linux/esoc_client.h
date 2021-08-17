@@ -1,13 +1,6 @@
-/* Copyright (c) 2014, 2017-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2014, 2017-2019, The Linux Foundation. All rights reserved.
  */
 #ifndef __ESOC_CLIENT_H_
 #define __ESOC_CLIENT_H_
@@ -15,17 +8,6 @@
 #include <linux/device.h>
 #include <linux/esoc_ctrl.h>
 #include <linux/notifier.h>
-
-enum esoc_client_hook_prio {
-	ESOC_MHI_HOOK,
-	ESOC_CNSS_HOOK,
-	ESOC_MAX_HOOKS
-};
-
-struct esoc_link_data {
-	enum esoc_client_hook_prio prio;
-	__u64 link_id;
-};
 
 /* Flag values used with the power_on and power_off hooks */
 #define ESOC_HOOK_MDM_CRASH	0x0001 /* In crash handling path */

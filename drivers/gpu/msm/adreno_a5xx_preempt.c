@@ -1,20 +1,12 @@
-/* Copyright (c) 2014-2017,2019-2020 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2014-2017,2019-2020 The Linux Foundation. All rights reserved.
  */
 
 #include "adreno.h"
 #include "adreno_a5xx.h"
-#include "a5xx_reg.h"
-#include "adreno_trace.h"
 #include "adreno_pm4types.h"
+#include "adreno_trace.h"
 
 #define PREEMPT_RECORD(_field) \
 		offsetof(struct a5xx_cp_preemption_record, _field)
@@ -39,7 +31,7 @@ static void _update_wptr(struct adreno_device *adreno_dev, bool reset_timer)
 		 * In case something got submitted while preemption was on
 		 * going, reset the timer.
 		 */
-		reset_timer = 1;
+		reset_timer = true;
 	}
 
 	if (reset_timer)
@@ -71,13 +63,14 @@ static void _a5xx_preemption_done(struct adreno_device *adreno_dev)
 	adreno_readreg(adreno_dev, ADRENO_REG_CP_PREEMPT, &status);
 
 	if (status != 0) {
-		KGSL_DRV_ERR(device,
-			"Preemption not complete: status=%X cur=%d R/W=%X/%X next=%d R/W=%X/%X\n",
-			status, adreno_dev->cur_rb->id,
-			adreno_get_rptr(adreno_dev->cur_rb),
-			adreno_dev->cur_rb->wptr, adreno_dev->next_rb->id,
-			adreno_get_rptr(adreno_dev->next_rb),
-			adreno_dev->next_rb->wptr);
+		dev_err(device->dev,
+			     "Preemption not complete: status=%X cur=%d R/W=%X/%X next=%d R/W=%X/%X\n",
+			     status, adreno_dev->cur_rb->id,
+			     adreno_get_rptr(adreno_dev->cur_rb),
+			     adreno_dev->cur_rb->wptr,
+			     adreno_dev->next_rb->id,
+			     adreno_get_rptr(adreno_dev->next_rb),
+			     adreno_dev->next_rb->wptr);
 
 		/* Set a fault and restart */
 		adreno_set_gpu_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
@@ -127,13 +120,14 @@ static void _a5xx_preemption_fault(struct adreno_device *adreno_dev)
 		}
 	}
 
-	KGSL_DRV_ERR(device,
-		"Preemption timed out: cur=%d R/W=%X/%X, next=%d R/W=%X/%X\n",
-		adreno_dev->cur_rb->id,
-		adreno_get_rptr(adreno_dev->cur_rb), adreno_dev->cur_rb->wptr,
-		adreno_dev->next_rb->id,
-		adreno_get_rptr(adreno_dev->next_rb),
-		adreno_dev->next_rb->wptr);
+	dev_err(device->dev,
+		     "Preemption timed out: cur=%d R/W=%X/%X, next=%d R/W=%X/%X\n",
+		     adreno_dev->cur_rb->id,
+		     adreno_get_rptr(adreno_dev->cur_rb),
+		     adreno_dev->cur_rb->wptr,
+		     adreno_dev->next_rb->id,
+		     adreno_get_rptr(adreno_dev->next_rb),
+		     adreno_dev->next_rb->wptr);
 
 	adreno_set_gpu_fault(adreno_dev, ADRENO_PREEMPT_FAULT);
 	adreno_dispatcher_schedule(device);
@@ -156,9 +150,11 @@ static void _a5xx_preemption_worker(struct work_struct *work)
 	mutex_unlock(&device->mutex);
 }
 
-static void _a5xx_preemption_timer(unsigned long data)
+static void _a5xx_preemption_timer(struct timer_list *t)
 {
-	struct adreno_device *adreno_dev = (struct adreno_device *) data;
+	struct adreno_preemption *preempt = from_timer(preempt, t, timer);
+	struct adreno_device *adreno_dev = container_of(preempt,
+						struct adreno_device, preempt);
 
 	/* We should only be here from a triggered state */
 	if (!adreno_move_preempt_state(adreno_dev,
@@ -184,7 +180,7 @@ static struct adreno_ringbuffer *a5xx_next_ringbuffer(
 		empty = adreno_rb_empty(rb);
 		spin_unlock_irqrestore(&rb->preempt_lock, flags);
 
-		if (empty == false)
+		if (!empty)
 			return rb;
 	}
 
@@ -292,8 +288,9 @@ void a5xx_preempt_callback(struct adreno_device *adreno_dev, int bit)
 	adreno_readreg(adreno_dev, ADRENO_REG_CP_PREEMPT, &status);
 
 	if (status != 0) {
-		KGSL_DRV_ERR(KGSL_DEVICE(adreno_dev),
-			"preempt interrupt with non-zero status: %X\n", status);
+		dev_err(KGSL_DEVICE(adreno_dev)->dev,
+			     "preempt interrupt with non-zero status: %X\n",
+			     status);
 
 		/*
 		 * Under the assumption that this is a race between the
@@ -382,8 +379,7 @@ unsigned int a5xx_preemption_pre_ibsubmit(
 				? 2 : 0);
 
 	/* Turn CP protection OFF */
-	*cmds++ = cp_type7_packet(CP_SET_PROTECTED_MODE, 1);
-	*cmds++ = 0;
+	cmds += cp_protected_mode(adreno_dev, cmds, 0);
 
 	/*
 	 * CP during context switch will save context switch info to
@@ -395,8 +391,7 @@ unsigned int a5xx_preemption_pre_ibsubmit(
 	*cmds++ = upper_32_bits(gpuaddr);
 
 	/* Turn CP protection ON */
-	*cmds++ = cp_type7_packet(CP_SET_PROTECTED_MODE, 1);
-	*cmds++ = 1;
+	cmds += cp_protected_mode(adreno_dev, cmds, 1);
 
 	/*
 	 * Enable local preemption for finegrain preemption in case of
@@ -591,7 +586,6 @@ void a5xx_preemption_close(struct adreno_device *adreno_dev)
 	_preemption_close(adreno_dev);
 }
 
-
 int a5xx_preemption_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
@@ -607,8 +601,7 @@ int a5xx_preemption_init(struct adreno_device *adreno_dev)
 
 	INIT_WORK(&preempt->work, _a5xx_preemption_worker);
 
-	setup_timer(&preempt->timer, _a5xx_preemption_timer,
-		(unsigned long) adreno_dev);
+	timer_setup(&preempt->timer, _a5xx_preemption_timer, 0);
 
 	/* Allocate mem for storing preemption counters */
 	ret = kgsl_allocate_global(device, &preempt->scratch,

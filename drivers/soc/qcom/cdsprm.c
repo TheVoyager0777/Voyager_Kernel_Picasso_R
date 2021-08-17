@@ -1,19 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * CDSP Request Manager
- *
  * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
-/* This module uses rpmsg to communicate with CDSP and receive requests
+/*
+ * This driver uses rpmsg to communicate with CDSP and receive requests
  * for CPU L3 frequency and QoS along with Cx Limit management and
  * thermal cooling handling.
  */
@@ -199,7 +190,7 @@ struct cdsprm {
 
 static struct cdsprm gcdsprm;
 static LIST_HEAD(cdsprm_list);
-DECLARE_WAIT_QUEUE_HEAD(cdsprm_wq);
+static DECLARE_WAIT_QUEUE_HEAD(cdsprm_wq);
 
 /**
  * cdsprm_register_cdspl3gov() - Register a method to set L3 clock
@@ -543,8 +534,8 @@ static void process_delayed_rm_request(struct work_struct *work)
 			(curr_timestamp < timestamp)) {
 		if ((timestamp - curr_timestamp) <
 		(gcdsprm.qos_max_ms * SYS_CLK_TICKS_PER_MS))
-			time_ms = div_u64((timestamp - curr_timestamp),
-						SYS_CLK_TICKS_PER_MS);
+			time_ms = ((unsigned int)(timestamp - curr_timestamp)) /
+						SYS_CLK_TICKS_PER_MS;
 		else
 			break;
 		gcdsprm.dt_state = CDSP_DELAY_THREAD_BEFORE_SLEEP;
@@ -859,6 +850,9 @@ static int cdsp_get_cur_state(struct thermal_cooling_device *cdev,
 static int cdsp_set_cur_state(struct thermal_cooling_device *cdev,
 				unsigned long state)
 {
+	if (state > CDSP_THERMAL_MAX_STATE)
+		return -EINVAL;
+
 	if (gcdsprm.thermal_cdsp_level == state)
 		return 0;
 
@@ -892,6 +886,9 @@ static int hvx_get_cur_state(struct thermal_cooling_device *cdev,
 static int hvx_set_cur_state(struct thermal_cooling_device *cdev,
 				unsigned long state)
 {
+	if (state > HVX_THERMAL_MAX_STATE)
+		return -EINVAL;
+
 	if (gcdsprm.thermal_hvx_level == state)
 		return 0;
 
@@ -914,7 +911,7 @@ static int cdsprm_compute_prio_write(void *data, u64 val)
 	return 0;
 }
 
-DEFINE_SIMPLE_ATTRIBUTE(cdsprm_debugfs_fops,
+DEFINE_DEBUGFS_ATTRIBUTE(cdsprm_debugfs_fops,
 			cdsprm_compute_prio_read,
 			cdsprm_compute_prio_write,
 			"%llu\n");
@@ -983,7 +980,7 @@ static int cdsp_rm_driver_probe(struct platform_device *pdev)
 		thermal_cdev_update(tcdev);
 	}
 
-	dev_info(dev, "CDSP request manager driver probe called\n");
+	dev_dbg(dev, "CDSP request manager driver probe called\n");
 	gcdsprm.b_qosinitdone = true;
 
 	return 0;
@@ -1133,24 +1130,4 @@ err_wq:
 	return err;
 }
 
-static void __exit cdsprm_exit(void)
-{
-	if (gcdsprm.b_rpmsg_register)
-		unregister_rpmsg_driver(&cdsprm_rpmsg_client);
-
-	gcdsprm.b_rpmsg_register = false;
-	platform_driver_unregister(&cdsp_rm);
-	platform_driver_unregister(&hvx_rm);
-	complete(&gcdsprm.msg_avail);
-
-	if (gcdsprm.cdsprm_wq_task)
-		kthread_stop(gcdsprm.cdsprm_wq_task);
-
-	destroy_workqueue(gcdsprm.delay_work_queue);
-	debugfs_remove_recursive(gcdsprm.debugfs_dir);
-}
-
-module_init(cdsprm_init);
-module_exit(cdsprm_exit);
-
-MODULE_LICENSE("GPL v2");
+late_initcall(cdsprm_init);

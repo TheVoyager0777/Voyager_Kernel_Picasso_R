@@ -1,13 +1,6 @@
-/* Copyright (c) 2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2019, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _SOC_QCOM_LLCC_PERFMON_H_
@@ -16,6 +9,7 @@
 #define LLCC_COMMON_HW_INFO		(0x30000)
 #define LLCC_COMMON_STATUS0		(0x3000C)
 /* FEAC */
+#define FEAC_PROF_FILTER_0_CFG3		(0x03700C)
 #define FEAC_PROF_FILTER_0_CFG5		(0x037014)
 #define FEAC_PROF_FILTER_0_CFG6		(0x037018)
 #define FEAC_PROF_EVENT_n_CFG(n)	(0x037060 + 4 * (n))
@@ -43,6 +37,7 @@
 
 /* TRP */
 #define TRP_PROF_FILTER_0_CFG1		(0x024004)
+#define TRP_PROF_FILTER_0_CFG2		(0x024008)
 #define TRP_PROF_EVENT_n_CFG(n)		(0x024020 + 4 * (n))
 #define TRP_SCID_n_STATUS(n)		(0x000004 + 0x1000 * (n))
 
@@ -60,7 +55,7 @@
 
 #define LLCC_COUNTER_n_VALUE(n)		(0x031060 + 4 * (n))
 
-#define EVENT_NUM_MAX			(64)
+#define EVENT_NUM_MAX			(128)
 #define SCID_MAX			(32)
 
 /* Perfmon */
@@ -128,7 +123,21 @@
 #define EVENT_SEL_SHIFT			(0)
 #define EVENT_SEL_MASK			GENMASK(EVENT_SEL_SHIFT + 5,\
 						EVENT_SEL_SHIFT)
+#define EVENT_SEL_MASK7			GENMASK(EVENT_SEL_SHIFT + 6,\
+						EVENT_SEL_SHIFT)
 
+#define CACHEALLOC_MASK_SHIFT		(16)
+#define CACHEALLOC_MASK_MASK		GENMASK(CACHEALLOC_MASK_SHIFT + 3, \
+					CACHEALLOC_MASK_SHIFT)
+#define CACHEALLOC_MATCH_SHIFT		(12)
+#define CACHEALLOC_MATCH_MASK		GENMASK(CACHEALLOC_MATCH_SHIFT + 3, \
+					CACHEALLOC_MATCH_SHIFT)
+#define OPCODE_MASK_SHIFT		(28)
+#define OPCODE_MASK_MASK		GENMASK(OPCODE_MASK_SHIFT + 3, \
+					OPCODE_MASK_SHIFT)
+#define OPCODE_MATCH_SHIFT		(24)
+#define OPCODE_MATCH_MASK		GENMASK(OPCODE_MATCH_SHIFT + 3, \
+					OPCODE_MATCH_SHIFT)
 #define MID_MASK_SHIFT			(16)
 #define MID_MASK_MASK			GENMASK(MID_MASK_SHIFT + 15, \
 						MID_MASK_SHIFT)
@@ -257,7 +266,10 @@
 					+ 13, \
 					TRP_SCID_STATUS_CURRENT_CAP_SHIFT)
 
-#define LLCC_VERSION			(0x01010200)
+#define LLCC_VERSION_1			(0x01010200)
+#define LLCC_VERSION_2			(0x02000000)
 #define REV_0				(0x0)
 #define REV_1				(0x1)
+#define REV_2				(0x2)
+#define BANK_OFFSET			(0x80000)
 #endif /* _SOC_QCOM_LLCC_PERFMON_H_ */

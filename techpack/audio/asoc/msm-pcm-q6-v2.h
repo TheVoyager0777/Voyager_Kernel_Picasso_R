@@ -1,19 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (C) 2008 Google, Inc.
  * Copyright (C) 2008 HTC Corporation
- * Copyright (c) 2012-2017,2019 The Linux Foundation. All rights reserved.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- *
- * See the GNU General Public License for more details.
- * You should have received a copy of the GNU General Public License
- * along with this program; if not, you can find it at http://www.fsf.org.
+ * Copyright (c) 2012-2017, 2019 The Linux Foundation. All rights reserved.
  */
 
 #ifndef _MSM_PCM_H
@@ -110,8 +99,6 @@ struct msm_audio {
 	bool meta_data_mode;
 	uint32_t volume;
 	bool compress_enable;
-	uint32_t qtime_lsw;
-	uint32_t qtime_msw;
 	/* array of frame info */
 	struct msm_audio_in_frame_info in_frame_info[CAPTURE_MAX_NUM_PERIODS];
 };
@@ -126,8 +113,10 @@ struct output_meta_data_st {
 
 struct msm_plat_data {
 	int perf_mode;
-	struct snd_pcm *pcm[MSM_FRONTEND_DAI_MAX];
+	struct snd_pcm *pcm;
 	struct msm_pcm_ch_map *ch_map[MSM_FRONTEND_DAI_MAX];
+	struct snd_pcm *pcm_device[MSM_FRONTEND_DAI_MM_SIZE];
+	struct msm_pcm_channel_mixer *chmixer_pspd[MSM_FRONTEND_DAI_MM_SIZE][2];
 	struct mutex lock;
 };
 

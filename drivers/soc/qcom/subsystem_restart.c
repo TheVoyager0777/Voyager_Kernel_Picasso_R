@@ -1,13 +1,6 @@
-/* Copyright (c) 2011-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2011-2020, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "subsys-restart: %s(): " fmt, __func__
@@ -188,7 +181,7 @@ struct restart_log {
 struct subsys_device {
 	struct subsys_desc *desc;
 	struct work_struct work;
-	struct wakeup_source ssr_wlock;
+	struct wakeup_source *ssr_wlock;
 	char wlname[64];
 	struct work_struct device_restart_work;
 	struct subsys_tracking track;
@@ -519,14 +512,14 @@ static int is_ramdump_enabled(struct subsys_device *dev)
 }
 
 #ifdef CONFIG_SETUP_SSR_NOTIF_TIMEOUTS
-static void notif_timeout_handler(unsigned long data)
+static void notif_timeout_handler(struct timer_list *t)
 {
 	char *sysmon_msg = "Sysmon communication from %s to %s taking too long";
 	char *subsys_notif_msg = "Subsys notifier chain for %s taking too long";
 	char *sysmon_shutdwn_msg = "sysmon_send_shutdown to %s taking too long";
 	char *unknown_err_msg = "Unknown communication occurred";
 	struct subsys_notif_timeout *timeout_data =
-		(struct subsys_notif_timeout *) data;
+		from_timer(timeout_data, t, timer);
 	enum ssr_comm comm_type = timeout_data->comm_type;
 
 	switch (comm_type) {
@@ -574,7 +567,6 @@ static void _setup_timeout(struct subsys_desc *source_ss,
 		return;
 	}
 
-	timeout_data->timer.data = (unsigned long) timeout_data;
 	timeout_data->comm_type = comm_type;
 	timeout = jiffies + msecs_to_jiffies(timeout_vals[comm_type]);
 	mod_timer(&timeout_data->timer, timeout);
@@ -582,8 +574,7 @@ static void _setup_timeout(struct subsys_desc *source_ss,
 
 static void _init_subsys_timer(struct subsys_desc *subsys)
 {
-	init_timer(&subsys->timeout_data.timer);
-	subsys->timeout_data.timer.function = notif_timeout_handler;
+	timer_setup(&subsys->timeout_data.timer, notif_timeout_handler, 0);
 }
 
 #endif /* CONFIG_SETUP_SSR_NOTIF_TIMEOUTS */
@@ -620,22 +611,6 @@ static int for_each_subsys_device(struct subsys_device **list,
 			return ret;
 	}
 	return 0;
-}
-
-static void subsys_notif_uevent(struct subsys_desc *desc,
-				enum subsys_notif_type notif)
-{
-	char *envp[3];
-
-	if (notif == SUBSYS_AFTER_POWERUP) {
-		envp[0] = kasprintf(GFP_KERNEL, "SUBSYSTEM=%s", desc->name);
-		envp[1] = kasprintf(GFP_KERNEL, "NOTIFICATION=%d", notif);
-		envp[2] = NULL;
-		kobject_uevent_env(&desc->dev->kobj, KOBJ_CHANGE, envp);
-		pr_debug("%s %s sent\n", envp[0], envp[1]);
-		kfree(envp[1]);
-		kfree(envp[0]);
-	}
 }
 
 static void notify_each_subsys_device(struct subsys_device **list,
@@ -684,7 +659,6 @@ static void notify_each_subsys_device(struct subsys_device **list,
 								&notif_data);
 		cancel_timeout(dev->desc);
 		trace_pil_notif("after_send_notif", notif, dev->desc->fw_name);
-		subsys_notif_uevent(dev->desc, notif);
 	}
 }
 
@@ -804,7 +778,6 @@ static int subsystem_powerup(struct subsys_device *dev, void *data)
 	pr_info("[%s:%d]: Powering up %s\n", current->comm, current->pid, name);
 	reinit_completion(&dev->err_ready);
 
-	enable_all_irqs(dev);
 	ret = dev->desc->powerup(dev->desc);
 	if (ret < 0) {
 		notify_each_subsys_device(&dev, 1, SUBSYS_POWERUP_FAILURE,
@@ -820,6 +793,7 @@ static int subsystem_powerup(struct subsys_device *dev, void *data)
 			pr_err("Powerup failure on %s\n", name);
 		return ret;
 	}
+	enable_all_irqs(dev);
 
 	ret = wait_for_err_ready(dev);
 	if (ret) {
@@ -1185,7 +1159,7 @@ err:
 
 	spin_lock_irqsave(&track->s_lock, flags);
 	track->p_state = SUBSYS_NORMAL;
-	__pm_relax(&dev->ssr_wlock);
+	__pm_relax(dev->ssr_wlock);
 	spin_unlock_irqrestore(&track->s_lock, flags);
 }
 
@@ -1209,7 +1183,7 @@ static void __subsystem_restart_dev(struct subsys_device *dev)
 					dev->track.state == SUBSYS_ONLINE) {
 		if (track->p_state != SUBSYS_RESTARTING) {
 			track->p_state = SUBSYS_CRASHED;
-			__pm_stay_awake(&dev->ssr_wlock);
+			__pm_stay_awake(dev->ssr_wlock);
 			queue_work(ssr_wq, &dev->work);
 		} else {
 			panic("Subsystem %s crashed during SSR!", name);
@@ -1271,16 +1245,13 @@ int subsystem_restart_dev(struct subsys_device *dev)
 		return 0;
 	}
 
-	if (!strcmp(name, "modem"))
-		dev->restart_level = RESET_SUBSYS_COUPLED;
-
 	switch (dev->restart_level) {
 
 	case RESET_SUBSYS_COUPLED:
 		__subsystem_restart_dev(dev);
 		break;
 	case RESET_SOC:
-		__pm_stay_awake(&dev->ssr_wlock);
+		__pm_stay_awake(dev->ssr_wlock);
 		schedule_work(&dev->device_restart_work);
 		return 0;
 	default:
@@ -1338,14 +1309,24 @@ EXPORT_SYMBOL(subsystem_crashed);
 void subsys_set_crash_status(struct subsys_device *dev,
 				enum crash_status crashed)
 {
+	if (!dev) {
+		pr_err("subsys_set_crash_status() dev is NULL\n");
+		return;
+	}
 	dev->crashed = crashed;
 }
 EXPORT_SYMBOL(subsys_set_crash_status);
 
 enum crash_status subsys_get_crash_status(struct subsys_device *dev)
 {
+	if (!dev) {
+		pr_err("subsys_get_crash_status() dev is NULL\n");
+		return CRASH_STATUS_WDOG_BITE;
+	}
+
 	return dev->crashed;
 }
+EXPORT_SYMBOL(subsys_get_crash_status);
 
 static struct subsys_device *desc_to_subsys(struct device *d)
 {
@@ -1374,6 +1355,16 @@ void notify_proxy_unvote(struct device *device)
 	if (dev)
 		notify_each_subsys_device(&dev, 1, SUBSYS_PROXY_UNVOTE, NULL);
 }
+
+void notify_before_auth_and_reset(struct device *device)
+{
+	struct subsys_device *dev = desc_to_subsys(device);
+
+	if (dev)
+		notify_each_subsys_device(&dev, 1,
+			SUBSYS_BEFORE_AUTH_AND_RESET, NULL);
+}
+
 
 static int subsys_device_open(struct inode *inode, struct file *file)
 {
@@ -1424,7 +1415,7 @@ static void subsys_device_release(struct device *dev)
 {
 	struct subsys_device *subsys = to_subsys(dev);
 
-	wakeup_source_trash(&subsys->ssr_wlock);
+	wakeup_source_unregister(subsys->ssr_wlock);
 	mutex_destroy(&subsys->track.lock);
 	ida_simple_remove(&subsys_ida, subsys->id);
 	kfree(subsys);
@@ -1839,7 +1830,14 @@ struct subsys_device *subsys_register(struct subsys_desc *desc)
 	subsys->early_notify = subsys_get_early_notif_info(desc->name);
 
 	snprintf(subsys->wlname, sizeof(subsys->wlname), "ssr(%s)", desc->name);
-	wakeup_source_init(&subsys->ssr_wlock, subsys->wlname);
+
+	subsys->ssr_wlock =
+		wakeup_source_register(&subsys->dev, subsys->wlname);
+	if (!subsys->ssr_wlock) {
+		kfree(subsys);
+		return ERR_PTR(-ENOMEM);
+	}
+
 	INIT_WORK(&subsys->work, subsystem_restart_wq_func);
 	INIT_WORK(&subsys->device_restart_work, device_restart_work_hdlr);
 	spin_lock_init(&subsys->track.s_lock);
@@ -1847,7 +1845,7 @@ struct subsys_device *subsys_register(struct subsys_desc *desc)
 
 	subsys->id = ida_simple_get(&subsys_ida, 0, 0, GFP_KERNEL);
 	if (subsys->id < 0) {
-		wakeup_source_trash(&subsys->ssr_wlock);
+		wakeup_source_unregister(subsys->ssr_wlock);
 		ret = subsys->id;
 		kfree(subsys);
 		return ERR_PTR(ret);

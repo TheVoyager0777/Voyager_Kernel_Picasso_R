@@ -70,6 +70,21 @@ struct drm_msm_timespec {
 };
 
 /*
+ * Colorimetry Data Block values
+ * These bit nums are defined as per the CTA spec
+ * and indicate the colorspaces supported by the sink
+ */
+#define DRM_EDID_CLRMETRY_xvYCC_601   (1 << 0)
+#define DRM_EDID_CLRMETRY_xvYCC_709   (1 << 1)
+#define DRM_EDID_CLRMETRY_sYCC_601    (1 << 2)
+#define DRM_EDID_CLRMETRY_ADOBE_YCC_601  (1 << 3)
+#define DRM_EDID_CLRMETRY_ADOBE_RGB     (1 << 4)
+#define DRM_EDID_CLRMETRY_BT2020_CYCC (1 << 5)
+#define DRM_EDID_CLRMETRY_BT2020_YCC  (1 << 6)
+#define DRM_EDID_CLRMETRY_BT2020_RGB  (1 << 7)
+#define DRM_EDID_CLRMETRY_DCI_P3      (1 << 15)
+
+/*
  * HDR Metadata
  * These are defined as per EDID spec and shall be used by the sink
  * to set the HDR metadata for playback from userspace.
@@ -84,6 +99,7 @@ struct drm_msm_timespec {
 #define HDR_EOTF_HLG		0x3
 
 #define DRM_MSM_EXT_HDR_METADATA
+#define DRM_MSM_EXT_HDR_PLUS_METADATA
 struct drm_msm_ext_hdr_metadata {
 	__u32 hdr_state;        /* HDR state */
 	__u32 eotf;             /* electro optical transfer function */
@@ -96,6 +112,9 @@ struct drm_msm_ext_hdr_metadata {
 	__u32 min_luminance;    /* Min Luminance */
 	__u32 max_content_light_level; /* max content light level */
 	__u32 max_average_light_level; /* max average light level */
+
+	__u64 hdr_plus_payload;     /* user pointer to dynamic HDR payload */
+	__u32 hdr_plus_payload_size;/* size of dynamic HDR payload data */
 };
 
 /**
@@ -104,6 +123,7 @@ struct drm_msm_ext_hdr_metadata {
  * to determine the HDR properties to be set to the sink.
  */
 #define DRM_MSM_EXT_HDR_PROPERTIES
+#define DRM_MSM_EXT_HDR_PLUS_PROPERTIES
 struct drm_msm_ext_hdr_properties {
 	__u8 hdr_metadata_type_one;   /* static metadata type one */
 	__u32 hdr_supported;          /* HDR supported */
@@ -111,6 +131,8 @@ struct drm_msm_ext_hdr_properties {
 	__u32 hdr_max_luminance;      /* Max luminance */
 	__u32 hdr_avg_luminance;      /* Avg luminance */
 	__u32 hdr_min_luminance;      /* Min Luminance */
+
+	__u32 hdr_plus_supported;     /* HDR10+ supported */
 };
 
 #define MSM_PARAM_GPU_ID     0x01
@@ -119,6 +141,7 @@ struct drm_msm_ext_hdr_properties {
 #define MSM_PARAM_MAX_FREQ   0x04
 #define MSM_PARAM_TIMESTAMP  0x05
 #define MSM_PARAM_GMEM_BASE  0x06
+#define MSM_PARAM_NR_RINGS   0x07
 
 struct drm_msm_param {
 	__u32 pipe;           /* in, MSM_PIPE_x */
@@ -196,9 +219,9 @@ struct drm_msm_gem_submit_reloc {
 #ifdef __cplusplus
 	__u32 or_val;
 #else
-	__u32 or; /* in, value OR'd with result */
+	__u32 or;             /* in, value OR'd with result */
 #endif
-	__s32  shift;          /* in, amount of left shift (can be negative) */
+	__s32 shift;          /* in, amount of left shift (can be negative) */
 	__u32 reloc_idx;      /* in, index of reloc_bo buffer */
 	__u64 reloc_offset;   /* in, offset from start of reloc_bo */
 };
@@ -250,10 +273,12 @@ struct drm_msm_gem_submit_bo {
 #define MSM_SUBMIT_NO_IMPLICIT   0x80000000 /* disable implicit sync */
 #define MSM_SUBMIT_FENCE_FD_IN   0x40000000 /* enable input fence_fd */
 #define MSM_SUBMIT_FENCE_FD_OUT  0x20000000 /* enable output fence_fd */
+#define MSM_SUBMIT_SUDO          0x10000000 /* run submitted cmds from RB */
 #define MSM_SUBMIT_FLAGS                ( \
 		MSM_SUBMIT_NO_IMPLICIT   | \
 		MSM_SUBMIT_FENCE_FD_IN   | \
 		MSM_SUBMIT_FENCE_FD_OUT  | \
+		MSM_SUBMIT_SUDO          | \
 		0)
 
 /* Each cmdstream submit consists of a table of buffers involved, and
@@ -268,6 +293,7 @@ struct drm_msm_gem_submit {
 	__u64 bos;            /* in, ptr to array of submit_bo's */
 	__u64 cmds;           /* in, ptr to array of submit_cmd's */
 	__s32 fence_fd;       /* in/out fence fd (see MSM_SUBMIT_FENCE_FD_IN/OUT) */
+	__u32 queueid;         /* in, submitqueue id */
 };
 
 /* The normal way to synchronize with the GPU is just to CPU_PREP on
@@ -281,6 +307,7 @@ struct drm_msm_wait_fence {
 	__u32 fence;          /* in */
 	__u32 pad;
 	struct drm_msm_timespec timeout;   /* in */
+	__u32 queueid;         /* in, submitqueue id */
 };
 
 /* madvise provides a way to tell the kernel in case a buffers contents
@@ -361,6 +388,20 @@ struct drm_msm_event_resp {
 	__u8 data[];
 };
 
+/*
+ * Draw queues allow the user to set specific submission parameter. Command
+ * submissions specify a specific submitqueue to use.  ID 0 is reserved for
+ * backwards compatibility as a "default" submitqueue
+ */
+
+#define MSM_SUBMITQUEUE_FLAGS (0)
+
+struct drm_msm_submitqueue {
+	__u32 flags;   /* in, MSM_SUBMITQUEUE_x */
+	__u32 prio;    /* in, Priority level */
+	__u32 id;      /* out, identifier */
+};
+
 /**
  * struct drm_msm_power_ctrl: Payload to enable/disable the power vote
  * @enable: enable/disable the power vote
@@ -382,7 +423,11 @@ struct drm_msm_power_ctrl {
 #define DRM_MSM_GEM_SUBMIT             0x06
 #define DRM_MSM_WAIT_FENCE             0x07
 #define DRM_MSM_GEM_MADVISE            0x08
-
+/* placeholder:
+#define DRM_MSM_GEM_SVM_NEW            0x09
+ */
+#define DRM_MSM_SUBMITQUEUE_NEW        0x0A
+#define DRM_MSM_SUBMITQUEUE_CLOSE      0x0B
 #define DRM_SDE_WB_CONFIG              0x40
 #define DRM_MSM_REGISTER_EVENT         0x41
 #define DRM_MSM_DEREGISTER_EVENT       0x42
@@ -398,6 +443,9 @@ struct drm_msm_power_ctrl {
 #define DRM_EVENT_IDLE_NOTIFY 0x80000005
 #define DRM_EVENT_PANEL_DEAD 0x80000006 /* ESD event */
 #define DRM_EVENT_SDE_HW_RECOVERY 0X80000007
+#define DRM_EVENT_LTM_HIST 0X80000008
+#define DRM_EVENT_LTM_WB_PB 0X80000009
+#define DRM_EVENT_LTM_OFF 0X8000000A
 
 #define DRM_EVENT_TOUCH 0x8000000F
 
@@ -417,6 +465,8 @@ struct drm_msm_power_ctrl {
 			DRM_MSM_DEREGISTER_EVENT), struct drm_msm_event_req)
 #define DRM_IOCTL_MSM_RMFB2 DRM_IOW((DRM_COMMAND_BASE + \
 			DRM_MSM_RMFB2), unsigned int)
+#define DRM_IOCTL_MSM_SUBMITQUEUE_NEW    DRM_IOWR(DRM_COMMAND_BASE + DRM_MSM_SUBMITQUEUE_NEW, struct drm_msm_submitqueue)
+#define DRM_IOCTL_MSM_SUBMITQUEUE_CLOSE  DRM_IOW (DRM_COMMAND_BASE + DRM_MSM_SUBMITQUEUE_CLOSE, __u32)
 #define DRM_IOCTL_MSM_POWER_CTRL DRM_IOW((DRM_COMMAND_BASE + \
 			DRM_MSM_POWER_CTRL), struct drm_msm_power_ctrl)
 

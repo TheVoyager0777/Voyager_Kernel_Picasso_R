@@ -1,4 +1,5 @@
-/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -929,7 +930,7 @@ static int32_t msm_vfe40_convert_bpp_to_reg(int32_t bpp, uint32_t *bpp_reg)
 		*bpp_reg = 1 << 1;
 		break;
 	default:
-		pr_err("%s:%d invalid bpp %d", __func__, __LINE__, bpp);
+		pr_err("%s:%d invalid bpp %d\n", __func__, __LINE__, bpp);
 		return -EINVAL;
 	}
 	return rc;
@@ -1173,7 +1174,7 @@ static void msm_vfe40_cfg_fetch_engine(struct vfe_device *vfe_dev,
 	struct msm_vfe_fetch_engine_cfg *fe_cfg = NULL;
 
 	if (pix_cfg->input_mux != EXTERNAL_READ) {
-		pr_err("%s: Invalid mux configuration - mux: %d",
+		pr_err("%s: Invalid mux configuration - mux: %d\n",
 			__func__, pix_cfg->input_mux);
 		return;
 	}
@@ -2388,7 +2389,6 @@ static struct platform_driver vfe40_driver = {
 	.probe = vfe_hw_probe,
 	.driver = {
 		.name = "msm_vfe40",
-		.owner = THIS_MODULE,
 		.of_match_table = msm_vfe40_dt_match,
 	},
 };

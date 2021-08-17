@@ -9,10 +9,6 @@
 #include <linux/percpu.h>
 
 void topology_normalize_cpu_scale(void);
-int topology_detect_flags(void);
-int topology_smt_flags(void);
-int topology_core_flags(void);
-int topology_cpu_flags(void);
 int topology_update_cpu_topology(void);
 
 struct device_node;
@@ -29,27 +25,22 @@ unsigned long topology_get_cpu_scale(struct sched_domain *sd, int cpu)
 
 void topology_set_cpu_scale(unsigned int cpu, unsigned long capacity);
 
-DECLARE_PER_CPU(unsigned long, efficiency);
-static inline
-unsigned long topology_get_cpu_efficiency(int cpu)
-{
-	return per_cpu(efficiency, cpu);
-}
-
 DECLARE_PER_CPU(unsigned long, freq_scale);
 
 static inline
-unsigned long topology_get_freq_scale(struct sched_domain *sd, int cpu)
+unsigned long topology_get_freq_scale(int cpu)
 {
 	return per_cpu(freq_scale, cpu);
 }
 
 DECLARE_PER_CPU(unsigned long, max_freq_scale);
+DECLARE_PER_CPU(unsigned long, max_thermal_scale);
 
 static inline
 unsigned long topology_get_max_freq_scale(struct sched_domain *sd, int cpu)
 {
-	return per_cpu(max_freq_scale, cpu);
+	return min(per_cpu(max_freq_scale, cpu),
+		   per_cpu(max_thermal_scale, cpu));
 }
 
 #endif /* _LINUX_ARCH_TOPOLOGY_H_ */

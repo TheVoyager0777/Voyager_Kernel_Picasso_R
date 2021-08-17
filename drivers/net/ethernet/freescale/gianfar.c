@@ -485,11 +485,7 @@ static struct net_device_stats *gfar_get_stats(struct net_device *dev)
 
 static int gfar_set_mac_addr(struct net_device *dev, void *p)
 {
-	int ret;
-
-	ret = eth_mac_addr(dev, p);
-	if (ret)
-		return ret;
+	eth_mac_addr(dev, p);
 
 	gfar_set_mac_for_addr(dev, 0, dev->dev_addr);
 
@@ -848,10 +844,8 @@ static int gfar_of_init(struct platform_device *ofdev, struct net_device **pdev)
 				continue;
 
 			err = gfar_parse_group(child, priv, model);
-			if (err) {
-				of_node_put(child);
+			if (err)
 				goto err_grp_init;
-			}
 		}
 	} else { /* SQ_SG_MODE */
 		err = gfar_parse_group(np, priv, model);
@@ -2936,29 +2930,17 @@ static bool gfar_add_rx_frag(struct gfar_rx_buff *rxb, u32 lstatus,
 {
 	int size = lstatus & BD_LENGTH_MASK;
 	struct page *page = rxb->page;
-	bool last = !!(lstatus & BD_LFLAG(RXBD_LAST));
-
-	/* Remove the FCS from the packet length */
-	if (last)
-		size -= ETH_FCS_LEN;
 
 	if (likely(first)) {
 		skb_put(skb, size);
 	} else {
 		/* the last fragments' length contains the full frame length */
-		if (last)
+		if (lstatus & BD_LFLAG(RXBD_LAST))
 			size -= skb->len;
 
-		/* Add the last fragment if it contains something other than
-		 * the FCS, otherwise drop it and trim off any part of the FCS
-		 * that was already received.
-		 */
-		if (size > 0)
-			skb_add_rx_frag(skb, skb_shinfo(skb)->nr_frags, page,
-					rxb->page_offset + RXBUF_ALIGNMENT,
-					size, GFAR_RXB_TRUESIZE);
-		else if (size < 0)
-			pskb_trim(skb, skb->len + size);
+		skb_add_rx_frag(skb, skb_shinfo(skb)->nr_frags, page,
+				rxb->page_offset + RXBUF_ALIGNMENT,
+				size, GFAR_RXB_TRUESIZE);
 	}
 
 	/* try reuse page */
@@ -3070,6 +3052,9 @@ static void gfar_process_frame(struct net_device *ndev, struct sk_buff *skb)
 
 	if (priv->padding)
 		skb_pull(skb, priv->padding);
+
+	/* Trim off the FCS */
+	pskb_trim(skb, skb->len - ETH_FCS_LEN);
 
 	if (ndev->features & NETIF_F_RXCSUM)
 		gfar_rx_checksum(skb, fcb);

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2016, Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2016, 2019 Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -23,6 +23,8 @@
 #include <linux/platform_device.h>
 #include <linux/io.h>
 #include <linux/delay.h>
+#include <soc/qcom/cmd-db.h>
+#include <soc/qcom/rpmh.h>
 
 #define readl_poll_timeout(addr, val, cond, sleep_us, timeout_us) \
 ({ \
@@ -80,6 +82,12 @@ struct ufs_qcom_phy_vreg {
 	bool is_always_on;
 };
 
+struct ufs_qcom_phy_rpmh_rsc {
+	const char *qphy_rsc_name;
+	u32 qphy_rsc_addr;
+	bool enabled;
+};
+
 struct ufs_qcom_phy {
 	struct list_head list;
 	struct device *dev;
@@ -97,6 +105,7 @@ struct ufs_qcom_phy {
 	struct ufs_qcom_phy_vreg vdda_pll;
 	struct ufs_qcom_phy_vreg vdda_phy;
 	struct ufs_qcom_phy_vreg vddp_ref_clk;
+	struct ufs_qcom_phy_rpmh_rsc rpmh_rsc;
 
 	/* Number of lanes available (1 or 2) for Rx/Tx */
 	u32 lanes_per_direction;
@@ -137,15 +146,17 @@ struct ufs_qcom_phy {
 	struct ufs_qcom_phy_calibration *cached_regs;
 	int cached_regs_table_size;
 	bool is_powered_on;
+	bool is_started;
 	struct ufs_qcom_phy_specific_ops *phy_spec_ops;
 	u32 vco_tune1_mode1;
+
+	enum phy_mode mode;
 };
 
 /**
  * struct ufs_qcom_phy_specific_ops - set of pointers to functions which have a
  * specific implementation per phy. Each UFS phy, should implement
  * those functions according to its spec and requirements
- * @calibrate_phy: pointer to a function that calibrate the phy
  * @start_serdes: pointer to a function that starts the serdes
  * @is_physical_coding_sublayer_ready: pointer to a function that
  * checks pcs readiness. returns 0 for success and non-zero for error.

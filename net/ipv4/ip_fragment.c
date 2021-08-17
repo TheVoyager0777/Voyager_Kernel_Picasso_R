@@ -191,7 +191,8 @@ out:
 	spin_unlock(&qp->q.lock);
 out_rcu_unlock:
 	rcu_read_unlock();
-	kfree_skb(head);
+	if (head)
+		kfree_skb(head);
 	ipq_put(qp);
 }
 

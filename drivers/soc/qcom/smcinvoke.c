@@ -1,21 +1,12 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * SMC Invoke driver
- *
  * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #define pr_fmt(fmt) "smcinvoke: %s: " fmt, __func__
 
 #include <linux/module.h>
+#include <linux/mod_devicetable.h>
 #include <linux/device.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
@@ -33,6 +24,7 @@
 #include <soc/qcom/scm.h>
 #include <asm/cacheflush.h>
 #include <soc/qcom/qseecomi.h>
+#include <soc/qcom/qtee_shmbridge.h>
 
 #include "smcinvoke_object.h"
 #include "../../misc/qseecom_kernel.h"
@@ -287,7 +279,7 @@ static struct smcinvoke_server_info *find_cb_server_locked(uint16_t server_id)
 	return  NULL;
 }
 
-static struct smcinvoke_server_info *get_cb_server_locked(uint16_t server_id)
+struct smcinvoke_server_info *get_cb_server_locked(uint16_t server_id)
 {
 	struct smcinvoke_server_info *server = find_cb_server_locked(server_id);
 
@@ -302,7 +294,8 @@ static uint16_t next_cb_server_id_locked(void)
 	if (g_last_cb_server_id == CBOBJ_SERVER_ID_END)
 		g_last_cb_server_id = CBOBJ_SERVER_ID_START;
 
-	while (find_cb_server_locked(++g_last_cb_server_id));
+	while (find_cb_server_locked(++g_last_cb_server_id))
+		;
 
 	return g_last_cb_server_id;
 }
@@ -342,7 +335,8 @@ static uint32_t next_mem_region_obj_id_locked(void)
 	if (g_last_mem_rgn_id == MAX_LOCAL_OBJ_ID)
 		g_last_mem_rgn_id = 0;
 
-	while (find_mem_obj_locked(++g_last_mem_rgn_id, SMCINVOKE_MEM_RGN_OBJ));
+	while (find_mem_obj_locked(++g_last_mem_rgn_id, SMCINVOKE_MEM_RGN_OBJ))
+		;
 
 	return g_last_mem_rgn_id;
 }
@@ -353,7 +347,8 @@ static uint32_t next_mem_map_obj_id_locked(void)
 		g_last_mem_map_obj_id = 0;
 
 	while (find_mem_obj_locked(++g_last_mem_map_obj_id,
-					SMCINVOKE_MEM_MAP_OBJ));
+					SMCINVOKE_MEM_MAP_OBJ))
+		;
 
 	return g_last_mem_map_obj_id;
 }
@@ -703,7 +698,7 @@ out:
 	return ret;
 }
 
-static int get_fd_for_obj(uint32_t obj_type, uint32_t obj, int64_t *fd)
+static int get_fd_for_obj(uint32_t obj_type, uint32_t obj, int32_t *fd)
 {
 	int unused_fd = -1, ret = -EINVAL;
 	struct file *f = NULL;
@@ -747,7 +742,7 @@ out:
 }
 
 static int get_uhandle_from_tzhandle(int32_t tzhandle, int32_t srvr_id,
-				int64_t *uhandle, bool lock)
+				int32_t *uhandle, bool lock)
 {
 	int ret = -1;
 
@@ -1030,6 +1025,7 @@ static int marshal_out_invoke_req(const uint8_t *buf, uint32_t buf_size,
 				union smcinvoke_arg *args_buf)
 {
 	int ret = -EINVAL, i = 0;
+	int32_t temp_fd = UHANDLE_NULL;
 	union smcinvoke_tz_args *tz_args = NULL;
 	size_t offset = sizeof(struct smcinvoke_msg_hdr) +
 				OBJECT_COUNTS_TOTAL(req->counts) *
@@ -1070,9 +1066,14 @@ static int marshal_out_invoke_req(const uint8_t *buf, uint32_t buf_size,
 		 * is a CBObj. For CBObj, we have to ensure that it is sent
 		 * to server who serves it and that info comes from USpace.
 		 */
+		temp_fd = UHANDLE_NULL;
+
 		ret = get_uhandle_from_tzhandle(tz_args->handle,
 					TZHANDLE_GET_SERVER(tz_args->handle),
-					&(args_buf[i].o.fd), NO_LOCK);
+				&temp_fd, NO_LOCK);
+
+		args_buf[i].o.fd = temp_fd;
+
 		if (ret)
 			goto out;
 		tz_args++;
@@ -1089,8 +1090,10 @@ static bool is_inbound_req(int val)
 		val == QSEOS_RESULT_BLOCKED_ON_LISTENER);
 }
 
-static int prepare_send_scm_msg(const uint8_t *in_buf, size_t in_buf_len,
-				uint8_t *out_buf, size_t out_buf_len,
+static int prepare_send_scm_msg(const uint8_t *in_buf, phys_addr_t in_paddr,
+				size_t in_buf_len,
+				uint8_t *out_buf, phys_addr_t out_paddr,
+				size_t out_buf_len,
 				struct smcinvoke_cmd_req *req,
 				union smcinvoke_arg *args_buf,
 				bool *tz_acked)
@@ -1105,9 +1108,9 @@ static int prepare_send_scm_msg(const uint8_t *in_buf, size_t in_buf_len,
 		return -EINVAL;
 
 	desc.arginfo = SMCINVOKE_INVOKE_PARAM_ID;
-	desc.args[0] = (uint64_t)virt_to_phys(in_buf);
+	desc.args[0] = (uint64_t)in_paddr;
 	desc.args[1] = in_buf_len;
-	desc.args[2] = (uint64_t)virt_to_phys(out_buf);
+	desc.args[2] = (uint64_t)out_paddr;
 	desc.args[3] = out_buf_len;
 	cmd = SMCINVOKE_INVOKE_CMD;
 	dmac_flush_range(in_buf, in_buf + in_buf_len);
@@ -1285,6 +1288,7 @@ static int marshal_in_tzcb_req(const struct smcinvoke_cb_txn *cb_txn,
 				struct smcinvoke_accept *user_req, int srvr_id)
 {
 	int ret = 0, i = 0;
+	int32_t temp_fd = UHANDLE_NULL;
 	union smcinvoke_arg tmp_arg;
 	struct smcinvoke_tzcb_req *tzcb_req = cb_txn->cb_req;
 	union smcinvoke_tz_args *tz_args = tzcb_req->args;
@@ -1300,7 +1304,7 @@ static int marshal_in_tzcb_req(const struct smcinvoke_cb_txn *cb_txn,
 
 	user_req->txn_id = cb_txn->txn_id;
 	if (get_uhandle_from_tzhandle(tzcb_req->hdr.tzhandle, srvr_id,
-				(int64_t *)&user_req->cbobj_id, TAKE_LOCK)) {
+				&user_req->cbobj_id, TAKE_LOCK)) {
 		ret = -EINVAL;
 		goto out;
 	}
@@ -1361,8 +1365,13 @@ static int marshal_in_tzcb_req(const struct smcinvoke_cb_txn *cb_txn,
 		 * create a new FD and assign to output object's
 		 * context
 		 */
+		temp_fd = UHANDLE_NULL;
+
 		ret = get_uhandle_from_tzhandle(tz_args[i].handle, srvr_id,
-						&(tmp_arg.o.fd), TAKE_LOCK);
+					&temp_fd, TAKE_LOCK);
+
+		tmp_arg.o.fd = temp_fd;
+
 		if (ret) {
 			ret = -EINVAL;
 			goto out;
@@ -1484,7 +1493,7 @@ static long process_server_req(struct file *filp, unsigned int cmd,
 						 unsigned long arg)
 {
 	int ret = -1;
-	int64_t server_fd = -1;
+	int32_t server_fd = -1;
 	struct smcinvoke_server server_req = {0};
 	struct smcinvoke_server_info *server_info = NULL;
 
@@ -1542,7 +1551,7 @@ static long process_accept_req(struct file *filp, unsigned int cmd,
 		return -EINVAL;
 	}
 
-	if (copy_from_user(&user_args, (void __user *)arg,
+	if (copy_from_user(&user_args, (void __user *)(uintptr_t)arg,
 					sizeof(struct smcinvoke_accept))) {
 		pr_err("copying accept request from user failed\n");
 		return -EFAULT;
@@ -1658,8 +1667,8 @@ static long process_accept_req(struct file *filp, unsigned int cmd,
 							cb_txn->txn_id);
 			kref_put(&cb_txn->ref_cnt, delete_cb_txn);
 			mutex_unlock(&g_smcinvoke_lock);
-			ret =  copy_to_user((void __user *)arg, &user_args,
-					sizeof(struct smcinvoke_accept));
+			ret =  copy_to_user((void __user *)(uintptr_t)arg,
+				&user_args, sizeof(struct smcinvoke_accept));
 		}
 	} while (!cb_txn);
 out:
@@ -1681,6 +1690,7 @@ static long process_invoke_req(struct file *filp, unsigned int cmd,
 	size_t inmsg_size = 0, outmsg_size = SMCINVOKE_TZ_MIN_BUF_SIZE;
 	union  smcinvoke_arg *args_buf = NULL;
 	struct smcinvoke_file_data *tzobj = filp->private_data;
+	struct qtee_shm in_shm = {0}, out_shm = {0};
 	/*
 	 * Hold reference to remote object until invoke op is not
 	 * completed. Release once invoke is done.
@@ -1703,7 +1713,7 @@ static long process_invoke_req(struct file *filp, unsigned int cmd,
 		return -EPERM;
 	}
 
-	ret = copy_from_user(&req, (void __user *)arg, sizeof(req));
+	ret = copy_from_user(&req, (void __user *)(uintptr_t)arg, sizeof(req));
 	if (ret) {
 		pr_err("copying invoke req failed\n");
 		return -EFAULT;
@@ -1732,26 +1742,24 @@ static long process_invoke_req(struct file *filp, unsigned int cmd,
 	}
 
 	inmsg_size = compute_in_msg_size(&req, args_buf);
-	in_msg = (void *)__get_free_pages(GFP_KERNEL|__GFP_COMP,
-						get_order(inmsg_size));
-	if (!in_msg) {
+	ret = qtee_shmbridge_allocate_shm(inmsg_size, &in_shm);
+	if (ret) {
 		ret = -ENOMEM;
-		pr_err("memory alloc failed for in msg in invoke req\n");
+		pr_err("shmbridge alloc failed for in msg in invoke req\n");
 		goto out;
 	}
-	memset(in_msg, 0, inmsg_size);
+	in_msg = in_shm.vaddr;
 
 	mutex_lock(&g_smcinvoke_lock);
 	outmsg_size = PAGE_ALIGN(g_max_cb_buf_size);
 	mutex_unlock(&g_smcinvoke_lock);
-	out_msg = (void *)__get_free_pages(GFP_KERNEL | __GFP_COMP,
-						get_order(outmsg_size));
-	if (!out_msg) {
+	ret = qtee_shmbridge_allocate_shm(outmsg_size, &out_shm);
+	if (ret) {
 		ret = -ENOMEM;
-		pr_err("memory alloc failed for out msg in invoke req\n");
+		pr_err("shmbridge alloc failed for out msg in invoke req\n");
 		goto out;
 	}
-	memset(out_msg, 0, outmsg_size);
+	out_msg = out_shm.vaddr;
 
 	ret = marshal_in_invoke_req(&req, args_buf, tzobj->tzhandle, in_msg,
 			inmsg_size, filp_to_release, tzhandles_to_release);
@@ -1760,7 +1768,8 @@ static long process_invoke_req(struct file *filp, unsigned int cmd,
 		goto out;
 	}
 
-	ret = prepare_send_scm_msg(in_msg, inmsg_size, out_msg, outmsg_size,
+	ret = prepare_send_scm_msg(in_msg, in_shm.paddr, inmsg_size,
+					out_msg, out_shm.paddr, outmsg_size,
 					&req, args_buf, &tz_acked);
 
 	/*
@@ -1788,7 +1797,7 @@ static long process_invoke_req(struct file *filp, unsigned int cmd,
 					nr_args * req.argsize);
 	}
 	/* copy result of invoke op */
-	ret |=  copy_to_user((void __user *)arg, &req, sizeof(req));
+	ret |=  copy_to_user((void __user *)(uintptr_t)arg, &req, sizeof(req));
 	if (ret)
 		goto out;
 
@@ -1798,8 +1807,8 @@ out:
 	release_filp(filp_to_release, OBJECT_COUNTS_MAX_OO);
 	if (ret)
 		release_tzhandles(tzhandles_to_release, OBJECT_COUNTS_MAX_OO);
-	free_pages((long)out_msg, get_order(outmsg_size));
-	free_pages((long)in_msg, get_order(inmsg_size));
+	qtee_shmbridge_free_shm(&in_shm);
+	qtee_shmbridge_free_shm(&out_shm);
 	kfree(args_buf);
 
 	if (ret)
@@ -1870,6 +1879,7 @@ static int smcinvoke_release(struct inode *nodp, struct file *filp)
 	struct smcinvoke_file_data *file_data = filp->private_data;
 	struct smcinvoke_cmd_req req = {0};
 	uint32_t tzhandle = 0;
+	struct qtee_shm in_shm = {0}, out_shm = {0};
 
 	if (file_data->context_type == SMCINVOKE_OBJ_TYPE_SERVER) {
 		ret = release_cb_server(file_data->server_id);
@@ -1881,29 +1891,36 @@ static int smcinvoke_release(struct inode *nodp, struct file *filp)
 	if (!tzhandle || tzhandle == SMCINVOKE_TZ_ROOT_OBJ)
 		goto out;
 
-	in_buf = (uint8_t *)__get_free_page(GFP_KERNEL | __GFP_COMP);
-	out_buf = (uint8_t *)__get_free_page(GFP_KERNEL | __GFP_COMP);
-	if (!in_buf || !out_buf) {
+	ret = qtee_shmbridge_allocate_shm(SMCINVOKE_TZ_MIN_BUF_SIZE, &in_shm);
+	if (ret) {
 		ret = -ENOMEM;
-		pr_err("Failed to allocate memory\n");
+		pr_err("shmbridge alloc failed for in msg in release\n");
 		goto out;
 	}
 
-	memset(in_buf, 0, PAGE_SIZE);
-	memset(out_buf, 0, PAGE_SIZE);
+	ret = qtee_shmbridge_allocate_shm(SMCINVOKE_TZ_MIN_BUF_SIZE, &out_shm);
+	if (ret) {
+		ret = -ENOMEM;
+		pr_err("shmbridge alloc failed for out msg in release\n");
+		goto out;
+	}
+
+	in_buf = in_shm.vaddr;
+	out_buf = out_shm.vaddr;
 	hdr.tzhandle = tzhandle;
 	hdr.op = OBJECT_OP_RELEASE;
 	hdr.counts = 0;
 	*(struct smcinvoke_msg_hdr *)in_buf = hdr;
 
-	ret = prepare_send_scm_msg(in_buf, SMCINVOKE_TZ_MIN_BUF_SIZE, out_buf,
+	ret = prepare_send_scm_msg(in_buf, in_shm.paddr,
+		SMCINVOKE_TZ_MIN_BUF_SIZE, out_buf, out_shm.paddr,
 		SMCINVOKE_TZ_MIN_BUF_SIZE, &req, NULL, &release_handles);
 
 	process_piggyback_data(out_buf, SMCINVOKE_TZ_MIN_BUF_SIZE);
 out:
 	kfree(filp->private_data);
-	free_page((long)in_buf);
-	free_page((long)out_buf);
+	qtee_shmbridge_free_shm(&in_shm);
+	qtee_shmbridge_free_shm(&out_shm);
 
 	return ret;
 }
@@ -2000,7 +2017,6 @@ static struct platform_driver smcinvoke_plat_driver = {
 	.resume = smcinvoke_resume,
 	.driver = {
 		.name = "smcinvoke",
-		.owner = THIS_MODULE,
 		.of_match_table = smcinvoke_match,
 	},
 };

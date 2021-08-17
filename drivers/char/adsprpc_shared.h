@@ -1,15 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
- * Copyright (c) 2012-2019, 2021 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+ * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  */
 #ifndef ADSPRPC_SHARED_H
 #define ADSPRPC_SHARED_H
@@ -32,6 +23,8 @@
 #define FASTRPC_IOCTL_INVOKE_CRC _IOWR('R', 11, struct fastrpc_ioctl_invoke_crc)
 #define FASTRPC_IOCTL_CONTROL   _IOWR('R', 12, struct fastrpc_ioctl_control)
 #define FASTRPC_IOCTL_MUNMAP_FD _IOWR('R', 13, struct fastrpc_ioctl_munmap_fd)
+#define FASTRPC_IOCTL_GET_DSP_INFO \
+			_IOWR('R', 16, struct fastrpc_ioctl_dsp_capabilities)
 
 #define FASTRPC_GLINK_GUID "fastrpcglink-apps-dsp"
 #define FASTRPC_SMD_GUID "fastrpcsmd-apps-dsp"
@@ -52,6 +45,16 @@
 
 /* Fastrpc attribute for no mapping of fd  */
 #define FASTRPC_ATTR_NOMAP (16)
+
+/*
+ * Fastrpc attribute to skip flush by fastrpc
+ */
+#define FASTRPC_ATTR_FORCE_NOFLUSH  (32)
+
+/*
+ * Fastrpc attribute to skip invalidate by fastrpc
+ */
+#define FASTRPC_ATTR_FORCE_NOINVALIDATE (64)
 
 /* Driver should operate in parallel with the co-processor */
 #define FASTRPC_MODE_PARALLEL    0
@@ -246,11 +249,14 @@ enum fastrpc_control_type {
 	FASTRPC_CONTROL_SMMU		=	2,
 	FASTRPC_CONTROL_KALLOC		=	3,
 	FASTRPC_CONTROL_WAKELOCK	=	4,
+	FASTRPC_CONTROL_PM		=	5,
+/* Clean process on DSP */
+	FASTRPC_CONTROL_DSPPROCESS_CLEAN	=	6,
 };
 
 struct fastrpc_ctrl_latency {
 	uint32_t enable;	/* latency control enable */
-	uint32_t level;		/* level of control */
+	uint32_t latency;	/* latency request in us */
 };
 
 struct fastrpc_ctrl_kalloc {
@@ -261,13 +267,24 @@ struct fastrpc_ctrl_wakelock {
 	uint32_t enable;	/* wakelock control enable */
 };
 
+struct fastrpc_ctrl_pm {
+	uint32_t timeout;	/* timeout(in ms) for PM to keep system awake*/
+};
+
 struct fastrpc_ioctl_control {
 	uint32_t req;
 	union {
 		struct fastrpc_ctrl_latency lp;
 		struct fastrpc_ctrl_kalloc kalloc;
 		struct fastrpc_ctrl_wakelock wp;
+		struct fastrpc_ctrl_pm pm;
 	};
+};
+
+#define FASTRPC_MAX_DSP_ATTRIBUTES	(7)
+struct fastrpc_ioctl_dsp_capabilities {
+	uint32_t domain;	//! DSP domain to query capabilities
+	uint32_t dsp_attributes[FASTRPC_MAX_DSP_ATTRIBUTES];
 };
 
 struct smq_null_invoke {
@@ -300,6 +317,21 @@ struct smq_msg {
 struct smq_invoke_rsp {
 	uint64_t ctx;			/* invoke caller context */
 	int retval;	             /* invoke return value */
+};
+
+enum fastrpc_response_flags {
+	NORMAL_RESPONSE = 0,
+	EARLY_RESPONSE = 1,
+	USER_EARLY_SIGNAL = 2,
+	COMPLETE_SIGNAL = 3
+};
+
+struct smq_invoke_rspv2 {
+	uint64_t ctx;		/* invoke caller context */
+	int retval;		/* invoke return value */
+	uint32_t flags;		/* early response flags */
+	uint32_t earlyWakeTime;	/* user predicted early wakeup time in us */
+	uint32_t version;	/* Version number for validation */
 };
 
 static inline struct smq_invoke_buf *smq_invoke_buf_start(remote_arg64_t *pra,

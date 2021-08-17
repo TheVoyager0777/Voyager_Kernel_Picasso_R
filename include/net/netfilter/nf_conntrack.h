@@ -18,7 +18,6 @@
 #include <linux/bitops.h>
 #include <linux/compiler.h>
 #include <linux/atomic.h>
-#include <linux/list.h>
 
 #include <linux/netfilter/nf_conntrack_tcp.h>
 #include <linux/netfilter/nf_conntrack_dccp.h>
@@ -27,14 +26,6 @@
 #include <net/netfilter/ipv6/nf_conntrack_icmpv6.h>
 
 #include <net/netfilter/nf_conntrack_tuple.h>
-
-#define SIP_LIST_ELEMENTS	2
-
-struct sip_length {
-	int msg_length[SIP_LIST_ELEMENTS];
-	int skb_len[SIP_LIST_ELEMENTS];
-	int data_len[SIP_LIST_ELEMENTS];
-};
 
 /* per conntrack: protocol private data */
 union nf_conntrack_proto {
@@ -50,16 +41,16 @@ union nf_conntrack_expect_proto {
 	/* insert expect proto private data here */
 };
 
+struct nf_conntrack_net {
+	unsigned int users4;
+	unsigned int users6;
+};
+
 #include <linux/types.h>
 #include <linux/skbuff.h>
 
 #include <net/netfilter/ipv4/nf_conntrack_ipv4.h>
 #include <net/netfilter/ipv6/nf_conntrack_ipv6.h>
-
-/* Handle NATTYPE Stuff,only if NATTYPE module was defined */
-#ifdef CONFIG_IP_NF_TARGET_NATTYPE_MODULE
-#include <linux/netfilter_ipv4/ipt_NATTYPE.h>
-#endif
 
 struct nf_conn {
 	/* Usage count in here is 1 for hash table, 1 per skb,
@@ -109,17 +100,6 @@ struct nf_conn {
 
 	/* Extensions */
 	struct nf_ct_ext *ext;
-
-	void *sfe_entry;
-	struct list_head sip_segment_list;
-	const char *dptr_prev;
-	struct sip_length segment;
-	bool sip_original_dir;
-	bool sip_reply_dir;
-
-#ifdef CONFIG_IP_NF_TARGET_NATTYPE_MODULE
-	unsigned long nattype_entry;
-#endif
 
 	/* Storage reserved for other modules, must be the last member */
 	union nf_conntrack_proto proto;
@@ -196,8 +176,6 @@ void nf_ct_netns_put(struct net *net, u8 nfproto);
  */
 void *nf_ct_alloc_hashtable(unsigned int *sizep, int nulls);
 
-void nf_ct_free_hashtable(void *hash, unsigned int size);
-
 int nf_conntrack_hash_check_insert(struct nf_conn *ct);
 bool nf_ct_delete(struct nf_conn *ct, u32 pid, int report);
 
@@ -237,11 +215,6 @@ static inline bool nf_ct_kill(struct nf_conn *ct)
 {
 	return nf_ct_delete(ct, 0, 0);
 }
-
-/* These are for NAT.  Icky. */
-extern s32 (*nf_ct_nat_offset)(const struct nf_conn *ct,
-			       enum ip_conntrack_dir dir,
-			       u32 seq);
 
 /* Set all unconfirmed conntrack as dying */
 void nf_ct_unconfirmed_destroy(struct net *);
@@ -317,7 +290,6 @@ extern struct hlist_nulls_head *nf_conntrack_hash;
 extern unsigned int nf_conntrack_htable_size;
 extern seqcount_t nf_conntrack_generation;
 extern unsigned int nf_conntrack_max;
-extern unsigned int nf_conntrack_pkt_threshold;
 
 /* must be called with rcu read lock held */
 static inline void

@@ -1,18 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  */
 
-#include <asm/dma-iommu.h>
 #include <linux/clk.h>
 #include <linux/dma-mapping.h>
 #include <linux/ipc_logging.h>
@@ -27,6 +17,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/qcom-geni-se.h>
 #include <linux/spinlock.h>
+#include <linux/pinctrl/consumer.h>
 
 #define GENI_SE_IOMMU_VA_START	(0x40000000)
 #define GENI_SE_IOMMU_VA_SIZE	(0xC0000000)
@@ -45,16 +36,6 @@
 #define MAX_CLK_PERF_LEVEL 32
 static unsigned long default_bus_bw_set[] = {0, 19200000, 50000000,
 				100000000, 150000000, 200000000, 236000000};
-/* SCM Call Id */
-#define TZ_SCM_CALL_FROM_HLOS	0x7E7E7E7E
-#define TZ_PIL_AUTH_GSI_QUP_PROC	0x13
-#define SSR_SCM_CMD	0x2
-
-enum ssc_core_clocks {
-	SSC_CORE_CLK,
-	SSC_CORE2X_CLK,
-	SSC_NUM_CLKS
-};
 
 struct bus_vectors {
 	int src;
@@ -68,7 +49,6 @@ struct bus_vectors {
  * @iommu_lock:		Lock to protect IOMMU Mapping & attachment.
  * @iommu_map:		IOMMU map of the memory space supported by this core.
  * @iommu_s1_bypass:	Bypass IOMMU stage 1 translation.
- * @iommu_atomic_ctx:	Enable IOMMU in atomic context.
  * @base:		Base address of this instance of QUPv3 core.
  * @bus_bw:		Client handle to the bus bandwidth request.
  * @bus_bw_noc:		Client handle to the QUP clock and DDR path bus
@@ -89,8 +69,6 @@ struct bus_vectors {
  * @bus_bw_set_noc:	Clock plan for DDR path.
  * @cur_bus_bw_idx:	Current index within the bus clock plan.
  * @cur_bus_bw_idx_noc:	Current index within the DDR path clock plan.
- * @num_clk_levels:	Number of valid clock levels in clk_perf_tbl.
- * @clk_perf_tbl:	Table of clock frequency input to Serial Engine clock.
  * @log_ctx:		Logging context to hold the debug information.
  * @vectors:		Structure to store Master End and Slave End IDs for
 			QUPv3 clock and DDR path bus BW request.
@@ -100,7 +78,6 @@ struct bus_vectors {
  * @update:		Usecase index for icb voting.
  * @vote_for_bw:	To check if we have to vote for BW or BCM threashold
 			in ab/ib ICB voting.
- * @struct ssc_qup_ssr: Structure to represent SSC Qupv3 SSR Structure.
  */
 struct geni_se_device {
 	struct device *dev;
@@ -108,7 +85,6 @@ struct geni_se_device {
 	struct mutex iommu_lock;
 	struct dma_iommu_mapping *iommu_map;
 	bool iommu_s1_bypass;
-	bool iommu_atomic_ctx;
 	void __iomem *base;
 	struct msm_bus_client_handle *bus_bw;
 	uint32_t bus_bw_noc;
@@ -129,8 +105,6 @@ struct geni_se_device {
 	unsigned long *bus_bw_set_noc;
 	int cur_bus_bw_idx;
 	int cur_bus_bw_idx_noc;
-	unsigned int num_clk_levels;
-	unsigned long *clk_perf_tbl;
 	void *log_ctx;
 	struct bus_vectors *vectors;
 	int num_paths;
@@ -138,8 +112,6 @@ struct geni_se_device {
 	struct msm_bus_scale_pdata *pdata;
 	int update;
 	bool vote_for_bw;
-	struct ssc_qup_ssr ssr;
-	struct clk_bulk_data *ssc_clks;
 };
 
 #define HW_VER_MAJOR_MASK GENMASK(31, 28)
@@ -217,10 +189,10 @@ int get_se_proto(void __iomem *base)
 EXPORT_SYMBOL(get_se_proto);
 
 /**
- * get_se_m_fw() - Read the Firmware ver for the Main seqeuncer engine
+ * get_se_m_fw() - Read the Firmware ver for the Main sequencer engine
  * @base:	Base address of the serial engine's register block.
  *
- * Return:	Firmware version for the Main seqeuncer engine
+ * Return:	Firmware version for the Main sequencer engine
  */
 int get_se_m_fw(void __iomem *base)
 {
@@ -233,10 +205,10 @@ int get_se_m_fw(void __iomem *base)
 EXPORT_SYMBOL(get_se_m_fw);
 
 /**
- * get_se_s_fw() - Read the Firmware ver for the Secondry seqeuncer engine
+ * get_se_s_fw() - Read the Firmware ver for the Secondry sequencer engine
  * @base:	Base address of the serial engine's register block.
  *
- * Return:	Firmware version for the Secondry seqeuncer engine
+ * Return:	Firmware version for the Secondry sequencer engine
  */
 int get_se_s_fw(void __iomem *base)
 {
@@ -358,131 +330,15 @@ static int geni_se_select_fifo_mode(void __iomem *base)
 			M_RX_FIFO_WATERMARK_EN | M_RX_FIFO_LAST_EN);
 		common_geni_s_irq_en |= S_CMD_DONE_EN;
 	}
+
+	if (proto == I3C)
+		common_geni_m_irq_en |=  (M_GP_SYNC_IRQ_0_EN | M_SEC_IRQ_EN);
+
 	geni_dma_mode &= ~GENI_DMA_MODE_EN;
 
 	geni_write_reg(common_geni_m_irq_en, base, SE_GENI_M_IRQ_EN);
 	geni_write_reg(common_geni_s_irq_en, base, SE_GENI_S_IRQ_EN);
 	geni_write_reg(geni_dma_mode, base, SE_GENI_DMA_MODE_EN);
-	return 0;
-}
-
-static ssize_t ssc_qup_state_show(struct device *dev,
-		struct device_attribute *attr, char *buf)
-{
-	struct geni_se_device *geni_se_dev = dev_get_drvdata(dev);
-
-	return snprintf(buf, sizeof(int), "%d\n",
-				!geni_se_dev->ssr.is_ssr_down);
-}
-
-static DEVICE_ATTR_RO(ssc_qup_state);
-
-static void geni_se_ssc_qup_down(struct geni_se_device *dev)
-{
-	struct se_geni_rsc *rsc = NULL;
-
-	dev->ssr.is_ssr_down = true;
-	if (list_empty(&dev->ssr.active_list_head)) {
-		GENI_SE_ERR(dev->log_ctx, false, NULL,
-			"%s: No Active usecase\n", __func__);
-		return;
-	}
-
-	list_for_each_entry(rsc, &dev->ssr.active_list_head,
-					rsc_ssr.active_list) {
-		rsc->rsc_ssr.force_suspend(rsc->ctrl_dev);
-	}
-	clk_bulk_disable_unprepare(SSC_NUM_CLKS, dev->ssc_clks);
-}
-
-static void geni_se_ssc_qup_up(struct geni_se_device *dev)
-{
-	int ret = 0;
-	struct scm_desc desc;
-	struct se_geni_rsc *rsc = NULL;
-
-	desc.args[0] = TZ_PIL_AUTH_GSI_QUP_PROC;
-	desc.args[1] = TZ_SCM_CALL_FROM_HLOS;
-	desc.arginfo = SCM_ARGS(2, SCM_VAL);
-
-	if (list_empty(&dev->ssr.active_list_head)) {
-		GENI_SE_ERR(dev->log_ctx, false, NULL,
-			"%s: No Active usecase\n", __func__);
-		return;
-	}
-	/* Enable core/2x clk before TZ SCM call */
-	ret = clk_bulk_prepare_enable(SSC_NUM_CLKS, dev->ssc_clks);
-	if (ret) {
-		GENI_SE_ERR(dev->log_ctx, false, NULL,
-			"%s: corex/2x clk enable failed ret:%d\n",
-							__func__, ret);
-		return;
-	}
-
-	list_for_each_entry(rsc, &dev->ssr.active_list_head,
-						rsc_ssr.active_list)
-		se_geni_clks_on(rsc);
-
-	ret = scm_call2(SCM_SIP_FNID(SCM_SVC_MP, SSR_SCM_CMD), &desc);
-	if (ret) {
-		GENI_SE_ERR(dev->log_ctx, false, NULL,
-			"%s: Unable to load firmware after SSR ret:%d\n",
-								__func__, ret);
-		return;
-	}
-
-	list_for_each_entry(rsc, &dev->ssr.active_list_head,
-						rsc_ssr.active_list)
-		se_geni_clks_off(rsc);
-
-	list_for_each_entry(rsc, &dev->ssr.active_list_head,
-						rsc_ssr.active_list)
-		rsc->rsc_ssr.force_resume(rsc->ctrl_dev);
-
-	dev->ssr.is_ssr_down = false;
-}
-
-static int geni_se_ssr_notify_block(struct notifier_block *n,
-						unsigned long code, void *_cmd)
-{
-	struct ssc_qup_nb *ssc_qup_nb = container_of(n, struct ssc_qup_nb, nb);
-	struct ssc_qup_ssr *ssr = container_of(ssc_qup_nb, struct ssc_qup_ssr,
-					ssc_qup_nb);
-	struct geni_se_device *dev = container_of(ssr, struct geni_se_device,
-						ssr);
-
-	switch (code) {
-	case SUBSYS_BEFORE_SHUTDOWN:
-		geni_se_ssc_qup_down(dev);
-		GENI_SE_DBG(dev->log_ctx, false, NULL,
-				"SSR notification before power down\n");
-		break;
-	case SUBSYS_AFTER_POWERUP:
-		geni_se_ssc_qup_up(dev);
-		GENI_SE_DBG(dev->log_ctx, false, NULL,
-				"SSR notification after power up\n");
-		break;
-	default:
-		break;
-	}
-
-	return 0;
-}
-
-static int geni_se_ssc_qup_ssr_reg(struct geni_se_device *dev)
-{
-	dev->ssr.ssc_qup_nb.nb.notifier_call = geni_se_ssr_notify_block;
-	dev->ssr.ssc_qup_nb.next = subsys_notif_register_notifier(
-				dev->ssr.subsys_name, &dev->ssr.ssc_qup_nb.nb);
-
-	if (IS_ERR_OR_NULL(dev->ssr.ssc_qup_nb.next)) {
-		dev_err(dev->dev,
-			"subsys_notif_register_notifier failed %ld\n",
-			PTR_ERR(dev->ssr.ssc_qup_nb.next));
-		return PTR_ERR(dev->ssr.ssc_qup_nb.next);
-	}
-
-	GENI_SE_DBG(dev->log_ctx, false, NULL, "SSR registration done\n");
 
 	return 0;
 }
@@ -1191,8 +1047,9 @@ EXPORT_SYMBOL(se_geni_resources_on);
 int geni_se_resources_init(struct se_geni_rsc *rsc,
 			   unsigned long ab, unsigned long ib)
 {
-	int ret = 0;
 	struct geni_se_device *geni_se_dev;
+	int ret = 0;
+	const char *mode = NULL;
 
 	if (unlikely(!rsc || !rsc->wrapper_dev))
 		return -EINVAL;
@@ -1240,16 +1097,18 @@ int geni_se_resources_init(struct se_geni_rsc *rsc,
 
 	INIT_LIST_HEAD(&rsc->ab_list);
 	INIT_LIST_HEAD(&rsc->ib_list);
-	if (geni_se_dev->ssr.subsys_name) {
-		INIT_LIST_HEAD(&rsc->rsc_ssr.active_list);
-		list_add(&rsc->rsc_ssr.active_list,
-				&geni_se_dev->ssr.active_list_head);
+
+	ret = of_property_read_string(geni_se_dev->dev->of_node,
+					"qcom,iommu-dma", &mode);
+
+	if ((ret == 0) && (strcmp(mode, "disabled") == 0)) {
+		ret = geni_se_iommu_map_and_attach(geni_se_dev);
+		if (ret)
+			GENI_SE_ERR(geni_se_dev->log_ctx, false, NULL,
+				"%s: Error %d iommu_map_and_attach\n",
+					 __func__, ret);
 	}
 
-	ret = geni_se_iommu_map_and_attach(geni_se_dev);
-	if (ret)
-		GENI_SE_ERR(geni_se_dev->log_ctx, false, NULL,
-			"%s: Error %d iommu_map_and_attach\n", __func__, ret);
 	return ret;
 }
 EXPORT_SYMBOL(geni_se_resources_init);
@@ -1283,31 +1142,31 @@ int geni_se_clk_tbl_get(struct se_geni_rsc *rsc, unsigned long **tbl)
 	mutex_lock(&geni_se_dev->geni_dev_lock);
 	*tbl = NULL;
 
-	if (geni_se_dev->clk_perf_tbl) {
-		*tbl = geni_se_dev->clk_perf_tbl;
-		ret = geni_se_dev->num_clk_levels;
+	if (rsc->clk_perf_tbl) {
+		*tbl = rsc->clk_perf_tbl;
+		ret = rsc->num_clk_levels;
 		goto exit_se_clk_tbl_get;
 	}
 
-	geni_se_dev->clk_perf_tbl = kzalloc(sizeof(*geni_se_dev->clk_perf_tbl) *
+	rsc->clk_perf_tbl = kzalloc(sizeof(*rsc->clk_perf_tbl) *
 						MAX_CLK_PERF_LEVEL, GFP_KERNEL);
-	if (!geni_se_dev->clk_perf_tbl) {
+	if (!rsc->clk_perf_tbl) {
 		ret = -ENOMEM;
 		goto exit_se_clk_tbl_get;
 	}
 
 	for (i = 0; i < MAX_CLK_PERF_LEVEL; i++) {
-		geni_se_dev->clk_perf_tbl[i] = clk_round_rate(rsc->se_clk,
+		rsc->clk_perf_tbl[i] = clk_round_rate(rsc->se_clk,
 								prev_freq + 1);
-		if (geni_se_dev->clk_perf_tbl[i] == prev_freq) {
-			geni_se_dev->clk_perf_tbl[i] = 0;
+		if (rsc->clk_perf_tbl[i] == prev_freq) {
+			rsc->clk_perf_tbl[i] = 0;
 			break;
 		}
-		prev_freq = geni_se_dev->clk_perf_tbl[i];
+		prev_freq = rsc->clk_perf_tbl[i];
 	}
-	geni_se_dev->num_clk_levels = i;
-	*tbl = geni_se_dev->clk_perf_tbl;
-	ret = geni_se_dev->num_clk_levels;
+	rsc->num_clk_levels = i;
+	*tbl = rsc->clk_perf_tbl;
+	ret = rsc->num_clk_levels;
 exit_se_clk_tbl_get:
 	mutex_unlock(&geni_se_dev->geni_dev_lock);
 	return ret;
@@ -1534,59 +1393,6 @@ EXPORT_SYMBOL(geni_se_qupv3_hw_version);
 
 static int geni_se_iommu_map_and_attach(struct geni_se_device *geni_se_dev)
 {
-	dma_addr_t va_start = GENI_SE_IOMMU_VA_START;
-	size_t va_size = GENI_SE_IOMMU_VA_SIZE;
-	int bypass = 1, atomic_ctx = 1;
-	struct device *cb_dev = geni_se_dev->cb_dev;
-
-	/*Don't proceed if IOMMU node is disabled*/
-	if (!iommu_present(&platform_bus_type))
-		return 0;
-
-	mutex_lock(&geni_se_dev->iommu_lock);
-	if (likely(geni_se_dev->iommu_map)) {
-		mutex_unlock(&geni_se_dev->iommu_lock);
-		return 0;
-	}
-
-	geni_se_dev->iommu_map = arm_iommu_create_mapping(&platform_bus_type,
-							  va_start, va_size);
-	if (IS_ERR(geni_se_dev->iommu_map)) {
-		GENI_SE_ERR(geni_se_dev->log_ctx, false, NULL,
-			"%s:%s iommu_create_mapping failure\n",
-			__func__, dev_name(cb_dev));
-		mutex_unlock(&geni_se_dev->iommu_lock);
-		return PTR_ERR(geni_se_dev->iommu_map);
-	}
-
-	/* Set either s1_bypass or atomic context as defined in DT */
-	if ((geni_se_dev->iommu_s1_bypass &&
-			iommu_domain_set_attr(geni_se_dev->iommu_map->domain,
-				DOMAIN_ATTR_S1_BYPASS, &bypass)) ||
-		(geni_se_dev->iommu_atomic_ctx &&
-			iommu_domain_set_attr(geni_se_dev->iommu_map->domain,
-				DOMAIN_ATTR_ATOMIC, &atomic_ctx))) {
-		GENI_SE_ERR(geni_se_dev->log_ctx, false, NULL,
-			"%s:%s Couldn't set iommu attribute\n",
-			__func__, dev_name(cb_dev));
-		arm_iommu_release_mapping(geni_se_dev->iommu_map);
-		geni_se_dev->iommu_map = NULL;
-		mutex_unlock(&geni_se_dev->iommu_lock);
-		return -EIO;
-	}
-
-	if (arm_iommu_attach_device(cb_dev, geni_se_dev->iommu_map)) {
-		GENI_SE_ERR(geni_se_dev->log_ctx, false, NULL,
-			"%s:%s couldn't arm_iommu_attach_device\n",
-			__func__, dev_name(cb_dev));
-		arm_iommu_release_mapping(geni_se_dev->iommu_map);
-		geni_se_dev->iommu_map = NULL;
-		mutex_unlock(&geni_se_dev->iommu_lock);
-		return -EIO;
-	}
-	mutex_unlock(&geni_se_dev->iommu_lock);
-	GENI_SE_DBG(geni_se_dev->log_ctx, false, NULL, "%s:%s successful\n",
-		    __func__, dev_name(cb_dev));
 	return 0;
 }
 
@@ -1766,7 +1572,8 @@ void geni_se_dump_dbg_regs(struct se_geni_rsc *rsc, void __iomem *base,
 		return;
 
 	geni_se_dev = dev_get_drvdata(rsc->wrapper_dev);
-	if (unlikely(!geni_se_dev || !geni_se_dev->bus_bw))
+	if (unlikely(!geni_se_dev || !(geni_se_dev->bus_bw ||
+					geni_se_dev->bus_bw_noc)))
 		return;
 	if (unlikely(list_empty(&rsc->ab_list) || list_empty(&rsc->ib_list))) {
 		GENI_SE_DBG(ipc, false, NULL, "%s: Clocks not on\n", __func__);
@@ -1790,8 +1597,8 @@ void geni_se_dump_dbg_regs(struct se_geni_rsc *rsc, void __iomem *base,
 	se_dma_tx_len_in = geni_read_reg(base, SE_DMA_TX_LEN_IN);
 
 	GENI_SE_DBG(ipc, false, NULL,
-	"%s: m_cmd0:0x%x, m_irq_status:0x%x, geni_status:0x%x, geni_ios:0x%x\n",
-	__func__, m_cmd0, m_irq_status, geni_status, geni_ios);
+	"%s: m_cmd0:0x%x, m_irq_status:0x%x, s_irq_status:0x%x, geni_status:0x%x, geni_ios:0x%x\n",
+	__func__, m_cmd0, m_irq_status, s_irq_status, geni_status, geni_ios);
 	GENI_SE_DBG(ipc, false, NULL,
 	"dma_rx_irq:0x%x, dma_tx_irq:0x%x, rx_fifo_sts:0x%x, tx_fifo_sts:0x%x\n"
 	, dma_rx_irq, dma_tx_irq, rx_fifo_status, tx_fifo_status);
@@ -1883,9 +1690,9 @@ static struct msm_bus_scale_pdata *ab_ib_register(struct platform_device *pdev,
 out:
 	if (mem_err) {
 		for ( ; i > 0; i--)
-			kfree(usecase[i-1].vectors);
-		kfree(usecase);
-		kfree(pdata);
+			devm_kfree(dev, usecase[i-1].vectors);
+		devm_kfree(dev, usecase);
+		devm_kfree(dev, pdata);
 	}
 	return NULL;
 }
@@ -1950,7 +1757,7 @@ static int geni_se_probe(struct platform_device *pdev)
 	}
 
 	geni_se_dev->dev = dev;
-
+	geni_se_dev->cb_dev = dev;
 	ret = of_property_read_u32(dev->of_node, "qcom,msm-bus,num-paths",
 					&geni_se_dev->num_paths);
 	if (!ret) {
@@ -1989,8 +1796,6 @@ static int geni_se_probe(struct platform_device *pdev)
 							"qcom,vote-for-bw");
 	geni_se_dev->iommu_s1_bypass = of_property_read_bool(dev->of_node,
 							"qcom,iommu-s1-bypass");
-	geni_se_dev->iommu_atomic_ctx = of_property_read_bool(dev->of_node,
-							"qcom,iommu-atomic-ctx");
 	geni_se_dev->bus_bw_set = default_bus_bw_set;
 	geni_se_dev->bus_bw_set_size =
 				ARRAY_SIZE(default_bus_bw_set);
@@ -2016,48 +1821,13 @@ static int geni_se_probe(struct platform_device *pdev)
 	ret = of_platform_populate(dev->of_node, geni_se_dt_match, NULL, dev);
 	if (ret) {
 		dev_err(dev, "%s: Error populating children\n", __func__);
-		return ret;
-	}
-
-	ret = of_property_read_string(geni_se_dev->dev->of_node,
-			"qcom,subsys-name", &geni_se_dev->ssr.subsys_name);
-	if (!ret) {
-
-		geni_se_dev->ssc_clks = devm_kcalloc(dev, SSC_NUM_CLKS,
-				sizeof(*geni_se_dev->ssc_clks), GFP_KERNEL);
-		if (!geni_se_dev->ssc_clks) {
-			ret = -ENOMEM;
-			dev_err(dev, "%s: Unable to allocate memmory ret:%d\n",
-					__func__, ret);
-			return ret;
-		}
-
-		geni_se_dev->ssc_clks[SSC_CORE_CLK].id = "corex";
-		geni_se_dev->ssc_clks[SSC_CORE2X_CLK].id = "core2x";
-		ret = devm_clk_bulk_get(dev, SSC_NUM_CLKS,
-						geni_se_dev->ssc_clks);
-		if (ret) {
-			dev_err(dev, "%s: Err getting core/2x clk:%d\n",
-								__func__, ret);
-			return ret;
-		}
-
-		INIT_LIST_HEAD(&geni_se_dev->ssr.active_list_head);
-		ret = geni_se_ssc_qup_ssr_reg(geni_se_dev);
-		if (ret) {
-			dev_err(dev, "Unable to register SSR notification\n");
-			return ret;
-		}
-
-		ret = sysfs_create_file(&geni_se_dev->dev->kobj,
-			 &dev_attr_ssc_qup_state.attr);
-		if (ret)
-			dev_err(dev, "Unable to create sysfs file\n");
+		devm_iounmap(dev, geni_se_dev->base);
+		devm_kfree(dev, geni_se_dev);
 	}
 
 	GENI_SE_DBG(geni_se_dev->log_ctx, false, NULL,
 		    "%s: Probe successful\n", __func__);
-	return 0;
+	return ret;
 }
 
 static int geni_se_remove(struct platform_device *pdev)
@@ -2065,17 +1835,6 @@ static int geni_se_remove(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	struct geni_se_device *geni_se_dev = dev_get_drvdata(dev);
 
-	if (likely(!IS_ERR_OR_NULL(geni_se_dev->iommu_map))) {
-		arm_iommu_detach_device(geni_se_dev->cb_dev);
-		arm_iommu_release_mapping(geni_se_dev->iommu_map);
-	}
-	if (geni_se_dev->ssr.subsys_name) {
-		subsys_notif_unregister_notifier(
-				geni_se_dev->ssr.ssc_qup_nb.next,
-				&geni_se_dev->ssr.ssc_qup_nb.nb);
-		sysfs_remove_file(&geni_se_dev->dev->kobj,
-				&dev_attr_ssc_qup_state.attr);
-	}
 	ipc_log_context_destroy(geni_se_dev->log_ctx);
 	devm_iounmap(dev, geni_se_dev->base);
 	devm_kfree(dev, geni_se_dev);
@@ -2095,7 +1854,7 @@ static int __init geni_se_driver_init(void)
 {
 	return platform_driver_register(&geni_se_driver);
 }
-subsys_initcall(geni_se_driver_init);
+arch_initcall(geni_se_driver_init);
 
 static void __exit geni_se_driver_exit(void)
 {

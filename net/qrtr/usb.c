@@ -1,15 +1,5 @@
-/*
- * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved. */
 
 #include <linux/kthread.h>
 #include <linux/module.h>
@@ -40,8 +30,6 @@ struct qrtr_usb_dev {
 	unsigned int in_pipe;
 	unsigned int out_pipe;
 };
-
-static struct qrtr_usb_dev *__qdev;
 
 static void qcom_usb_qrtr_txn_cb(struct urb *urb)
 {
@@ -74,10 +62,10 @@ static int qcom_usb_qrtr_rx_thread_fn(void *data)
 			dev_dbg(&qdev->udev->dev,
 				"pausing or stopping thread, state=%d\n",
 				qdev->thread_state);
-			wait_event_interruptible(
-				qdev->qrtr_wq,
-				qdev->thread_state == QRTR_USB_RX_RUN ||
-				kthread_should_stop());
+			wait_event_interruptible(qdev->qrtr_wq,
+						 qdev->thread_state ==
+						 QRTR_USB_RX_RUN ||
+						 kthread_should_stop());
 			continue;
 		}
 
@@ -198,7 +186,7 @@ static int qcom_usb_qrtr_probe(struct usb_interface *interface,
 		return -ENOMEM;
 
 	qdev->udev = udev;
-	qdev->iface = usb_get_intf(interface);
+	qdev->iface = interface;
 	qdev->ep.xmit = qcom_usb_qrtr_send;
 
 	intf_desc = interface->cur_altsetting;
@@ -213,13 +201,13 @@ static int qcom_usb_qrtr_probe(struct usb_interface *interface,
 	}
 
 	if (!qdev->in_pipe || !qdev->out_pipe) {
-		dev_err(&qdev->udev->dev, "could not find endpoints");
+		dev_err(&qdev->udev->dev, "could not find endpoints\n");
 		return -ENODEV;
 	}
 
 	qdev->in_urb = usb_alloc_urb(0, GFP_KERNEL);
 	if (!qdev->in_urb) {
-		dev_err(&qdev->udev->dev, "could not allocate in urb");
+		dev_err(&qdev->udev->dev, "could not allocate in urb\n");
 		return -ENOMEM;
 	}
 
@@ -242,7 +230,6 @@ static int qcom_usb_qrtr_probe(struct usb_interface *interface,
 		return PTR_ERR(qdev->rx_thread);
 	}
 
-	__qdev = qdev;
 	dev_dbg(&qdev->udev->dev, "QTI USB QRTR driver probed\n");
 
 	return 0;
@@ -263,12 +250,11 @@ static int qcom_usb_qrtr_suspend(struct usb_interface *intf,
 static int qcom_usb_qrtr_resume(struct usb_interface *intf)
 {
 	struct qrtr_usb_dev *qdev = usb_get_intfdata(intf);
-	int rc = 0;
 
 	qdev->thread_state = QRTR_USB_RX_RUN;
 	wake_up(&qdev->qrtr_wq);
 
-	return rc;
+	return 0;
 }
 
 static int qcom_usb_qrtr_reset_resume(struct usb_interface *intf)
@@ -298,25 +284,13 @@ static void qcom_usb_qrtr_disconnect(struct usb_interface *interface)
 	usb_free_urb(qdev->in_urb);
 	qrtr_endpoint_unregister(&qdev->ep);
 	usb_set_intfdata(interface, NULL);
-	usb_put_intf(interface);
-	qdev->iface = NULL;
 	usb_put_dev(qdev->udev);
-	__qdev = NULL;
 }
 
 static const struct usb_device_id qcom_usb_qrtr_ids[] = {
 	{ USB_DEVICE_INTERFACE_NUMBER(QRTR_VENDOR_ID, 0x90ef, 3) },
 	{ USB_DEVICE_INTERFACE_NUMBER(QRTR_VENDOR_ID, 0x90f0, 3) },
 	{ USB_DEVICE_INTERFACE_NUMBER(QRTR_VENDOR_ID, 0x90f3, 2) },
-	{ USB_DEVICE_INTERFACE_NUMBER(QRTR_VENDOR_ID, 0x90fd, 1) },
-	{ USB_DEVICE_INTERFACE_NUMBER(QRTR_VENDOR_ID, 0x9102, 1) },
-	{ USB_DEVICE_INTERFACE_NUMBER(QRTR_VENDOR_ID, 0x9103, 1) },
-	{ USB_DEVICE_INTERFACE_NUMBER(QRTR_VENDOR_ID, 0x9106, 1) },
-	{ USB_DEVICE_INTERFACE_NUMBER(QRTR_VENDOR_ID, 0x9107, 1) },
-	{ USB_DEVICE_INTERFACE_NUMBER(QRTR_VENDOR_ID, 0x910A, 4) },
-	{ USB_DEVICE_INTERFACE_NUMBER(QRTR_VENDOR_ID, 0x910B, 3) },
-	{ USB_DEVICE_INTERFACE_NUMBER(QRTR_VENDOR_ID, 0x910C, 3) },
-	{ USB_DEVICE_INTERFACE_NUMBER(QRTR_VENDOR_ID, 0x910D, 2) },
 	{ } /* Terminating entry */
 };
 MODULE_DEVICE_TABLE(usb, qcom_usb_qrtr_ids);

@@ -1,18 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* drivers/usb/gadget/f_diag.c
  * Diag Function Device - Route ARM9 and ARM11 DIAG messages
  * between HOST and DEVICE.
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2008-2018, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
  * Author: Brian Swetland <swetland@google.com>
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
  */
 #include <linux/init.h>
 #include <linux/module.h>
@@ -518,7 +510,7 @@ int usb_diag_read(struct usb_diag_ch *ch, struct diag_request *d_req)
 
 	if (list_empty(&ctxt->read_pool)) {
 		spin_unlock_irqrestore(&ctxt->lock, flags);
-		ERROR(ctxt->cdev, "%s: no requests available\n", __func__);
+		pr_err("%s: no requests available\n", __func__);
 		return -EAGAIN;
 	}
 
@@ -544,8 +536,7 @@ int usb_diag_read(struct usb_diag_ch *ch, struct diag_request *d_req)
 		list_add_tail(&req->list, &ctxt->read_pool);
 		/* 1 error message for every 10 sec */
 		if (__ratelimit(&rl))
-			ERROR(ctxt->cdev, "%s: cannot queue read request\n",
-								__func__);
+			pr_err("%s: cannot queue read request\n", __func__);
 
 		if (kref_put(&ctxt->kref, diag_context_release))
 			/* diag_context_release called spin_unlock already */
@@ -594,7 +585,7 @@ int usb_diag_write(struct usb_diag_ch *ch, struct diag_request *d_req)
 
 	if (list_empty(&ctxt->write_pool)) {
 		spin_unlock_irqrestore(&ctxt->lock, flags);
-		ERROR(ctxt->cdev, "%s: no requests available\n", __func__);
+		pr_err("%s: no requests available\n", __func__);
 		return -EAGAIN;
 	}
 
@@ -622,8 +613,7 @@ int usb_diag_write(struct usb_diag_ch *ch, struct diag_request *d_req)
 		ctxt->dpkts_tolaptop_pending--;
 		/* 1 error message for every 10 sec */
 		if (__ratelimit(&rl))
-			ERROR(ctxt->cdev, "%s: cannot queue read request\n",
-								__func__);
+			pr_err("%s: cannot queue read request\n", __func__);
 
 		if (kref_put(&ctxt->kref, diag_context_release))
 			/* diag_context_release called spin_unlock already */

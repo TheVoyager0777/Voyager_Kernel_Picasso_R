@@ -427,7 +427,6 @@ static const struct of_device_id of_plat_virq_table[] = {
 static struct platform_driver of_plat_virq_driver = {
 	.driver = {
 		.name = "okl4_virq",
-		.owner = THIS_MODULE,
 		.of_match_table = of_plat_virq_table,
 	},
 	.probe = okl4_virq_probe,

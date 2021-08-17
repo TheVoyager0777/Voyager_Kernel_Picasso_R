@@ -1,13 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/slab.h>
@@ -30,7 +22,6 @@
 #include "diag_mux.h"
 #include "diagmem.h"
 #include "diag_ipc_logging.h"
-#include <soc/qcom/boot_stats.h>
 
 #define DIAG_USB_STRING_SZ	10
 #define DIAG_USB_MAX_SIZE	16384
@@ -321,7 +312,9 @@ static void usb_read_work_fn(struct work_struct *work)
 		atomic_set(&ch->read_pending, 1);
 		req->buf = ch->read_buf;
 		req->length = USB_MAX_OUT_BUF;
+		spin_unlock_irqrestore(&ch->lock, flags);
 		err = usb_diag_read(ch->hdl, req);
+		spin_lock_irqsave(&ch->lock, flags);
 		if (err) {
 			pr_debug("diag: In %s, error in reading from USB %s, err: %d\n",
 				 __func__, ch->name, err);
@@ -418,9 +411,9 @@ static void diag_usb_notifier(void *priv, unsigned int event,
 
 	switch (event) {
 	case USB_DIAG_CONNECT:
-		pr_info("diag: USB channel %s: Received Connect event\n",
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
+			"diag: USB channel %s: Received Connect event\n",
 			usb_info->name);
-		place_marker("M - Diag port is enumerated");
 		spin_lock_irqsave(&usb_info->event_lock, flags);
 		diag_usb_event_add(usb_info, USB_DIAG_CONNECT);
 		spin_unlock_irqrestore(&usb_info->event_lock, flags);
@@ -428,7 +421,8 @@ static void diag_usb_notifier(void *priv, unsigned int event,
 			   &usb_info->event_work);
 		break;
 	case USB_DIAG_DISCONNECT:
-		pr_info("diag: USB channel %s: Received Disconnect event\n",
+		DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
+			"diag: USB channel %s: Received Disconnect event\n",
 			usb_info->name);
 		spin_lock_irqsave(&usb_info->event_lock, flags);
 		diag_usb_event_add(usb_info, USB_DIAG_DISCONNECT);
@@ -649,11 +643,11 @@ void diag_usb_connect_device(int id)
 {
 	struct diag_usb_info *usb_info = NULL;
 
-	usb_info = &diag_usb[id];
-	if (!usb_info->enabled)
-		return;
-	atomic_set(&usb_info->diag_state, 1);
-	usb_connect(usb_info);
+		usb_info = &diag_usb[id];
+		if (!usb_info->enabled)
+			return;
+		atomic_set(&usb_info->diag_state, 1);
+		usb_connect(usb_info);
 }
 
 /*
@@ -679,11 +673,12 @@ void diag_usb_disconnect_device(int id)
 {
 	struct diag_usb_info *usb_info = NULL;
 
-	usb_info = &diag_usb[id];
-	if (!usb_info->enabled)
-		return;
-	atomic_set(&usb_info->diag_state, 0);
-	usb_disconnect(usb_info);
+		usb_info = &diag_usb[id];
+		if (!usb_info->enabled)
+			return;
+		atomic_set(&usb_info->diag_state, 0);
+		usb_disconnect(usb_info);
+
 }
 int diag_usb_register(int id, int ctxt, struct diag_mux_ops *ops)
 {

@@ -725,6 +725,10 @@ int wiphy_register(struct wiphy *wiphy)
 		    (!rdev->ops->set_pmk || !rdev->ops->del_pmk)))
 		return -EINVAL;
 
+	if (WARN_ON(!(rdev->wiphy.flags & WIPHY_FLAG_SUPPORTS_FW_ROAM) &&
+		    rdev->ops->update_connect_params))
+		return -EINVAL;
+
 	if (wiphy->addresses)
 		memcpy(wiphy->perm_addr, wiphy->addresses[0].addr, ETH_ALEN);
 
@@ -1331,8 +1335,10 @@ static int cfg80211_netdev_notifier_call(struct notifier_block *nb,
 		}
 		break;
 	case NETDEV_PRE_UP:
-		if (!(wdev->wiphy->interface_modes & BIT(wdev->iftype)))
+		if (!cfg80211_iftype_allowed(wdev->wiphy, wdev->iftype,
+					     wdev->use_4addr, 0))
 			return notifier_from_errno(-EOPNOTSUPP);
+
 		if (rfkill_blocked(rdev->rfkill))
 			return notifier_from_errno(-ERFKILL);
 		break;
@@ -1413,7 +1419,7 @@ out_fail_sysfs:
 out_fail_pernet:
 	return err;
 }
-subsys_initcall(cfg80211_init);
+fs_initcall(cfg80211_init);
 
 static void __exit cfg80211_exit(void)
 {

@@ -1,15 +1,6 @@
-/* Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt)	"%s:%d: " fmt, __func__, __LINE__
@@ -516,7 +507,7 @@ static void sde_rotator_clear_fence(struct sde_rot_entry *entry)
 			sde_rotator_resync_timeline(entry->fenceq->timeline);
 
 		SDEROT_EVTLOG(entry->output_fence, 2222);
-		SDEROT_DBG("sys_fence_put o:%p\n", entry->output_fence);
+		SDEROT_DBG("sys_fence_put o:%pK\n", entry->output_fence);
 		sde_rotator_put_sync_fence(entry->output_fence);
 		entry->output_fence = NULL;
 	}
@@ -1186,7 +1177,6 @@ static void sde_rotator_deinit_queue(struct sde_rot_mgr *mgr)
 				kthread_stop(mgr->commitq[i].rot_thread);
 			}
 		}
-		devm_kfree(mgr->device, mgr->commitq);
 		mgr->commitq = NULL;
 	}
 	if (mgr->doneq) {
@@ -1196,7 +1186,6 @@ static void sde_rotator_deinit_queue(struct sde_rot_mgr *mgr)
 				kthread_stop(mgr->doneq[i].rot_thread);
 			}
 		}
-		devm_kfree(mgr->device, mgr->doneq);
 		mgr->doneq = NULL;
 	}
 	mgr->queue_count = 0;
@@ -1520,9 +1509,8 @@ static void sde_rotator_release_from_work_distribution(
 			} else {
 				mgr->pending_close_bw_vote -= entry->perf->bw;
 			}
-			devm_kfree(&mgr->pdev->dev,
-				entry->perf->work_distribution);
-			devm_kfree(&mgr->pdev->dev, entry->perf);
+			kfree(entry->perf->work_distribution);
+			kfree(entry->perf);
 			sde_rotator_update_perf(mgr);
 			sde_rotator_clk_ctrl(mgr, false);
 			sde_rotator_resource_ctrl(mgr, false);
@@ -1556,6 +1544,7 @@ static void sde_rotator_commit_handler(struct kthread_work *work)
 	struct sde_rot_hw_resource *hw;
 	struct sde_rot_mgr *mgr;
 	struct sched_param param = { .sched_priority = 5 };
+	struct sde_rot_trace_entry rot_trace;
 	int ret;
 
 	entry = container_of(work, struct sde_rot_entry, commit_work);
@@ -1604,17 +1593,26 @@ static void sde_rotator_commit_handler(struct kthread_work *work)
 	if (entry->item.ts)
 		entry->item.ts[SDE_ROTATOR_TS_COMMIT] = ktime_get();
 
+	/* Set values to pass to trace */
+	rot_trace.wb_idx = entry->item.wb_idx;
+	rot_trace.flags = entry->item.flags;
+	rot_trace.input_format = entry->item.input.format;
+	rot_trace.input_width = entry->item.input.width;
+	rot_trace.input_height = entry->item.input.height;
+	rot_trace.src_x = entry->item.src_rect.x;
+	rot_trace.src_y = entry->item.src_rect.y;
+	rot_trace.src_w = entry->item.src_rect.w;
+	rot_trace.src_h = entry->item.src_rect.h;
+	rot_trace.output_format = entry->item.output.format;
+	rot_trace.output_width = entry->item.output.width;
+	rot_trace.output_height = entry->item.output.height;
+	rot_trace.dst_x = entry->item.dst_rect.x;
+	rot_trace.dst_y = entry->item.dst_rect.y;
+	rot_trace.dst_w = entry->item.dst_rect.w;
+	rot_trace.dst_h = entry->item.dst_rect.h;
+
 	trace_rot_entry_commit(
-		entry->item.session_id, entry->item.sequence_id,
-		entry->item.wb_idx, entry->item.flags,
-		entry->item.input.format,
-		entry->item.input.width, entry->item.input.height,
-		entry->item.src_rect.x, entry->item.src_rect.y,
-		entry->item.src_rect.w, entry->item.src_rect.h,
-		entry->item.output.format,
-		entry->item.output.width, entry->item.output.height,
-		entry->item.dst_rect.x, entry->item.dst_rect.y,
-		entry->item.dst_rect.w, entry->item.dst_rect.h);
+		entry->item.session_id, entry->item.sequence_id, &rot_trace);
 
 	ATRACE_INT("sde_smmu_ctrl", 0);
 	ret = sde_smmu_ctrl(1);
@@ -1700,6 +1698,7 @@ static void sde_rotator_done_handler(struct kthread_work *work)
 	struct sde_rot_entry_container *request;
 	struct sde_rot_hw_resource *hw;
 	struct sde_rot_mgr *mgr;
+	struct sde_rot_trace_entry rot_trace;
 	int ret;
 
 	entry = container_of(work, struct sde_rot_entry, done_work);
@@ -1734,17 +1733,26 @@ static void sde_rotator_done_handler(struct kthread_work *work)
 	if (entry->item.ts)
 		entry->item.ts[SDE_ROTATOR_TS_DONE] = ktime_get();
 
-	trace_rot_entry_done(
-		entry->item.session_id, entry->item.sequence_id,
-		entry->item.wb_idx, entry->item.flags,
-		entry->item.input.format,
-		entry->item.input.width, entry->item.input.height,
-		entry->item.src_rect.x, entry->item.src_rect.y,
-		entry->item.src_rect.w, entry->item.src_rect.h,
-		entry->item.output.format,
-		entry->item.output.width, entry->item.output.height,
-		entry->item.dst_rect.x, entry->item.dst_rect.y,
-		entry->item.dst_rect.w, entry->item.dst_rect.h);
+	/* Set values to pass to trace */
+	rot_trace.wb_idx = entry->item.wb_idx;
+	rot_trace.flags = entry->item.flags;
+	rot_trace.input_format = entry->item.input.format;
+	rot_trace.input_width = entry->item.input.width;
+	rot_trace.input_height = entry->item.input.height;
+	rot_trace.src_x = entry->item.src_rect.x;
+	rot_trace.src_y = entry->item.src_rect.y;
+	rot_trace.src_w = entry->item.src_rect.w;
+	rot_trace.src_h = entry->item.src_rect.h;
+	rot_trace.output_format = entry->item.output.format;
+	rot_trace.output_width = entry->item.output.width;
+	rot_trace.output_height = entry->item.output.height;
+	rot_trace.dst_x = entry->item.dst_rect.x;
+	rot_trace.dst_y = entry->item.dst_rect.y;
+	rot_trace.dst_w = entry->item.dst_rect.w;
+	rot_trace.dst_h = entry->item.dst_rect.h;
+
+	trace_rot_entry_done(entry->item.session_id, entry->item.sequence_id,
+			&rot_trace);
 
 	sde_rot_mgr_lock(mgr);
 	sde_rotator_put_hw_resource(entry->commitq, entry, entry->commitq->hw);
@@ -2185,7 +2193,7 @@ static void sde_rotator_cancel_request(struct sde_rot_mgr *mgr,
 	}
 
 	list_del_init(&req->list);
-	devm_kfree(&mgr->pdev->dev, req);
+	kfree(req);
 }
 
 void sde_rotator_cancel_all_requests(struct sde_rot_mgr *mgr,
@@ -2207,7 +2215,7 @@ static void sde_rotator_free_completed_request(struct sde_rot_mgr *mgr,
 	list_for_each_entry_safe(req, req_next, &private->req_list, list) {
 		if ((atomic_read(&req->pending_count) == 0) && req->finished) {
 			list_del_init(&req->list);
-			devm_kfree(&mgr->pdev->dev, req);
+			kfree(req);
 		}
 	}
 }
@@ -2223,8 +2231,8 @@ static void sde_rotator_release_rotator_perf_session(
 
 	list_for_each_entry_safe(perf, perf_next, &private->perf_list, list) {
 		list_del_init(&perf->list);
-		devm_kfree(&mgr->pdev->dev, perf->work_distribution);
-		devm_kfree(&mgr->pdev->dev, perf);
+		kfree(perf->work_distribution);
+		kfree(perf);
 	}
 }
 
@@ -2291,12 +2299,12 @@ static int sde_rotator_open_session(struct sde_rot_mgr *mgr,
 	config.output.width = 640;
 	config.output.height = 480;
 
-	perf = devm_kzalloc(&mgr->pdev->dev, sizeof(*perf), GFP_KERNEL);
+	perf = kzalloc(sizeof(*perf), GFP_KERNEL);
 	if (!perf)
 		return -ENOMEM;
 
-	perf->work_distribution = devm_kzalloc(&mgr->pdev->dev,
-		sizeof(u32) * mgr->queue_count, GFP_KERNEL);
+	perf->work_distribution = kcalloc(mgr->queue_count, sizeof(u32),
+					GFP_KERNEL);
 	if (!perf->work_distribution) {
 		ret = -ENOMEM;
 		goto alloc_err;
@@ -2338,9 +2346,9 @@ update_clk_err:
 	sde_rotator_resource_ctrl(mgr, false);
 resource_err:
 	list_del_init(&perf->list);
-	devm_kfree(&mgr->pdev->dev, perf->work_distribution);
+	kfree(perf->work_distribution);
 alloc_err:
-	devm_kfree(&mgr->pdev->dev, perf);
+	kfree(perf);
 done:
 	return ret;
 }
@@ -2369,8 +2377,8 @@ static int sde_rotator_close_session(struct sde_rot_mgr *mgr,
 	if (offload_release_work)
 		goto done;
 
-	devm_kfree(&mgr->pdev->dev, perf->work_distribution);
-	devm_kfree(&mgr->pdev->dev, perf);
+	kfree(perf->work_distribution);
+	kfree(perf);
 	sde_rotator_update_perf(mgr);
 	sde_rotator_clk_ctrl(mgr, false);
 	sde_rotator_update_clk(mgr);
@@ -2462,7 +2470,7 @@ struct sde_rot_entry_container *sde_rotator_req_init(
 
 	size = sizeof(struct sde_rot_entry_container);
 	size += sizeof(struct sde_rot_entry) * count;
-	req = devm_kzalloc(&mgr->pdev->dev, size, GFP_KERNEL);
+	req = kzalloc(size, GFP_KERNEL);
 
 	if (!req)
 		return ERR_PTR(-ENOMEM);
@@ -2633,7 +2641,7 @@ static int sde_rotator_open(struct sde_rot_mgr *mgr,
 	if (atomic_read(&mgr->device_suspended))
 		return -EPERM;
 
-	private = devm_kzalloc(&mgr->pdev->dev, sizeof(*private),
+	private = kzalloc(sizeof(*private),
 		GFP_KERNEL);
 	if (!private)
 		return -ENOMEM;
@@ -2684,13 +2692,13 @@ static int sde_rotator_close(struct sde_rot_mgr *mgr,
 	sde_rotator_release_rotator_perf_session(mgr, private);
 
 	list_del_init(&private->list);
-	devm_kfree(&mgr->pdev->dev, private);
+	kfree(private);
 
 	sde_rotator_update_perf(mgr);
 	return 0;
 }
 
-static ssize_t sde_rotator_show_caps(struct device *dev,
+static ssize_t caps_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	size_t len = PAGE_SIZE;
@@ -2713,7 +2721,7 @@ static ssize_t sde_rotator_show_caps(struct device *dev,
 	return cnt;
 }
 
-static ssize_t sde_rotator_show_state(struct device *dev,
+static ssize_t state_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	size_t len = PAGE_SIZE;
@@ -2745,8 +2753,8 @@ static ssize_t sde_rotator_show_state(struct device *dev,
 	return cnt;
 }
 
-static DEVICE_ATTR(caps, 0444, sde_rotator_show_caps, NULL);
-static DEVICE_ATTR(state, 0444, sde_rotator_show_state, NULL);
+static DEVICE_ATTR_RO(caps);
+static DEVICE_ATTR_RO(state);
 
 static struct attribute *sde_rotator_fs_attrs[] = {
 	&dev_attr_caps.attr,
@@ -2836,10 +2844,6 @@ static void sde_rotator_put_dt_vreg_data(struct device *dev,
 	}
 
 	sde_rot_config_vreg(dev, mp->vreg_config, mp->num_vreg, 0);
-	if (mp->vreg_config) {
-		devm_kfree(dev, mp->vreg_config);
-		mp->vreg_config = NULL;
-	}
 	mp->num_vreg = 0;
 }
 
@@ -2896,10 +2900,6 @@ static int sde_rotator_get_dt_vreg_data(struct device *dev,
 	return rc;
 
 error:
-	if (mp->vreg_config) {
-		devm_kfree(dev, mp->vreg_config);
-		mp->vreg_config = NULL;
-	}
 	mp->num_vreg = 0;
 	return rc;
 }
@@ -2962,11 +2962,10 @@ static inline int sde_rotator_search_dt_clk(struct platform_device *pdev,
 
 	tmp = devm_clk_get(&pdev->dev, clk_name);
 	if (IS_ERR(tmp)) {
+		rc = PTR_ERR(tmp);
 		if (mandatory)
 			SDEROT_ERR("unable to get clk: %s\n", clk_name);
-		else
-			tmp = NULL;
-		rc = PTR_ERR(tmp);
+		tmp = NULL;
 	}
 
 	strlcpy(mgr->rot_clk[clk_idx].clk_name, clk_name,
@@ -3045,8 +3044,6 @@ static int sde_rotator_register_clk(struct platform_device *pdev,
 
 static void sde_rotator_unregister_clk(struct sde_rot_mgr *mgr)
 {
-	devm_kfree(mgr->device, mgr->rot_clk);
-	mgr->rot_clk = NULL;
 	mgr->num_rot_clk = 0;
 }
 
@@ -3174,19 +3171,16 @@ int sde_rotator_core_init(struct sde_rot_mgr **pmgr,
 		mgr->ops_hw_init = sde_rotator_r3_init;
 		mgr->min_rot_clk = ROT_MIN_ROT_CLK;
 
-		if (IS_SDE_MAJOR_MINOR_SAME(mdata->mdss_version,
-				SDE_MDP_HW_REV_500) ||
-		IS_SDE_MAJOR_MINOR_SAME(mdata->mdss_version,
-			SDE_MDP_HW_REV_620))
-			mgr->max_rot_clk = 460000000UL;
-		else if (IS_SDE_MAJOR_MINOR_SAME(mdata->mdss_version,
-			SDE_MDP_HW_REV_520))
-			mgr->max_rot_clk = 430000000UL;
-		else if (IS_SDE_MAJOR_MINOR_SAME(mdata->mdss_version,
-			SDE_MDP_HW_REV_530) ||
+		/*
+		 * on platforms where the maxlinewidth is greater than
+		 * default we need to have a max clock rate check to
+		 * ensure we do not cross the max allowed clock for rotator
+		 */
+		if (IS_SDE_MAJOR_SAME(mdata->mdss_version,
+			SDE_MDP_HW_REV_500) ||
 			IS_SDE_MAJOR_MINOR_SAME(mdata->mdss_version,
-			SDE_MDP_HW_REV_540))
-			mgr->max_rot_clk = 307200000UL;
+			SDE_MDP_HW_REV_620))
+			mgr->max_rot_clk = ROT_R3_MAX_ROT_CLK;
 
 		if (!(IS_SDE_MAJOR_SAME(mdata->mdss_version,
 					SDE_MDP_HW_REV_500) ||
@@ -3241,7 +3235,6 @@ error_res_init:
 error_parse_dt:
 	sysfs_remove_group(&mgr->device->kobj, &sde_rotator_fs_attr_group);
 error_create_sysfs:
-	devm_kfree(&pdev->dev, mgr);
 	*pmgr = NULL;
 	return ret;
 }
@@ -3262,7 +3255,6 @@ void sde_rotator_core_destroy(struct sde_rot_mgr *mgr)
 	pm_runtime_disable(mgr->device);
 	sde_rotator_res_destroy(mgr);
 	sysfs_remove_group(&mgr->device->kobj, &sde_rotator_fs_attr_group);
-	devm_kfree(dev, mgr);
 }
 
 void sde_rotator_core_dump(struct sde_rot_mgr *mgr)

@@ -358,20 +358,6 @@ int mius_ultrasound_suspend_get(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-int mius_ultrasound_suspend_set(struct snd_kcontrol *kcontrol,
-					  struct snd_ctl_elem_value *ucontrol)
-{
-	int32_t msg[4] = {0, 0, 0, 0};
-
-	ultrasound_suspend_cache = ucontrol->value.integer.value[0];
-
-	msg[0] = ultrasound_suspend_cache ? 1 : 0;
-
-	return mius_data_write(
-		MIUS_ULTRASOUND_SUSPEND,
-		(const char *)msg, sizeof(msg));
-}
-
 static uint32_t ultrasound_report_none_cache;
 
 int mius_ultrasound_report_none_get(struct snd_kcontrol *kcontrol,
@@ -392,6 +378,20 @@ int mius_ultrasound_report_none_set(struct snd_kcontrol *kcontrol,
 
 	return mius_data_write(
 		MIUS_ULTRASOUND_UPLOAD_NONE,
+		(const char *)msg, sizeof(msg));
+}
+
+int mius_ultrasound_suspend_set(struct snd_kcontrol *kcontrol,
+					  struct snd_ctl_elem_value *ucontrol)
+{
+	int32_t msg[4] = {0, 0, 0, 0};
+
+	ultrasound_suspend_cache = ucontrol->value.integer.value[0];
+
+	msg[0] = ultrasound_suspend_cache ? 1 : 0;
+
+	return mius_data_write(
+		MIUS_ULTRASOUND_SUSPEND,
 		(const char *)msg, sizeof(msg));
 }
 
@@ -1404,16 +1404,14 @@ static const struct snd_kcontrol_new ultrasound_filter_mixer_controls[] = {
 
 };
 
-
-
-unsigned int mius_add_platform_controls(void *platform)
+unsigned int mius_add_component_controls(void *component)
 {
 	const unsigned int num_controls =
 		ARRAY_SIZE(ultrasound_filter_mixer_controls);
 
-	if (platform != NULL) {
-		snd_soc_add_platform_controls(
-			(struct snd_soc_platform *)platform,
+	if (component != NULL) {
+		snd_soc_add_component_controls(
+			(struct snd_soc_component *)component,
 			ultrasound_filter_mixer_controls,
 			num_controls);
 	} else {
@@ -1422,7 +1420,7 @@ unsigned int mius_add_platform_controls(void *platform)
 
 	return num_controls;
 }
-EXPORT_SYMBOL(mius_add_platform_controls);
+EXPORT_SYMBOL(mius_add_component_controls);
 
 int mius_trigger_version_msg(void)
 {

@@ -1,4 +1,5 @@
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2018, 2020 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -210,7 +211,7 @@ int msm_isp_update_bandwidth(enum msm_isp_hw_client client,
 void msm_isp_deinit_bandwidth_mgr(enum msm_isp_hw_client client)
 {
 	if (client >= MAX_ISP_CLIENT) {
-		pr_err("invalid Client id %d", client);
+		pr_err("invalid Client id %d\n", client);
 		return;
 	}
 	mutex_lock(&bandwidth_mgr_mutex);
@@ -307,7 +308,7 @@ int msm_isp_get_clk_info(struct vfe_device *vfe_dev,
 
 	ISP_DBG("count = %d\n", count);
 	if (count <= 0) {
-		pr_err("no clocks found in device tree, count=%d", count);
+		pr_err("no clocks found in device tree, count=%d\n", count);
 		return 0;
 	}
 
@@ -565,14 +566,14 @@ static int msm_isp_proc_cmd_list_unlocked(struct vfe_device *vfe_dev, void *arg)
 	struct msm_vfe_cfg_cmd2 cfg_cmd;
 
 	if (!vfe_dev || !arg) {
-		pr_err("%s:%d failed: vfe_dev %pK arg %pK", __func__, __LINE__,
-			vfe_dev, arg);
+		pr_err("%s:%d failed: vfe_dev %pK arg %pK\n",
+			__func__, __LINE__, vfe_dev, arg);
 		return -EINVAL;
 	}
 
 	rc = msm_isp_proc_cmd(vfe_dev, &proc_cmd->cfg_cmd);
 	if (rc < 0)
-		pr_err("%s:%d failed: rc %d", __func__, __LINE__, rc);
+		pr_err("%s:%d failed: rc %d\n", __func__, __LINE__, rc);
 
 	cmd = *proc_cmd;
 
@@ -599,7 +600,7 @@ static int msm_isp_proc_cmd_list_unlocked(struct vfe_device *vfe_dev, void *arg)
 
 		rc = msm_isp_proc_cmd(vfe_dev, &cfg_cmd);
 		if (rc < 0)
-			pr_err("%s:%d failed: rc %d", __func__, __LINE__, rc);
+			pr_err("%s:%d failed: rc %d\n", __func__, __LINE__, rc);
 
 		cmd = cmd_next;
 	}
@@ -644,14 +645,14 @@ static int msm_isp_proc_cmd_list_compat(struct vfe_device *vfe_dev, void *arg)
 	struct msm_vfe_cfg_cmd2 current_cmd;
 
 	if (!vfe_dev || !arg) {
-		pr_err("%s:%d failed: vfe_dev %pK arg %pK", __func__, __LINE__,
-			vfe_dev, arg);
+		pr_err("%s:%d failed: vfe_dev %pK arg %pK\n",
+			__func__, __LINE__, vfe_dev, arg);
 		return -EINVAL;
 	}
 	msm_isp_compat_to_proc_cmd(&current_cmd, &proc_cmd->cfg_cmd);
 	rc = msm_isp_proc_cmd(vfe_dev, &current_cmd);
 	if (rc < 0)
-		pr_err("%s:%d failed: rc %d", __func__, __LINE__, rc);
+		pr_err("%s:%d failed: rc %d\n", __func__, __LINE__, rc);
 
 	cmd = *proc_cmd;
 
@@ -677,7 +678,7 @@ static int msm_isp_proc_cmd_list_compat(struct vfe_device *vfe_dev, void *arg)
 		msm_isp_compat_to_proc_cmd(&current_cmd, &cmd_next.cfg_cmd);
 		rc = msm_isp_proc_cmd(vfe_dev, &current_cmd);
 		if (rc < 0)
-			pr_err("%s:%d failed: rc %d", __func__, __LINE__, rc);
+			pr_err("%s:%d failed: rc %d\n", __func__, __LINE__, rc);
 
 		cmd = cmd_next;
 	}
@@ -1222,35 +1223,18 @@ int msm_isp_proc_cmd(struct vfe_device *vfe_dev, void *arg)
 		pr_err("%s: Passed num_cfg as 0\n", __func__);
 		return -EINVAL;
 	}
-
-	reg_cfg_cmd = kzalloc(sizeof(struct msm_vfe_reg_cfg_cmd)*
-		proc_cmd->num_cfg, GFP_KERNEL);
-	if (!reg_cfg_cmd) {
-		rc = -ENOMEM;
-		goto reg_cfg_failed;
-	}
-
-	if (copy_from_user(reg_cfg_cmd,
-		(void __user *)(proc_cmd->cfg_cmd),
-		sizeof(struct msm_vfe_reg_cfg_cmd) * proc_cmd->num_cfg)) {
-		rc = -EFAULT;
-		goto copy_cmd_failed;
-	}
+	reg_cfg_cmd = memdup_user((void __user *)(proc_cmd->cfg_cmd),
+			sizeof(struct msm_vfe_reg_cfg_cmd)*proc_cmd->num_cfg);
+	if (IS_ERR(reg_cfg_cmd))
+		return PTR_ERR(reg_cfg_cmd);
 
 	if (proc_cmd->cmd_len > 0 &&
 		proc_cmd->cmd_len < UINT16_MAX) {
-		cfg_data = kzalloc(proc_cmd->cmd_len, GFP_KERNEL);
-		if (!cfg_data) {
-			rc = -ENOMEM;
-			goto cfg_data_failed;
-		}
+		cfg_data = memdup_user((void __user *)(proc_cmd->cfg_data),
+			proc_cmd->cmd_len);
+		if (IS_ERR(cfg_data))
+			return PTR_ERR(cfg_data);
 
-		if (copy_from_user(cfg_data,
-			(void __user *)(proc_cmd->cfg_data),
-			proc_cmd->cmd_len)) {
-			rc = -EFAULT;
-			goto copy_cmd_failed;
-		}
 	}
 
 	for (i = 0; i < proc_cmd->num_cfg; i++)
@@ -1265,10 +1249,6 @@ int msm_isp_proc_cmd(struct vfe_device *vfe_dev, void *arg)
 
 copy_cmd_failed:
 	kfree(cfg_data);
-cfg_data_failed:
-	kfree(reg_cfg_cmd);
-reg_cfg_failed:
-	return rc;
 }
 
 int msm_isp_send_event(struct vfe_device *vfe_dev,

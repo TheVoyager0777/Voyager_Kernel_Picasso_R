@@ -1,14 +1,7 @@
-/* Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
  * Copyright (C) 2021 XiaoMi, Inc.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #define pr_fmt(fmt)	"QG-K: %s: " fmt, __func__
@@ -28,43 +21,150 @@
 #include "qg-profile-lib.h"
 #include "qg-soc.h"
 
+enum soc_scaling_feature {
+	QG_FVSS = BIT(0),
+	QG_TCSS = BIT(1),
+	QG_BASS = BIT(2),
+};
+
 #define DEFAULT_UPDATE_TIME_MS			64000
 #define SOC_SCALE_HYST_MS			2000
-#define VBAT_LOW_HYST_UV			5000
+#define VBAT_LOW_HYST_UV			50000
 #define FULL_SOC				100
 
+static int qg_ss_feature;
+static ssize_t qg_ss_feature_show(struct device *dev, struct device_attribute
+				     *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "0x%4x\n", qg_ss_feature);
+}
+
+static ssize_t qg_ss_feature_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (kstrtos32(buf, 0, &val))
+		return -EINVAL;
+
+	qg_ss_feature = val;
+
+	return count;
+}
+DEVICE_ATTR_RW(qg_ss_feature);
+
 static int qg_delta_soc_interval_ms = 40000;
-module_param_named(
-	soc_interval_ms, qg_delta_soc_interval_ms, int, 0600
-);
+static ssize_t soc_interval_ms_show(struct device *dev, struct device_attribute
+				     *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n", qg_delta_soc_interval_ms);
+}
+
+static ssize_t soc_interval_ms_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (kstrtos32(buf, 0, &val))
+		return -EINVAL;
+
+	qg_delta_soc_interval_ms = val;
+
+	return count;
+}
+DEVICE_ATTR_RW(soc_interval_ms);
 
 static int qg_fvss_delta_soc_interval_ms = 10000;
-module_param_named(
-	fvss_soc_interval_ms, qg_fvss_delta_soc_interval_ms, int, 0600
-);
+static ssize_t fvss_delta_soc_interval_ms_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n", qg_fvss_delta_soc_interval_ms);
+}
+
+static ssize_t fvss_delta_soc_interval_ms_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (kstrtos32(buf, 0, &val))
+		return -EINVAL;
+
+	qg_fvss_delta_soc_interval_ms = val;
+
+	return count;
+}
+DEVICE_ATTR_RW(fvss_delta_soc_interval_ms);
 
 static int qg_delta_soc_cold_interval_ms = 25000;
-module_param_named(
-	soc_cold_interval_ms, qg_delta_soc_cold_interval_ms, int, 0600
-);
+static ssize_t soc_cold_interval_ms_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n", qg_delta_soc_cold_interval_ms);
+}
+
+static ssize_t soc_cold_interval_ms_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (kstrtos32(buf, 0, &val))
+		return -EINVAL;
+
+	qg_delta_soc_cold_interval_ms = val;
+
+	return count;
+}
+DEVICE_ATTR_RW(soc_cold_interval_ms);
 
 static int qg_maint_soc_update_ms = 120000;
-module_param_named(
-	maint_soc_update_ms, qg_maint_soc_update_ms, int, 0600
-);
+static ssize_t maint_soc_update_ms_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n", qg_maint_soc_update_ms);
+}
+
+static ssize_t maint_soc_update_ms_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (kstrtos32(buf, 0, &val))
+		return -EINVAL;
+
+	qg_maint_soc_update_ms = val;
+
+	return count;
+}
+DEVICE_ATTR_RW(maint_soc_update_ms);
 
 /* FVSS scaling only based on VBAT */
 static int qg_fvss_vbat_scaling = 1;
-module_param_named(
-	fvss_vbat_scaling, qg_fvss_vbat_scaling, int, 0600
-);
+static ssize_t fvss_vbat_scaling_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	return snprintf(buf, PAGE_SIZE, "%d\n", qg_fvss_vbat_scaling);
+}
+
+static ssize_t fvss_vbat_scaling_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (kstrtos32(buf, 0, &val))
+		return -EINVAL;
+
+	qg_fvss_vbat_scaling = val;
+
+	return count;
+}
+DEVICE_ATTR_RW(fvss_vbat_scaling);
 
 static int qg_process_fvss_soc(struct qpnp_qg *chip, int sys_soc)
 {
 	int rc, vbat_uv = 0, vbat_cutoff_uv = chip->dt.vbatt_cutoff_mv * 1000;
 	int soc_vbat = 0, wt_vbat = 0, wt_sys = 0, soc_fvss = 0;
 
-	if (!chip->dt.fvss_enable)
+	if (!chip->dt.fvss_enable && !(qg_ss_feature & QG_FVSS))
 		goto exit_soc_scale;
 
 	if (chip->charge_status == POWER_SUPPLY_STATUS_CHARGING)
@@ -135,11 +235,12 @@ exit_soc_scale:
 #define TCSS_ENTRY_COUNT		2
 static int qg_process_tcss_soc(struct qpnp_qg *chip, int sys_soc)
 {
-	int rc, ibatt_diff = 0, ibat_inc_hyst = 0, qg_iterm_ua = 0, bat_health = 0;
+	int rc, ibatt_diff = 0, ibat_inc_hyst = 0;
+	int qg_iterm_ua = (-1 * chip->dt.iterm_ma * 1000);
 	int soc_ibat, wt_ibat, wt_sys;
 	union power_supply_propval prop = {0, };
 
-	if (!chip->dt.tcss_enable)
+	if (!chip->dt.tcss_enable && !(qg_ss_feature & QG_TCSS))
 		goto exit_soc_scale;
 
 	if (chip->sys_soc < (chip->dt.tcss_entry_soc * 100))
@@ -148,16 +249,7 @@ static int qg_process_tcss_soc(struct qpnp_qg *chip, int sys_soc)
 	if (chip->sys_soc >= QG_MAX_SOC && chip->soc_tcss >= QG_MAX_SOC)
 		goto exit_soc_scale;
 
-	rc = power_supply_get_property(chip->qg_psy, POWER_SUPPLY_PROP_BATT_FULL_CURRENT, &prop);
-	if (rc < 0) {
-		pr_err("failed to get full_current, rc = %d\n", rc);
-		goto exit_soc_scale;
-	} else {
-		qg_iterm_ua = -1 * prop.intval;
-	}
-
 	rc = power_supply_get_property(chip->batt_psy, POWER_SUPPLY_PROP_STATUS, &prop);
-	pr_err("charge_status = %d\n", prop.intval);
 	if (rc < 0) {
 		pr_err("failed to get charge_status, rc = %d\n", rc);
 		goto exit_soc_scale;
@@ -166,22 +258,27 @@ static int qg_process_tcss_soc(struct qpnp_qg *chip, int sys_soc)
 		goto exit_soc_scale;
 	}
 
-	rc = power_supply_get_property(chip->batt_psy, POWER_SUPPLY_PROP_HEALTH, &prop);
-	if (rc < 0){
-		pr_err("failed to get bat_health, rc = %d\n", rc);
+	rc = power_supply_get_property(chip->batt_psy,
+			POWER_SUPPLY_PROP_HEALTH, &prop);
+
+	if (!rc && (prop.intval == POWER_SUPPLY_HEALTH_COOL ||
+			prop.intval == POWER_SUPPLY_HEALTH_WARM))
 		goto exit_soc_scale;
-	} else {
-		bat_health = prop.intval;
-	}
-	if (bat_health == POWER_SUPPLY_HEALTH_WARM || bat_health == POWER_SUPPLY_HEALTH_OVERHEAT) {
-		pr_err("bat_health not good, %d\n", bat_health);
-		goto exit_soc_scale;
-	}
 
 	if (chip->last_fifo_i_ua >= 0)
 		goto exit_soc_scale;
 	else if (++chip->tcss_entry_count < TCSS_ENTRY_COUNT)
 		goto skip_entry_count;
+
+	if (!(chip->qg_psy))
+		goto exit_soc_scale;
+
+	rc = power_supply_get_property(chip->qg_psy,
+			POWER_SUPPLY_PROP_BATT_FULL_CURRENT, &prop);
+	if (rc < 0)
+		goto exit_soc_scale;
+
+	qg_iterm_ua = (-1 * prop.intval);
 
 	if (!chip->tcss_active) {
 		chip->soc_tcss = sys_soc;
@@ -233,11 +330,11 @@ static int qg_process_tcss_soc(struct qpnp_qg *chip, int sys_soc)
 	chip->soc_tcss = CAP(QG_MIN_SOC, QG_MAX_SOC, chip->soc_tcss);
 
 	qg_dbg(chip, QG_DEBUG_SOC,
-		"TCSS: fifo_i=%d prev_fifo_i=%d ibatt_tcss_entry=%d qg_term=%d soc_tcss_entry=%d sys_soc=%d soc_ibat=%d wt_ibat=%d wt_sys=%d soc_tcss=%d bat_health=%d\n",
+		"TCSS: fifo_i=%d prev_fifo_i=%d ibatt_tcss_entry=%d qg_term=%d soc_tcss_entry=%d sys_soc=%d soc_ibat=%d wt_ibat=%d wt_sys=%d soc_tcss=%d\n",
 			chip->last_fifo_i_ua, chip->prev_fifo_i_ua,
 			chip->ibat_tcss_entry, qg_iterm_ua,
 			chip->soc_tcss_entry, sys_soc, soc_ibat,
-			wt_ibat, wt_sys, chip->soc_tcss, bat_health);
+			wt_ibat, wt_sys, chip->soc_tcss);
 
 	return chip->soc_tcss;
 
@@ -245,8 +342,10 @@ exit_soc_scale:
 	chip->tcss_entry_count = 0;
 skip_entry_count:
 	chip->tcss_active = false;
-	qg_dbg(chip, QG_DEBUG_SOC, "TCSS: Quit - enabled=%d sys_soc=%d tcss_entry_count=%d fifo_i_ua=%d bat_health=%d\n",
-			chip->dt.tcss_enable, sys_soc, chip->tcss_entry_count, chip->last_fifo_i_ua, bat_health);
+	if (chip->dt.tcss_enable || (qg_ss_feature & QG_TCSS))
+		qg_dbg(chip, QG_DEBUG_SOC, "TCSS: Quit - enabled=%d sys_soc=%d tcss_entry_count=%d fifo_i_ua=%d\n",
+			chip->dt.tcss_enable, sys_soc, chip->tcss_entry_count,
+			chip->last_fifo_i_ua);
 	return sys_soc;
 }
 
@@ -254,14 +353,13 @@ skip_entry_count:
 static int qg_process_bass_soc(struct qpnp_qg *chip, int sys_soc)
 {
 	int bass_soc = sys_soc, msoc = chip->msoc;
-	int batt_soc = CAP(0, 100, DIV_ROUND_CLOSEST(chip->batt_soc, 100));
 
-	if (!chip->dt.bass_enable)
+	if (!chip->dt.bass_enable && !(qg_ss_feature & QG_BASS))
 		goto exit_soc_scale;
 
 	qg_dbg(chip, QG_DEBUG_SOC, "BASS Entry: fifo_i=%d sys_soc=%d msoc=%d batt_soc=%d fvss_active=%d\n",
 			chip->last_fifo_i_ua, sys_soc, msoc,
-			batt_soc, chip->fvss_active);
+			chip->batt_soc, chip->fvss_active);
 
 	/* Skip BASS if FVSS is active */
 	if (chip->fvss_active)
@@ -273,11 +371,11 @@ static int qg_process_bass_soc(struct qpnp_qg *chip, int sys_soc)
 
 	if (!chip->bass_active) {
 		chip->bass_active = true;
-		chip->bsoc_bass_entry = batt_soc;
+		chip->bsoc_bass_entry = chip->batt_soc;
 	}
 
 	/* Drop the sys_soc by 1% if batt_soc has dropped */
-	if ((chip->bsoc_bass_entry - batt_soc) >= 1) {
+	if ((chip->bsoc_bass_entry - chip->batt_soc) >= 100) {
 		bass_soc = (msoc > 0) ? msoc - 1 : 0;
 		chip->bass_active = false;
 	}
@@ -290,7 +388,8 @@ static int qg_process_bass_soc(struct qpnp_qg *chip, int sys_soc)
 
 exit_soc_scale:
 	chip->bass_active = false;
-	qg_dbg(chip, QG_DEBUG_SOC, "BASS Quit: enabled=%d fifo_i_ua=%d sys_soc=%d msoc=%d batt_soc=%d\n",
+	if (chip->dt.bass_enable || (qg_ss_feature & QG_BASS))
+		qg_dbg(chip, QG_DEBUG_SOC, "BASS Quit: enabled=%d fifo_i_ua=%d sys_soc=%d msoc=%d batt_soc=%d\n",
 			chip->dt.bass_enable, chip->last_fifo_i_ua,
 			sys_soc, msoc, chip->batt_soc);
 	return sys_soc;
@@ -308,12 +407,6 @@ int qg_adjust_sys_soc(struct qpnp_qg *chip)
 
 	if (chip->sys_soc == QG_MAX_SOC) {
 		soc = FULL_SOC;
-	} else if (chip->sys_soc >= (QG_MAX_SOC - 100) && !chip->dt.disable_hold_full) {
-		/* Hold SOC to 100% if we are dropping from 100 to 99 */
-		if (chip->last_adj_ssoc == FULL_SOC)
-			soc = FULL_SOC;
-		else /* Hold SOC at 99% until we hit 100% */
-			soc = FULL_SOC - 1;
 	} else {
 		soc = DIV_ROUND_CLOSEST(chip->sys_soc, 100);
 	}
@@ -407,8 +500,9 @@ static bool is_scaling_required(struct qpnp_qg *chip)
 
 	if (chip->catch_up_soc > chip->msoc && input_present &&
 			(chip->charge_status != POWER_SUPPLY_STATUS_CHARGING &&
-			chip->charge_status != POWER_SUPPLY_STATUS_FULL))
-		/* USB is present, but not charging */
+			chip->charge_status != POWER_SUPPLY_STATUS_FULL
+			&& chip->msoc != 0))
+		/* USB is present, but not charging. Ignore when msoc = 0 */
 		return false;
 
 	return true;
@@ -448,15 +542,15 @@ static void update_msoc(struct qpnp_qg *chip)
 	if (rc < 0) {
 		pr_err("Failed to read BATT_CUR rc=%d\n", rc);
 	}
+
 	if (chip->catch_up_soc > chip->msoc) {
 		/* SOC increased */
 		if (input_present) /* Increment if input is present */
 			chip->msoc += chip->dt.delta_soc;
 	} else if (chip->catch_up_soc < chip->msoc) {
 		/* SOC dropped */
-		if (batt_cur > 0) {
+		if (batt_cur > 0)
 			chip->msoc -= chip->dt.delta_soc;
-		}
 	}
 	chip->msoc = CAP(0, 100, chip->msoc);
 

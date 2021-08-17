@@ -43,8 +43,7 @@ obj-$(CONFIG_EDAC_IE31200)		+= ie31200_edac.o
 obj-$(CONFIG_EDAC_X38)			+= x38_edac.o
 obj-$(CONFIG_EDAC_I82860)		+= i82860_edac.o
 obj-$(CONFIG_EDAC_R82600)		+= r82600_edac.o
-obj-$(CONFIG_EDAC_KRYO_ARM64)		+= kryo_arm64_edac.o
-obj-$(CONFIG_EDAC_GIC)			+= gic600_edac.o
+obj-$(CONFIG_EDAC_KRYO_ARM64)          += kryo_arm64_edac.o
 
 amd64_edac_mod-y := amd64_edac.o
 amd64_edac_mod-$(CONFIG_EDAC_DEBUG) += amd64_edac_dbg.o
@@ -66,8 +65,6 @@ obj-$(CONFIG_EDAC_PPC4XX)		+= ppc4xx_edac.o
 obj-$(CONFIG_EDAC_AMD8111)		+= amd8111_edac.o
 obj-$(CONFIG_EDAC_AMD8131)		+= amd8131_edac.o
 
-obj-$(CONFIG_EDAC_TILE)			+= tile_edac.o
-
 obj-$(CONFIG_EDAC_HIGHBANK_MC)		+= highbank_mc_edac.o
 obj-$(CONFIG_EDAC_HIGHBANK_L2)		+= highbank_l2_edac.o
 
@@ -80,5 +77,6 @@ obj-$(CONFIG_EDAC_THUNDERX)		+= thunderx_edac.o
 obj-$(CONFIG_EDAC_ALTERA)		+= altera_edac.o
 obj-$(CONFIG_EDAC_SYNOPSYS)		+= synopsys_edac.o
 obj-$(CONFIG_EDAC_XGENE)		+= xgene_edac.o
+obj-$(CONFIG_EDAC_TI)			+= ti_edac.o
+obj-$(CONFIG_EDAC_QCOM)			+= qcom_edac.o
 obj-$(CONFIG_EDAC_CORTEX_ARM64)		+= cortex_arm64_edac.o
-obj-$(CONFIG_EDAC_QCOM_LLCC)		+= qcom_llcc_edac.o

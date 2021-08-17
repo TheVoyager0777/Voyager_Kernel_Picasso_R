@@ -16,16 +16,12 @@
 #include <linux/module.h>
 #include <asm/cacheflush.h>
 #include <soc/qcom/scm.h>
+#include <soc/qcom/qtee_shmbridge.h>
 #include <linux/crypto-qti-common.h>
 #include "crypto-qti-platform.h"
 #include "crypto-qti-tz.h"
 
 unsigned int storage_type = SDCC_CE;
-
-#define ICE_BUFFER_SIZE 128
-
-static uint8_t ice_buffer[ICE_BUFFER_SIZE];
-static uint8_t secret_buffer[32];
 
 int crypto_qti_program_key(struct crypto_vops_qti_entry *ice_entry,
 			   const struct blk_crypto_key *key,
@@ -35,6 +31,7 @@ int crypto_qti_program_key(struct crypto_vops_qti_entry *ice_entry,
 	int err = 0;
 	uint32_t smc_id = 0;
 	char *tzbuf = NULL;
+	struct qtee_shm shm;
 	struct scm_desc desc = {0};
 	int i;
 	union {
@@ -42,7 +39,11 @@ int crypto_qti_program_key(struct crypto_vops_qti_entry *ice_entry,
 		u32 words[BLK_CRYPTO_MAX_WRAPPED_KEY_SIZE / sizeof(u32)];
 	} key_new;
 
-	tzbuf = ice_buffer;
+	err = qtee_shmbridge_allocate_shm(key->size, &shm);
+	if (err)
+		return -ENOMEM;
+
+	tzbuf = shm.vaddr;
 
 	memcpy(key_new.bytes, key->raw, key->size);
 	if (!key->is_hw_wrapped) {
@@ -53,19 +54,22 @@ int crypto_qti_program_key(struct crypto_vops_qti_entry *ice_entry,
 	memcpy(tzbuf, key_new.bytes, key->size);
 	dmac_flush_range(tzbuf, tzbuf + key->size);
 
-	smc_id = TZ_ES_CONFIG_SET_ICE_KEY_ID;
-	desc.arginfo = TZ_ES_CONFIG_SET_ICE_KEY_PARAM_ID;
+	smc_id = TZ_ES_CONFIG_SET_ICE_KEY_CE_TYPE_ID;
+	desc.arginfo = TZ_ES_CONFIG_SET_ICE_KEY_CE_TYPE_PARAM_ID;
 	desc.args[0] = slot;
-	desc.args[1] = virt_to_phys(tzbuf);
+	desc.args[1] = shm.paddr;
 	desc.args[2] = key->size;
 	desc.args[3] = ICE_CIPHER_MODE_XTS_256;
 	desc.args[4] = data_unit_mask;
+	desc.args[5] = storage_type;
 
 
 	err = scm_call2_noretry(smc_id, &desc);
 	if (err)
 		pr_err("%s:SCM call Error: 0x%x slot %d\n",
 				__func__, err, slot);
+
+	qtee_shmbridge_free_shm(&shm);
 
 	return err;
 }
@@ -77,10 +81,11 @@ int crypto_qti_invalidate_key(
 	uint32_t smc_id = 0;
 	struct scm_desc desc = {0};
 
-	smc_id = TZ_ES_INVALIDATE_ICE_KEY_ID;
+	smc_id = TZ_ES_INVALIDATE_ICE_KEY_CE_TYPE_ID;
 
-	desc.arginfo = TZ_ES_INVALIDATE_ICE_KEY_PARAM_ID;
+	desc.arginfo = TZ_ES_INVALIDATE_ICE_KEY_CE_TYPE_PARAM_ID;
 	desc.args[0] = slot;
+	desc.args[1] = storage_type;
 
 	err = scm_call2_noretry(smc_id, &desc);
 	if (err)
@@ -93,25 +98,33 @@ int crypto_qti_tz_raw_secret(const u8 *wrapped_key,
 			     unsigned int secret_size)
 {
 	int err = 0;
+	struct qtee_shm shm_key, shm_secret;
 	uint32_t smc_id = 0;
 
 	struct scm_desc desc = {0};
-	char *tzbuf_key, *secret_key;
+	char *tzbuf_key;
 
-	tzbuf_key = ice_buffer;
-	secret_key = secret_buffer;
+	err = qtee_shmbridge_allocate_shm(wrapped_key_size, &shm_key);
+	if (err)
+		return -ENOMEM;
+
+	err = qtee_shmbridge_allocate_shm(secret_size, &shm_secret);
+	if (err)
+		return -ENOMEM;
+
+	tzbuf_key = shm_key.vaddr;
 	memcpy(tzbuf_key, wrapped_key, wrapped_key_size);
 	dmac_flush_range(tzbuf_key, tzbuf_key + wrapped_key_size);
 
 	smc_id = TZ_ES_RETRIEVE_RAW_SECRET_CE_TYPE_ID;
 	desc.arginfo = TZ_ES_RETRIEVE_RAW_SECRET_CE_TYPE_PARAM_ID;
-	desc.args[0] = virt_to_phys(tzbuf_key);
+	desc.args[0] = shm_key.paddr;
 	desc.args[1] = wrapped_key_size;
-	desc.args[2] = virt_to_phys(secret_key);
+	desc.args[2] = shm_secret.paddr;
 	desc.args[3] = secret_size;
 
-	memset(secret_key, 0, secret_size);
-	dmac_flush_range(secret_key, secret_key + secret_size);
+	memset(shm_secret.vaddr, 0, secret_size);
+	dmac_flush_range(shm_secret.vaddr, shm_secret.vaddr + secret_size);
 
 	err = scm_call2_noretry(smc_id, &desc);
 	if (err) {
@@ -119,8 +132,11 @@ int crypto_qti_tz_raw_secret(const u8 *wrapped_key,
 		return err;
 	}
 
-	dmac_inv_range(secret_key, secret_key + secret_size);
-	memcpy(secret, secret_key, secret_size);
+	dmac_inv_range(shm_secret.vaddr, shm_secret.vaddr + secret_size);
+	memcpy(secret, shm_secret.vaddr, secret_size);
+
+	qtee_shmbridge_free_shm(&shm_key);
+	qtee_shmbridge_free_shm(&shm_secret);
 
 	return err;
 }

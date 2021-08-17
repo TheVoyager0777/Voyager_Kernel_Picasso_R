@@ -479,7 +479,6 @@ int libipw_wx_get_encode(struct libipw_device *ieee,
 {
 	struct iw_point *erq = &(wrqu->encoding);
 	int len, key;
-	struct lib80211_crypt_data *crypt;
 	struct libipw_security *sec = &ieee->sec;
 
 	LIBIPW_DEBUG_WX("GET_ENCODE\n");
@@ -492,7 +491,6 @@ int libipw_wx_get_encode(struct libipw_device *ieee,
 	} else
 		key = ieee->crypt_info.tx_keyidx;
 
-	crypt = ieee->crypt_info.crypt[key];
 	erq->flags = key + 1;
 
 	if (!sec->enabled) {
@@ -649,10 +647,8 @@ int libipw_wx_set_encodeext(struct libipw_device *ieee,
 	}
 
 	if (ext->alg != IW_ENCODE_ALG_NONE) {
-		int key_len = clamp_val(ext->key_len, 0, SCM_KEY_LEN);
-
-		memcpy(sec.keys[idx], ext->key, key_len);
-		sec.key_sizes[idx] = key_len;
+		memcpy(sec.keys[idx], ext->key, ext->key_len);
+		sec.key_sizes[idx] = ext->key_len;
 		sec.flags |= (1 << idx);
 		if (ext->alg == IW_ENCODE_ALG_WEP) {
 			sec.encode_alg[idx] = SEC_ALG_WEP;

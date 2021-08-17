@@ -1,4 +1,5 @@
-/* Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Copyright (c) 2014-2018, 2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -304,6 +305,7 @@ struct msm_spi {
 	struct msm_bus_client_handle *bus_cl_hdl;
 	unsigned long            mem_phys_addr;
 	size_t                   mem_size;
+	void			*ipc_logs; /* ipc logs handler */
 	int                      input_fifo_size;
 	int                      output_fifo_size;
 	u32                      rx_bytes_remaining;

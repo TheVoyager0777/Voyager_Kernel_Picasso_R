@@ -1,13 +1,5 @@
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2017, 2020, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "%s: " fmt, __func__
@@ -180,8 +172,8 @@ struct spm_vreg {
 	const struct voltage_range	*range;
 	int				uV;
 	int				last_set_uV;
-	unsigned			vlevel;
-	unsigned			last_set_vlevel;
+	unsigned int			vlevel;
+	unsigned int			last_set_vlevel;
 	u32				max_step_uV;
 	bool				online;
 	u16				spmi_base_addr;
@@ -241,8 +233,8 @@ static int spm_regulator_vlevel_to_uv(struct spm_vreg *vreg, int vlevel)
 	return vlevel * vreg->range->step_uV + vreg->range->min_uV;
 }
 
-static unsigned spm_regulator_vlevel_to_selector(struct spm_vreg *vreg,
-						 unsigned vlevel)
+static unsigned int spm_regulator_vlevel_to_selector(struct spm_vreg *vreg,
+						 unsigned int vlevel)
 {
 	/* Fix VSET for ULT HF Buck */
 	if (vreg->regulator_type == QPNP_TYPE_ULT_HF
@@ -274,7 +266,7 @@ static int qpnp_smps_read_voltage(struct spm_vreg *vreg)
 			return rc;
 		}
 
-		vreg->last_set_vlevel = ((unsigned)val[1] << 8) | val[0];
+		vreg->last_set_vlevel = ((unsigned int)val[1] << 8) | val[0];
 	} else {
 		rc = regmap_bulk_read(vreg->regmap,
 			vreg->spmi_base_addr + QPNP_SMPS_REG_VOLTAGE_SETPOINT,
@@ -292,7 +284,7 @@ static int qpnp_smps_read_voltage(struct spm_vreg *vreg)
 	return rc;
 }
 
-static int qpnp_smps_write_voltage(struct spm_vreg *vreg, unsigned vlevel)
+static int qpnp_smps_write_voltage(struct spm_vreg *vreg, unsigned int vlevel)
 {
 	int rc = 0;
 	u8 reg[2];
@@ -393,7 +385,7 @@ static int spm_regulator_get_voltage(struct regulator_dev *rdev)
 
 static int spm_regulator_write_voltage(struct spm_vreg *vreg, int uV)
 {
-	unsigned vlevel = spm_regulator_uv_to_vlevel(vreg, uV);
+	unsigned int vlevel = spm_regulator_uv_to_vlevel(vreg, uV);
 	bool spm_failed = false;
 	int rc = 0;
 	u32 slew_delay;
@@ -444,7 +436,8 @@ static int spm_regulator_recalibrate(struct spm_vreg *vreg)
 	if (!vreg->recal_cluster_mask)
 		return 0;
 
-	arm_smccc_smc(0xC4000020, vreg->recal_cluster_mask, 2, 0, 0, 0, 0, 0, &res);
+	arm_smccc_smc(0xC4000020, vreg->recal_cluster_mask,
+		2, 0, 0, 0, 0, 0, &res);
 	if (res.a0)
 		pr_err("%s: recalibration failed, rc=%ld\n", vreg->rdesc.name,
 			res.a0);
@@ -502,12 +495,12 @@ static int _spm_regulator_set_voltage(struct regulator_dev *rdev)
 }
 
 static int spm_regulator_set_voltage(struct regulator_dev *rdev, int min_uV,
-					int max_uV, unsigned *selector)
+					int max_uV, unsigned int *selector)
 {
 	struct spm_vreg *vreg = rdev_get_drvdata(rdev);
 	const struct voltage_range *range = vreg->range;
 	int uV = min_uV;
-	unsigned vlevel;
+	unsigned int vlevel;
 
 	if (uV < range->set_point_min_uV && max_uV >= range->set_point_min_uV)
 		uV = range->set_point_min_uV;
@@ -539,7 +532,7 @@ static int spm_regulator_set_voltage(struct regulator_dev *rdev, int min_uV,
 }
 
 static int spm_regulator_list_voltage(struct regulator_dev *rdev,
-					unsigned selector)
+					unsigned int selector)
 {
 	struct spm_vreg *vreg = rdev_get_drvdata(rdev);
 
@@ -614,11 +607,11 @@ static struct regulator_ops spm_regulator_ops = {
 };
 
 static int spm_regulator_avs_set_voltage(struct regulator_dev *rdev, int min_uV,
-					int max_uV, unsigned *selector)
+					int max_uV, unsigned int *selector)
 {
 	struct spm_vreg *vreg = rdev_get_drvdata(rdev);
 	const struct voltage_range *range = vreg->range;
-	unsigned vlevel_min, vlevel_max;
+	unsigned int vlevel_min, vlevel_max;
 	int uV, avs_min_uV, avs_max_uV, rc;
 
 	uV = min_uV;
@@ -779,7 +772,7 @@ static int qpnp_smps_check_type(struct spm_vreg *vreg)
 			"%s: invalid type=0x%02X, subtype=0x%02X register pair\n",
 			 __func__, type[0], type[1]);
 		return -ENODEV;
-	};
+	}
 
 	return rc;
 }
@@ -894,7 +887,7 @@ static int qpnp_smps_init_mode(struct spm_vreg *vreg)
 			dev_err(&vreg->pdev->dev,
 				"%s: could not read mode register, rc=%d\n",
 				__func__, rc);
-		 vreg->init_mode = qpnp_regval_to_mode(vreg, val);
+			 vreg->init_mode = qpnp_regval_to_mode(vreg, val);
 	}
 
 	vreg->mode = vreg->init_mode;
@@ -1033,7 +1026,7 @@ static int qpnp_smps_check_constraints(struct spm_vreg *vreg,
 		}
 
 		limit_max_uV = spm_regulator_vlevel_to_uv(vreg,
-					((unsigned)reg[1] << 8) | reg[0]);
+					((unsigned int)reg[1] << 8) | reg[0]);
 		break;
 	case QPNP_TYPE_ULT_HF:
 		/* no HW voltage limit configuration */
@@ -1152,10 +1145,9 @@ static int spm_regulator_probe(struct platform_device *pdev)
 	}
 
 	vreg = devm_kzalloc(&pdev->dev, sizeof(*vreg), GFP_KERNEL);
-	if (!vreg) {
-		pr_err("allocation failed.\n");
+	if (!vreg)
 		return -ENOMEM;
-	}
+
 	vreg->regmap = dev_get_regmap(pdev->dev.parent, NULL);
 	if (!vreg->regmap) {
 		dev_err(&pdev->dev, "Couldn't get parent's regmap\n");
@@ -1304,7 +1296,7 @@ static int spm_regulator_remove(struct platform_device *pdev)
 	return 0;
 }
 
-static struct of_device_id spm_regulator_match_table[] = {
+static const struct of_device_id spm_regulator_match_table[] = {
 	{ .compatible = SPM_REGULATOR_DRIVER_NAME, },
 	{}
 };
@@ -1319,7 +1311,6 @@ static struct platform_driver spm_regulator_driver = {
 	.driver = {
 		.name		= SPM_REGULATOR_DRIVER_NAME,
 		.of_match_table = spm_regulator_match_table,
-		.owner		= THIS_MODULE,
 	},
 	.probe		= spm_regulator_probe,
 	.remove		= spm_regulator_remove,
@@ -1340,8 +1331,8 @@ int __init spm_regulator_init(void)
 
 	if (has_registered)
 		return 0;
-	else
-		has_registered = true;
+
+	has_registered = true;
 
 	return platform_driver_register(&spm_regulator_driver);
 }

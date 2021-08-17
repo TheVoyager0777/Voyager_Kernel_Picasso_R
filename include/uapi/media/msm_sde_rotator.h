@@ -1,3 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
+/*
+ * Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+ */
+
 #ifndef __UAPI_MSM_SDE_ROTATOR_H__
 #define __UAPI_MSM_SDE_ROTATOR_H__
 

@@ -1,14 +1,7 @@
-/* Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2018-2020 The Linux Foundation. All rights reserved.
  * Copyright (C) 2021 XiaoMi, Inc.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/alarmtimer.h>
@@ -315,13 +308,25 @@ bool is_input_present(struct qpnp_qg *chip)
 	return is_usb_present(chip) || is_dc_present(chip);
 }
 
-static bool is_parallel_available(struct qpnp_qg *chip)
+bool is_parallel_available(struct qpnp_qg *chip)
 {
 	if (chip->parallel_psy)
 		return true;
 
 	chip->parallel_psy = power_supply_get_by_name("parallel");
 	if (!chip->parallel_psy)
+		return false;
+
+	return true;
+}
+
+bool is_cp_available(struct qpnp_qg *chip)
+{
+	if (chip->cp_psy)
+		return true;
+
+	chip->cp_psy = power_supply_get_by_name("charge_pump_master");
+	if (!chip->cp_psy)
 		return false;
 
 	return true;
@@ -334,6 +339,9 @@ bool is_parallel_enabled(struct qpnp_qg *chip)
 	if (is_parallel_available(chip)) {
 		power_supply_get_property(chip->parallel_psy,
 			POWER_SUPPLY_PROP_CHARGING_ENABLED, &pval);
+	} else if (is_cp_available(chip)) {
+		power_supply_get_property(chip->cp_psy,
+			POWER_SUPPLY_PROP_CP_ENABLE, &pval);
 	}
 
 	return pval.intval ? true : false;
@@ -353,103 +361,45 @@ int qg_write_monotonic_soc(struct qpnp_qg *chip, int msoc)
 	return rc;
 }
 
-static int handle_temp_comp_config(struct qpnp_qg *chip)
-{
-	int rc = 0;
-	int temp_comp_value = 0;
-	int ibat = 0;
-
-	if ((chip->real_temp > NTC_COMP_HIGH_TEMP) || (chip->real_temp < NTC_COMP_LOW_TEMP))
-		return 0;
-
-	ibat = -1 * (chip->last_ibat / 1000);
-	if (ibat <= 0)
-		return 0;
-
-	rc = get_val(chip->temp_comp_cfg, chip->temp_comp_hysteresis,
-			chip->step_index, ibat,
-			&chip->step_index, &temp_comp_value);
-
-	if (rc < 0)
-		return 0;
-
-	return temp_comp_value;
-}
-
+#define TEMP_READ_RETRY		3
 int qg_get_battery_temp(struct qpnp_qg *chip, int *temp)
 {
 	int rc = 0;
-	int last_temp = 0;
-	struct timespec now_time;
-	static struct timespec last_update_time;
+	static int retry = 0;
 
 	if (chip->battery_missing) {
 		*temp = 250;
 		return 0;
 	}
 
-	if (chip->batt_fake_temp != -1) {
-		*temp = chip->batt_fake_temp;
-		return 0;
-	}
-
 	rc = iio_read_channel_processed(chip->batt_therm_chan, temp);
 	if (rc < 0) {
-		pr_err("Failed reading BAT_TEMP over ADC rc=%d\n", rc);
-		return rc;
-	}
-
-	last_temp = *temp;
-	rc = iio_read_channel_processed(chip->batt_therm_chan, temp);
-	if (rc < 0) {
-		pr_err("Failed reading BAT_TEMP over ADC rc=%d\n", rc);
-		return rc;
-	}
-	if (abs(last_temp - *temp) > 50) {
-		rc = iio_read_channel_processed(chip->batt_therm_chan, temp);
-		if (rc < 0) {
+		while (retry < TEMP_READ_RETRY) {
+			rc = iio_read_channel_processed(chip->batt_therm_chan, temp);
+			if (rc >= 0) {
+				retry = 0;
+				break;
+			} else {
+				retry++;
+			}
+		}
+		if (retry >= TEMP_READ_RETRY) {
 			pr_err("Failed reading BAT_TEMP over ADC rc=%d\n", rc);
+			retry = 0;
 			return rc;
 		}
 	}
 
-	if (chip->temp_comp_enable) {
-		/* for F4 P0 & P0.1 */
-		if (*temp < -300) {
-			*temp = 250;
-			return 0;
+	if (abs(chip->last_temp - *temp) > 50) {
+		rc = iio_read_channel_processed(chip->batt_therm_chan, temp);
+		pr_err("Read battery temp again temp=%d\n", *temp);
+		if (rc < 0) {
+			pr_err("Failed reading BAT_TEMP over ADC when re-read temp rc=%d\n", rc);
+			return rc;
 		}
-
-		chip->real_temp = *temp;
-		chip->batt_ntc_comp = handle_temp_comp_config(chip);
-
-		if (chip->charge_status != POWER_SUPPLY_STATUS_CHARGING)
-			chip->batt_ntc_comp = NTC_NO_COMP;
-
-		if (chip->report_temp == INT_MIN)
-			chip->report_temp = chip->real_temp;
-
-		chip->obj_temp = chip->real_temp - chip->batt_ntc_comp * 10;
-		get_monotonic_boottime(&now_time);
-
-		if (abs(chip->obj_temp - chip->report_temp) < 5) {
-			chip->report_temp = chip->obj_temp;
-		} else if (now_time.tv_sec - last_update_time.tv_sec > TEMP_COMP_TIME) {
-			if (chip->report_temp > chip->obj_temp) {
-				chip->report_temp = chip->report_temp - 10;
-				get_monotonic_boottime(&last_update_time);
-			} else if (chip->report_temp < chip->obj_temp) {
-				chip->report_temp = chip->report_temp + 10;
-				get_monotonic_boottime(&last_update_time);
-			}
-		}
-
-		*temp = chip->report_temp;
-		pr_debug("obj_temp[%d] report_temp[%d] real_temp[%d] ntc_comp[%d]\n",
-				chip->obj_temp, chip->report_temp, chip->real_temp, chip->batt_ntc_comp);
-	} else {
-		pr_debug("batt_temp = %d\n", *temp);
 	}
+	chip->last_temp = *temp;
+	pr_debug("batt_temp = %d\n", *temp);
 
 	return 0;
 }
@@ -460,6 +410,11 @@ int qg_get_battery_current(struct qpnp_qg *chip, int *ibat_ua)
 
 	if (chip->battery_missing) {
 		*ibat_ua = 0;
+		return 0;
+	}
+
+	if (chip->qg_mode == QG_V_MODE) {
+		*ibat_ua = chip->qg_v_ibat;
 		return 0;
 	}
 
@@ -481,7 +436,6 @@ int qg_get_battery_current(struct qpnp_qg *chip, int *ibat_ua)
 
 	last_ibat = sign_extend32(last_ibat, 15);
 	*ibat_ua = qg_iraw_to_ua(chip, last_ibat);
-	chip->last_ibat = *ibat_ua;
 	if (*ibat_ua < 0) {
 		pr_err("ibat_ua =%d", *ibat_ua);
 		chip->sdam_data[SDAM_IBAT_UA] = 0;
@@ -543,6 +497,15 @@ int qg_get_ibat_avg(struct qpnp_qg *chip, int *ibat_ua)
 				(u8 *)&last_ibat, 2);
 	if (rc < 0) {
 		pr_err("Failed to read S2_NORMAL_AVG_I reg, rc=%d\n", rc);
+		return rc;
+	}
+
+	if (last_ibat == FIFO_I_RESET_VAL) {
+		/* First FIFO is not complete, read instantaneous IBAT */
+		rc = qg_get_battery_current(chip, ibat_ua);
+		if (rc < 0)
+			pr_err("Failed to read inst. IBAT rc=%d\n", rc);
+
 		return rc;
 	}
 

@@ -2,6 +2,8 @@
 #ifndef __USBAUDIO_CARD_H
 #define __USBAUDIO_CARD_H
 
+#include <linux/android_kabi.h>
+
 #define MAX_NR_RATES	1024
 #define MAX_PACKS	6		/* per URB */
 #define MAX_PACKS_HS	(MAX_PACKS * 8)	/* in high speed mode */
@@ -22,7 +24,7 @@ struct audioformat {
 	unsigned char endpoint;		/* endpoint */
 	unsigned char ep_attr;		/* endpoint attributes */
 	unsigned char datainterval;	/* log_2 of data packet interval */
-	unsigned char protocol;		/* UAC_VERSION_1/2 */
+	unsigned char protocol;		/* UAC_VERSION_1/2/3 */
 	unsigned int maxpacksize;	/* max. packet size */
 	unsigned int rates;		/* rate bitmasks */
 	unsigned int rate_min, rate_max;	/* min/max rates */
@@ -32,10 +34,12 @@ struct audioformat {
 	struct snd_pcm_chmap_elem *chmap; /* (optional) channel map */
 	bool dsd_dop;			/* add DOP headers in case of DSD samples */
 	bool dsd_bitrev;		/* reverse the bits of each DSD sample */
+	bool dsd_raw;			/* altsetting is raw DSD */
 };
 
 struct snd_usb_substream;
 struct snd_usb_endpoint;
+struct snd_usb_power_domain;
 
 struct snd_urb_ctx {
 	struct urb *urb;
@@ -104,6 +108,11 @@ struct snd_usb_endpoint {
 
 	spinlock_t lock;
 	struct list_head list;
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
+	ANDROID_KABI_RESERVE(3);
+	ANDROID_KABI_RESERVE(4);
 };
 
 struct snd_usb_substream {
@@ -114,6 +123,7 @@ struct snd_usb_substream {
 	int interface;	/* current interface */
 	int endpoint;	/* assigned endpoint */
 	struct audioformat *cur_audiofmt;	/* current audioformat pointer (for hw_params callback) */
+	struct snd_usb_power_domain *str_pd;	/* UAC3 Power Domain for streaming path */
 	snd_pcm_format_t pcm_format;	/* current audio format (for hw_params callback) */
 	unsigned int channels;		/* current number of channels (for hw_params callback) */
 	unsigned int channels_max;	/* max channels in the all audiofmts */
@@ -126,7 +136,6 @@ struct snd_usb_substream {
 	unsigned int tx_length_quirk:1;	/* add length specifier to transfers */
 	unsigned int fmt_type;		/* USB audio format type (1-3) */
 	unsigned int pkt_offset_adj;	/* Bytes to drop from beginning of packets (for non-compliant devices) */
-	unsigned int stream_offset_adj;	/* Bytes to drop from beginning of stream (for non-compliant devices) */
 
 	unsigned int running: 1;	/* running status */
 
@@ -140,6 +149,7 @@ struct snd_usb_substream {
 	struct snd_usb_endpoint *sync_endpoint;
 	unsigned long flags;
 	bool need_setup_ep;		/* (re)configure EP at prepare? */
+	bool need_setup_fmt;		/* (re)configure fmt after resume? */
 	unsigned int speed;		/* USB_SPEED_XXX */
 
 	u64 formats;			/* format bitmasks (all or'ed) */

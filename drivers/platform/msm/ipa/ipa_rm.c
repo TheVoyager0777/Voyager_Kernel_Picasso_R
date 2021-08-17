@@ -1,13 +1,6 @@
-/* Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/slab.h>
@@ -512,7 +505,7 @@ int ipa_rm_request_resource_with_timer(enum ipa_rm_resource_name resource_name)
 	release_work->needed_bw = 0;
 	release_work->dec_usage_count = false;
 	INIT_DELAYED_WORK(&release_work->work, delayed_release_work_func);
-	schedule_delayed_work(&release_work->work,
+	queue_delayed_work(system_power_efficient_wq, &release_work->work,
 			msecs_to_jiffies(IPA_RM_RELEASE_DELAY_IN_MSEC));
 	result = 0;
 bail:

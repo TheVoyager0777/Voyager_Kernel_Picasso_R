@@ -1,10 +1,20 @@
 /* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * <linux/gpio.h>
+ *
+ * This is the LEGACY GPIO bulk include file, including legacy APIs. It is
+ * used for GPIO drivers still referencing the global GPIO numberspace,
+ * and should not be included in new code.
+ *
+ * If you're implementing a GPIO driver, only include <linux/gpio/driver.h>
+ * If you're implementing a GPIO consumer, only include <linux/gpio/consumer.h>
+ */
 #ifndef __LINUX_GPIO_H
 #define __LINUX_GPIO_H
 
 #include <linux/errno.h>
 
-/* see Documentation/gpio/gpio-legacy.txt */
+/* see Documentation/driver-api/gpio/legacy.rst */
 
 /* make these flag values available regardless of GPIO kconfig options */
 #define GPIOF_DIR_OUT	(0 << 0)
@@ -86,6 +96,7 @@ int devm_gpio_request(struct device *dev, unsigned gpio, const char *label);
 int devm_gpio_request_one(struct device *dev, unsigned gpio,
 			  unsigned long flags, const char *label);
 void devm_gpio_free(struct device *dev, unsigned int gpio);
+struct gpio_chip *find_chip_by_name(const char *name);
 
 #else /* ! CONFIG_GPIOLIB */
 
@@ -247,6 +258,12 @@ static inline int devm_gpio_request_one(struct device *dev, unsigned gpio,
 static inline void devm_gpio_free(struct device *dev, unsigned int gpio)
 {
 	WARN_ON(1);
+}
+
+struct gpio_chip *find_chip_by_name(const char *name)
+{
+	WARN_ON(1);
+	return NULL;
 }
 
 #endif /* ! CONFIG_GPIOLIB */

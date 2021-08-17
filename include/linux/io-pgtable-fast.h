@@ -1,13 +1,6 @@
-/* Copyright (c) 2017, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2017, The Linux Foundation. All rights reserved.
  */
 
 #ifndef __LINUX_IO_PGTABLE_FAST_H
@@ -31,6 +24,10 @@ int av8l_fast_map_public(struct io_pgtable_ops *ops, unsigned long iova,
 void av8l_fast_unmap_public(struct io_pgtable_ops *ops, unsigned long iova,
 				size_t size);
 
+int av8l_fast_map_sg_public(struct io_pgtable_ops *ops,
+			unsigned long iova, struct scatterlist *sgl,
+			unsigned int nents, int prot, size_t *size);
+
 bool av8l_fast_iova_coherent_public(struct io_pgtable_ops *ops,
 					unsigned long iova);
 
@@ -46,6 +43,13 @@ av8l_fast_map_public(struct io_pgtable_ops *ops, unsigned long iova,
 static inline void av8l_fast_unmap_public(struct io_pgtable_ops *ops,
 					  unsigned long iova, size_t size)
 {
+}
+
+static inline int av8l_fast_map_sg_public(struct io_pgtable_ops *ops,
+				unsigned long iova, struct scatterlist *sgl,
+				unsigned int nents, int prot, size_t *size)
+{
+	return 0;
 }
 
 static inline bool av8l_fast_iova_coherent_public(struct io_pgtable_ops *ops,

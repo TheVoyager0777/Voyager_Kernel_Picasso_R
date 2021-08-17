@@ -200,6 +200,7 @@ int parse_options_remount(struct super_block *sb, char *options, int silent,
 		case Opt_fsuid:
 		case Opt_fsgid:
 		case Opt_reserved_mb:
+			pr_warn("Option \"%s\" can't be changed during remount\n", p);
 		case Opt_gid_derivation:
 			if (!silent)
 				pr_warn("Option \"%s\" can't be changed during remount\n", p);
@@ -279,7 +280,7 @@ static int sdcardfs_read_super(struct vfsmount *mnt, struct super_block *sb,
 
 	pr_info("sdcardfs: dev_name -> %s\n", dev_name);
 	pr_info("sdcardfs: options -> %s\n", (char *)raw_data);
-	pr_info("sdcardfs: mnt -> %pK\n", mnt);
+	pr_info("sdcardfs: mnt -> %p\n", mnt);
 
 	/* parse lower path */
 	err = kern_path(dev_name, LOOKUP_FOLLOW | LOOKUP_DIRECTORY,
@@ -475,6 +476,12 @@ static int __init init_sdcardfs_fs(void)
 
 	pr_info("Registering sdcardfs " SDCARDFS_VERSION "\n");
 
+	kmem_file_info_pool = KMEM_CACHE(sdcardfs_file_info, SLAB_HWCACHE_ALIGN);
+	if (!kmem_file_info_pool) {
+		err = -ENOMEM;
+		goto err;
+	}
+
 	err = sdcardfs_init_inode_cache();
 	if (err)
 		goto out;
@@ -491,6 +498,7 @@ out:
 		sdcardfs_destroy_dentry_cache();
 		packagelist_exit();
 	}
+err:
 	return err;
 }
 
@@ -500,6 +508,7 @@ static void __exit exit_sdcardfs_fs(void)
 	sdcardfs_destroy_dentry_cache();
 	packagelist_exit();
 	unregister_filesystem(&sdcardfs_fs_type);
+	kmem_cache_destroy(kmem_file_info_pool);
 	pr_info("Completed sdcardfs module unload\n");
 }
 

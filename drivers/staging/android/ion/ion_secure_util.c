@@ -1,16 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- *
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
  */
 
 #include <linux/slab.h>
@@ -31,9 +21,7 @@ bool is_secure_vmid_valid(int vmid)
 		vmid == VMID_CP_SPSS_SP ||
 		vmid == VMID_CP_SPSS_SP_SHARED ||
 		vmid == VMID_CP_SPSS_HLOS_SHARED ||
-		vmid == VMID_CP_CAMERA_ENCODE ||
-		vmid == VMID_CP_CDSP ||
-		vmid == VMID_CP_DSP_EXT);
+		vmid == VMID_CP_CDSP);
 }
 
 bool is_secure_allocation(unsigned long flags)
@@ -65,12 +53,8 @@ int get_secure_vmid(unsigned long flags)
 		return VMID_CP_SPSS_SP_SHARED;
 	if (flags & ION_FLAG_CP_SPSS_HLOS_SHARED)
 		return VMID_CP_SPSS_HLOS_SHARED;
-	if (flags & ION_FLAG_CP_CAMERA_ENCODE)
-		return VMID_CP_CAMERA_ENCODE;
 	if (flags & ION_FLAG_CP_CDSP)
 		return VMID_CP_CDSP;
-	if (flags & ION_FLAG_CP_DSP_EXT)
-		return VMID_CP_DSP_EXT;
 	return -EINVAL;
 }
 
@@ -91,8 +75,8 @@ static int get_vmid(unsigned long flags)
 	return vmid;
 }
 
-static int populate_vm_list(unsigned long flags, unsigned int *vm_list,
-			    int nelems)
+int ion_populate_vm_list(unsigned long flags, unsigned int *vm_list,
+			 int nelems)
 {
 	unsigned int itr = 0;
 	int vmid;
@@ -111,6 +95,7 @@ static int populate_vm_list(unsigned long flags, unsigned int *vm_list,
 	}
 	return 0;
 }
+EXPORT_SYMBOL(ion_populate_vm_list);
 
 int ion_hyp_unassign_sg(struct sg_table *sgt, int *source_vm_list,
 			int source_nelems, bool clear_page_private,
@@ -155,8 +140,6 @@ int ion_hyp_assign_sg(struct sg_table *sgt, int *dest_vm_list,
 	int *dest_perms;
 	int i;
 	int ret = 0;
-	int j = -1;
-	int k = -1;
 
 	if (dest_nelems <= 0) {
 		pr_err("%s: dest_nelems invalid\n",
@@ -171,23 +154,8 @@ int ion_hyp_assign_sg(struct sg_table *sgt, int *dest_vm_list,
 		goto out;
 	}
 
-	for (i = 0; i < dest_nelems; i++) {
-		if (dest_vm_list[i] == VMID_CP_SEC_DISPLAY ||
-		    dest_vm_list[i] == VMID_CP_DSP_EXT)
-			dest_perms[i] = PERM_READ;
-		else if (dest_vm_list[i] == VMID_CP_CAMERA_ENCODE) {
-			j = i;
-			dest_perms[i] = PERM_READ | PERM_WRITE;
-		} else if (dest_vm_list[i] == VMID_CP_CAMERA) {
-			k = i;
-			dest_perms[i] = PERM_READ | PERM_WRITE;
-		}
-		else
-			dest_perms[i] = PERM_READ | PERM_WRITE;
-	}
-
-	if ((j != -1) && (k != -1))
-		dest_perms[j] = PERM_READ;
+	for (i = 0; i < dest_nelems; i++)
+		dest_perms[i] = msm_secure_get_vmid_perms(dest_vm_list[i]);
 
 	ret = hyp_assign_table(sgt, &source_vmid, 1,
 			       dest_vm_list, dest_perms, dest_nelems);
@@ -219,7 +187,7 @@ int ion_hyp_unassign_sg_from_flags(struct sg_table *sgt, unsigned long flags,
 				 GFP_KERNEL);
 	if (!source_vm_list)
 		return -ENOMEM;
-	ret = populate_vm_list(flags, source_vm_list, source_nelems);
+	ret = ion_populate_vm_list(flags, source_vm_list, source_nelems);
 	if (ret) {
 		pr_err("%s: Failed to get secure vmids\n", __func__);
 		goto out_free_source;
@@ -247,7 +215,7 @@ int ion_hyp_assign_sg_from_flags(struct sg_table *sgt, unsigned long flags,
 		goto out;
 	}
 
-	ret = populate_vm_list(flags, dest_vm_list, dest_nelems);
+	ret = ion_populate_vm_list(flags, dest_vm_list, dest_nelems);
 	if (ret) {
 		pr_err("%s: Failed to get secure vmid(s)\n", __func__);
 		goto out_free_dest_vm;
@@ -295,24 +263,19 @@ int ion_hyp_assign_from_flags(u64 base, u64 size, unsigned long flags)
 	}
 
 	if ((flags & ~ION_FLAGS_CP_MASK) ||
-	    populate_vm_list(flags, vmids, nr)) {
+	    ion_populate_vm_list(flags, vmids, nr)) {
 		pr_err("%s: Failed to parse secure flags 0x%lx\n", __func__,
 		       flags);
 		goto out;
 	}
 
 	for (i = 0; i < nr; i++)
-		if (vmids[i] == VMID_CP_SEC_DISPLAY ||
-		    vmids[i] == VMID_CP_DSP_EXT)
-			modes[i] = PERM_READ;
-		else
-			modes[i] = PERM_READ | PERM_WRITE;
+		modes[i] = msm_secure_get_vmid_perms(vmids[i]);
 
 	ret = hyp_assign_phys(base, size, &src_vm, 1, vmids, modes, nr);
-	if (ret) {
+	if (ret)
 		pr_err("%s: Assign call failed, flags 0x%lx\n", __func__,
 		       flags);
-	}
 
 out:
 	kfree(modes);

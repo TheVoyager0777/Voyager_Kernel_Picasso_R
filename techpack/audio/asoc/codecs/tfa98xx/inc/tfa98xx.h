@@ -124,7 +124,11 @@ struct tfa98xx {
 	struct regmap *regmap;
 	struct i2c_client *i2c;
 	struct regulator *vdd;
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4,18,0)
+	struct snd_soc_component *component;
+#else
 	struct snd_soc_codec *codec;
+#endif
 	struct workqueue_struct *tfa98xx_wq;
 	struct delayed_work init_work;
 	struct delayed_work monitor_work;
@@ -140,6 +144,9 @@ struct tfa98xx {
 	struct tfa98xx_firmware fw;
 	char *fw_name;
 	int rate;
+	/*[nxp34663] CR: support 16bit/24bit/32bit audio data. begin*/
+	u8 pcm_format;
+	/*[nxp34663] CR: support 16bit/24bit/32bit audio data. end*/
 	wait_queue_head_t wq;
 	struct device *dev;
 	unsigned int init_count;

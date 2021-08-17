@@ -1,13 +1,5 @@
-/* Copyright (c) 2013-2014, 2017-2018 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2014, 2017-2020 The Linux Foundation. All rights reserved.
  */
 
 #include <linux/init.h>
@@ -25,6 +17,10 @@
 
 #include "msm-pcm-q6-v2.h"
 #include "msm-pcm-routing-v2.h"
+
+#define DRV_NAME "msm-pcm-dtmf-v2"
+
+#define DTMF_MAX_DURATION 65535
 
 enum {
 	DTMF_IN_RX,
@@ -100,8 +96,12 @@ static int msm_dtmf_rx_generate_put(struct snd_kcontrol *kcontrol,
 	int64_t duration = ucontrol->value.integer.value[2];
 	uint16_t gain = ucontrol->value.integer.value[3];
 
-	pr_debug("%s: low_freq=%d high_freq=%d duration=%d gain=%d\n",
-		 __func__, low_freq, high_freq, (int)duration, gain);
+	pr_debug("%s: low_freq=%d high_freq=%d duration=%lld gain=%d\n",
+		 __func__, low_freq, high_freq, duration, gain);
+
+	if (duration == DTMF_MAX_DURATION)
+		duration = -1;
+
 	afe_dtmf_generate_rx(duration, high_freq, low_freq, gain);
 	return 0;
 }
@@ -165,9 +165,9 @@ static struct snd_kcontrol_new msm_dtmf_controls[] = {
 				msm_dtmf_detect_volte_rx_put),
 };
 
-static int msm_pcm_dtmf_probe(struct snd_soc_platform *platform)
+static int msm_pcm_dtmf_probe(struct snd_soc_component *component)
 {
-	snd_soc_add_platform_controls(platform, msm_dtmf_controls,
+	snd_soc_add_component_controls(component, msm_dtmf_controls,
 				      ARRAY_SIZE(msm_dtmf_controls));
 	return 0;
 }
@@ -539,7 +539,8 @@ static int msm_asoc_pcm_new(struct snd_soc_pcm_runtime *rtd)
 	return ret;
 }
 
-static struct snd_soc_platform_driver msm_soc_platform = {
+static struct snd_soc_component_driver msm_soc_component = {
+	.name		= DRV_NAME,
 	.ops		= &msm_pcm_ops,
 	.pcm_new	= msm_asoc_pcm_new,
 	.probe		= msm_pcm_dtmf_probe,
@@ -549,13 +550,13 @@ static int msm_pcm_probe(struct platform_device *pdev)
 {
 	pr_debug("%s: dev name %s\n", __func__, dev_name(&pdev->dev));
 
-	return snd_soc_register_platform(&pdev->dev,
-					 &msm_soc_platform);
+	return snd_soc_register_component(&pdev->dev,
+					 &msm_soc_component, NULL, 0);
 }
 
 static int msm_pcm_remove(struct platform_device *pdev)
 {
-	snd_soc_unregister_platform(&pdev->dev);
+	snd_soc_unregister_component(&pdev->dev);
 	return 0;
 }
 
@@ -572,6 +573,7 @@ static struct platform_driver msm_pcm_driver = {
 		.name = "msm-pcm-dtmf",
 		.owner = THIS_MODULE,
 		.of_match_table = msm_pcm_dtmf_dt_match,
+		.suppress_bind_attrs = true,
 	},
 	.probe = msm_pcm_probe,
 	.remove = msm_pcm_remove,

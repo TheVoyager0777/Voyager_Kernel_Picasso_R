@@ -1,15 +1,5 @@
-/* Copyright (c) 2012-2017, 2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2017, 2020, The Linux Foundation. All rights reserved. */
 
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
@@ -129,11 +119,6 @@ static void mdss_dp_put_dt_clk_data(struct device *dev,
 		DEV_ERR("%s: invalid input\n", __func__);
 		return;
 	}
-
-	if (module_power->clk_config) {
-		devm_kfree(dev, module_power->clk_config);
-		module_power->clk_config = NULL;
-	}
 	module_power->num_clk = 0;
 } /* mdss_dp_put_dt_clk_data */
 
@@ -155,7 +140,7 @@ static int mdss_dp_is_ctrl_clk(const char *clk_name)
 	else
 		is_ctrl_clk = false;
 
-	pr_debug("%s-: is_ctrl_clk = %d", __func__, is_ctrl_clk);
+	pr_debug("%s-: is_ctrl_clk = %d\n", __func__, is_ctrl_clk);
 
 	return is_ctrl_clk;
 }
@@ -188,7 +173,7 @@ static int mdss_dp_is_core_clk(const char *clk_name)
 	else
 		is_core_clk = false;
 
-	pr_debug("%s-: is_core_clk = %d", __func__, is_core_clk);
+	pr_debug("%s-: is_core_clk = %d\n", __func__, is_core_clk);
 
 	return is_core_clk;
 }
@@ -268,7 +253,7 @@ static int mdss_dp_parse_prop(struct platform_device *pdev,
 	data = of_get_property(pdev->dev.of_node,
 		"qcom,logical2physical-lane-map", &len);
 	if ((!data) || (len != DP_MAX_PHY_LN)) {
-		pr_debug("%s:%d, lane mapping not defined, use default",
+		pr_debug("%s:%d, lane mapping not defined, use default\n",
 			__func__, __LINE__);
 		dp_drv->l_map[DP_PHY_LN0] = DP_ML0;
 		dp_drv->l_map[DP_PHY_LN1] = DP_ML1;
@@ -492,10 +477,6 @@ static int mdss_dp_clk_init(struct mdss_dp_drv_pdata *dp_drv,
 			dp_drv->pixel_clk_four_div = NULL;
 		}
 	} else {
-		if (dp_drv->pixel_parent)
-			devm_clk_put(dev, dp_drv->pixel_parent);
-		if (dp_drv->pixel_clk_rcg)
-			devm_clk_put(dev, dp_drv->pixel_clk_rcg);
 		msm_dss_put_clk(ctrl_power_data->clk_config,
 					ctrl_power_data->num_clk);
 		msm_dss_put_clk(core_power_data->clk_config,
@@ -663,10 +644,6 @@ static void mdss_dp_put_dt_vreg_data(struct device *dev,
 		return;
 	}
 
-	if (module_power->vreg_config) {
-		devm_kfree(dev, module_power->vreg_config);
-		module_power->vreg_config = NULL;
-	}
 	module_power->num_vreg = 0;
 } /* mdss_dp_put_dt_vreg_data */
 
@@ -776,10 +753,6 @@ static int mdss_dp_get_dt_vreg_data(struct device *dev,
 	return rc;
 
 error:
-	if (mp->vreg_config) {
-		devm_kfree(dev, mp->vreg_config);
-		mp->vreg_config = NULL;
-	}
 novreg:
 	mp->num_vreg = 0;
 
@@ -933,7 +906,7 @@ static int mdss_dp_config_gpios(struct mdss_dp_drv_pdata *dp, bool enable)
 {
 	int rc = 0;
 
-	if (enable == true) {
+	if (enable) {
 		rc = mdss_dp_request_gpios(dp);
 		if (rc) {
 			pr_err("gpio request failed\n");
@@ -1172,6 +1145,7 @@ static int dp_audio_info_setup(struct platform_device *pdev,
 	mdss_dp_config_audio_acr_ctrl(&dp_ctrl->ctrl_io, dp_ctrl->link_rate);
 	mdss_dp_set_safe_to_exit_level(&dp_ctrl->ctrl_io, dp_ctrl->lane_cnt);
 	mdss_dp_audio_enable(&dp_ctrl->ctrl_io, true);
+	dp_ctrl->audio_en = true;
 
 end:
 	return rc;
@@ -1213,7 +1187,8 @@ static void dp_audio_teardown_done(struct platform_device *pdev)
 	mdss_dp_audio_enable(&dp->ctrl_io, false);
 	/* Make sure the DP audio engine is disabled */
 	wmb();
-
+	dp->audio_en = false;
+	complete_all(&dp->audio_comp);
 	pr_debug("audio engine disabled\n");
 } /* dp_audio_teardown_done */
 
@@ -1435,7 +1410,7 @@ static int mdss_dp_get_lane_mapping(struct mdss_dp_drv_pdata *dp,
 	pr_debug("enter: orientation = %d\n", orientation);
 
 	if (!lane_map) {
-		pr_err("invalid lane map input");
+		pr_err("invalid lane map input\n");
 		ret = -EINVAL;
 		goto exit;
 	}
@@ -1906,7 +1881,7 @@ static int mdss_dp_off_irq(struct mdss_dp_drv_pdata *dp_drv)
 	mdss_dp_audio_enable(&dp_drv->ctrl_io, false);
 	/* Make sure DP mainlink and audio engines are disabled */
 	wmb();
-
+	dp_drv->audio_en = false;
 	/*
 	 * If downstream device is a brige which no longer has any
 	 * downstream devices connected to it, then we should reset
@@ -1939,6 +1914,7 @@ static int mdss_dp_off_hpd(struct mdss_dp_drv_pdata *dp_drv)
 	mdss_dp_aux_ctrl(&dp_drv->ctrl_io, false);
 
 	mdss_dp_audio_enable(&dp_drv->ctrl_io, false);
+	dp_drv->audio_en = false;
 
 	mdss_dp_host_deinit(dp_drv);
 
@@ -2343,6 +2319,14 @@ notify:
 		ret = mdss_dp_send_video_notification(dp, true);
 	} else {
 		mdss_dp_send_audio_notification(dp, false);
+		if (dp->audio_en) {
+			reinit_completion(&dp->audio_comp);
+			ret = wait_for_completion_timeout(&dp->audio_comp,
+						msecs_to_jiffies(2000));
+			if (ret <= 0)
+				pr_err("%s Wait for Audio Comp timed out\n",
+							 __func__);
+		}
 		ret = mdss_dp_send_video_notification(dp, false);
 	}
 
@@ -2647,7 +2631,7 @@ static struct mdss_dp_drv_pdata *mdss_dp_get_drvdata(struct device *device)
 	return dp;
 }
 
-static ssize_t mdss_dp_rda_connected(struct device *dev,
+static ssize_t connected_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -2660,13 +2644,13 @@ static ssize_t mdss_dp_rda_connected(struct device *dev,
 	mutex_lock(&dp->attention_lock);
 	cable_connected = dp->cable_connected;
 	mutex_unlock(&dp->attention_lock);
-	ret = snprintf(buf, PAGE_SIZE, "%d\n", cable_connected);
+	ret = scnprintf(buf, PAGE_SIZE, "%d\n", cable_connected);
 	pr_debug("%d\n", cable_connected);
 
 	return ret;
 }
 
-static ssize_t mdss_dp_sysfs_wta_s3d_mode(struct device *dev,
+static ssize_t s3d_mode_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	int ret, s3d_mode;
@@ -2689,7 +2673,7 @@ end:
 	return ret;
 }
 
-static ssize_t mdss_dp_sysfs_rda_s3d_mode(struct device *dev,
+static ssize_t s3d_mode_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -2700,7 +2684,7 @@ static ssize_t mdss_dp_sysfs_rda_s3d_mode(struct device *dev,
 		return -EINVAL;
 	}
 
-	ret = snprintf(buf, PAGE_SIZE, "%d\n", dp->s3d_mode);
+	ret = scnprintf(buf, PAGE_SIZE, "%d\n", dp->s3d_mode);
 	DEV_DBG("%s: '%d'\n", __func__, dp->s3d_mode);
 
 	return ret;
@@ -2777,7 +2761,7 @@ end:
 	return ret;
 }
 
-static ssize_t mdss_dp_wta_psm(struct device *dev,
+static ssize_t psm_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	int psm;
@@ -2807,7 +2791,7 @@ end:
 	return ret;
 }
 
-static ssize_t mdss_dp_rda_psm(struct device *dev,
+static ssize_t psm_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -2818,13 +2802,13 @@ static ssize_t mdss_dp_rda_psm(struct device *dev,
 		return -EINVAL;
 	}
 
-	ret = snprintf(buf, PAGE_SIZE, "%d\n", dp->psm_enabled ? 1 : 0);
+	ret = scnprintf(buf, PAGE_SIZE, "%d\n", dp->psm_enabled ? 1 : 0);
 	pr_debug("psm: %s\n", dp->psm_enabled ? "enabled" : "disabled");
 
 	return ret;
 }
 
-static ssize_t mdss_dp_wta_hpd(struct device *dev,
+static ssize_t hpd_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	int hpd, rc;
@@ -2866,7 +2850,7 @@ end:
 	return ret;
 }
 
-static ssize_t mdss_dp_rda_hpd(struct device *dev,
+static ssize_t hpd_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -2877,7 +2861,7 @@ static ssize_t mdss_dp_rda_hpd(struct device *dev,
 		return -EINVAL;
 	}
 
-	ret = snprintf(buf, PAGE_SIZE, "%d\n", dp->hpd);
+	ret = scnprintf(buf, PAGE_SIZE, "%d\n", dp->hpd);
 	pr_debug("hpd: %d\n", dp->hpd);
 
 	return ret;
@@ -2913,7 +2897,7 @@ end:
 	return ret;
 }
 
-static ssize_t mdss_dp_wta_config(struct device *dev,
+static ssize_t config_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	u32 val;
@@ -2969,7 +2953,7 @@ end:
 	return count;
 }
 
-static ssize_t mdss_dp_rda_config(struct device *dev,
+static ssize_t config_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -2982,7 +2966,7 @@ static ssize_t mdss_dp_rda_config(struct device *dev,
 	}
 
 	bpp = mdss_dp_get_bpp(dp);
-	ret = snprintf(buf, PAGE_SIZE, "bpp=%d\npattern_type=%d\n",
+	ret = scnprintf(buf, PAGE_SIZE, "bpp=%d\npattern_type=%d\n",
 		bpp, dp->test_data.test_video_pattern);
 
 	pr_debug("bpp: %d pattern_type=%d (%s)\n",
@@ -2993,7 +2977,7 @@ static ssize_t mdss_dp_rda_config(struct device *dev,
 	return ret;
 }
 
-static ssize_t mdss_dp_wta_frame_crc(struct device *dev,
+static ssize_t frame_crc_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	int ret;
@@ -3042,7 +3026,7 @@ static ssize_t mdss_dp_print_crc_values(struct mdss_dp_drv_pdata *dp,
 	mdss_dp_read_ctl_frame_crc(dp);
 	mdss_dp_aux_read_sink_frame_crc(dp);
 
-	return snprintf(buf, PAGE_SIZE,
+	return scnprintf(buf, PAGE_SIZE,
 		"\t\t|R_Cr\t\t|G_y\t\t|B_Cb\n%s%s\nctl(%s)\t|0x%08x\t|0x%08x\t|0x%08x\nsink(%s)\t|0x%08x\t|0x%08x\t|0x%08x\n",
 		line, line, dp->ctl_crc.en ? "enabled" : "disabled",
 		dp->ctl_crc.r_cr, dp->ctl_crc.g_y, dp->ctl_crc.b_cb,
@@ -3050,7 +3034,7 @@ static ssize_t mdss_dp_print_crc_values(struct mdss_dp_drv_pdata *dp,
 		dp->sink_crc.r_cr, dp->sink_crc.g_y, dp->sink_crc.b_cb);
 }
 
-static ssize_t mdss_dp_rda_frame_crc(struct device *dev,
+static ssize_t frame_crc_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -3071,7 +3055,7 @@ static ssize_t mdss_dp_rda_frame_crc(struct device *dev,
 	return ret;
 }
 
-static ssize_t mdss_dp_wta_hdcp_feature(struct device *dev,
+static ssize_t hdcp_feature_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	u32 hdcp;
@@ -3098,7 +3082,7 @@ end:
 	return ret;
 }
 
-static ssize_t mdss_dp_rda_hdcp_feature(struct device *dev,
+static ssize_t hdcp_feature_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -3109,25 +3093,19 @@ static ssize_t mdss_dp_rda_hdcp_feature(struct device *dev,
 		return -EINVAL;
 	}
 
-	ret = snprintf(buf, PAGE_SIZE, "%d\n", dp->hdcp.feature_enabled);
+	ret = scnprintf(buf, PAGE_SIZE, "%d\n", dp->hdcp.feature_enabled);
 	pr_debug("hdcp: %d\n", dp->hdcp.feature_enabled);
 
 	return ret;
 }
 
-static DEVICE_ATTR(connected, 0444, mdss_dp_rda_connected, NULL);
-static DEVICE_ATTR(s3d_mode, 0644, mdss_dp_sysfs_rda_s3d_mode,
-	mdss_dp_sysfs_wta_s3d_mode);
-static DEVICE_ATTR(hpd, 0644, mdss_dp_rda_hpd,
-	mdss_dp_wta_hpd);
-static DEVICE_ATTR(psm, 0644, mdss_dp_rda_psm,
-	mdss_dp_wta_psm);
-static DEVICE_ATTR(config, 0644, mdss_dp_rda_config,
-	mdss_dp_wta_config);
-static DEVICE_ATTR(frame_crc, 0644, mdss_dp_rda_frame_crc,
-	mdss_dp_wta_frame_crc);
-static DEVICE_ATTR(hdcp_feature, 0644, mdss_dp_rda_hdcp_feature,
-	mdss_dp_wta_hdcp_feature);
+static DEVICE_ATTR_RO(connected);
+static DEVICE_ATTR_RW(s3d_mode);
+static DEVICE_ATTR_RW(hpd);
+static DEVICE_ATTR_RW(psm);
+static DEVICE_ATTR_RW(config);
+static DEVICE_ATTR_RW(frame_crc);
+static DEVICE_ATTR_RW(hdcp_feature);
 
 static struct attribute *mdss_dp_fs_attrs[] = {
 	&dev_attr_connected.attr,
@@ -4193,7 +4171,7 @@ static int mdss_dp_process_video_pattern_request(struct mdss_dp_drv_pdata *dp)
 			dp->test_data.test_video_pattern));
 
 	if (dp->test_data.test_h_width == 640) {
-		pr_debug("Set resolution to 640x480p59");
+		pr_debug("Set resolution to 640x480p59\n");
 		if (dp->vic != HDMI_VFRMT_640x480p59_4_3) {
 			ov_res = true;
 			dp->vic = HDMI_VFRMT_640x480p59_4_3;
@@ -4205,7 +4183,7 @@ static int mdss_dp_process_video_pattern_request(struct mdss_dp_drv_pdata *dp)
 	dp_init_panel_info(dp, dp->vic);
 	lt_needed = ov_res | mdss_dp_video_pattern_test_lt_needed(dp);
 
-	pr_debug("Link training needed: %s", lt_needed ? "yes" : "no");
+	pr_debug("Link training needed: %s\n", lt_needed ? "yes" : "no");
 
 	mdss_dp_link_maintenance(dp, lt_needed);
 
@@ -4472,7 +4450,7 @@ static void mdss_dp_handle_attention(struct mdss_dp_drv_pdata *dp)
 			wait_for_completion(&dp->notification_comp);
 		}
 		pr_debug("done processing item %d in the list\n", i);
-	};
+	}
 
 exit:
 	pr_debug("exit\n");
@@ -4558,10 +4536,10 @@ static int mdss_dp_probe(struct platform_device *pdev)
 	init_completion(&dp_drv->aux_comp);
 	init_completion(&dp_drv->idle_comp);
 	init_completion(&dp_drv->video_comp);
+	init_completion(&dp_drv->audio_comp);
 
 	if (mdss_dp_usbpd_setup(dp_drv)) {
 		pr_err("Error usbpd setup!\n");
-		devm_kfree(&pdev->dev, dp_drv);
 		dp_drv = NULL;
 		return -EPROBE_DEFER;
 	}
@@ -4658,7 +4636,6 @@ probe_err:
 		if (dp_drv->pd)
 			usbpd_unregister_svid(dp_drv->pd,
 					&dp_drv->svid_handler);
-		devm_kfree(&pdev->dev, dp_drv);
 	}
 	return ret;
 
@@ -4697,7 +4674,7 @@ error:
 
 static inline bool dp_is_stream_shareable(struct mdss_dp_drv_pdata *dp_drv)
 {
-	bool ret = 0;
+	bool ret = false;
 
 	switch (dp_drv->hdcp.enc_lvl) {
 	case HDCP_STATE_AUTH_ENC_NONE:
@@ -4757,7 +4734,7 @@ static int __init mdss_dp_init(void)
 
 	ret = platform_driver_register(&mdss_dp_driver);
 	if (ret) {
-		pr_err("driver register failed");
+		pr_err("driver register failed\n");
 		return ret;
 	}
 

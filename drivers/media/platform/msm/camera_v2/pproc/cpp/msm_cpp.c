@@ -1,4 +1,5 @@
-/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -45,7 +46,7 @@
 
 #define ENABLE_CPP_LOW		0
 
-#define CPP_CMD_TIMEOUT_MS	120
+#define CPP_CMD_TIMEOUT_MS	300
 #define MSM_CPP_INVALID_OFFSET	0x00000000
 #define MSM_CPP_NOMINAL_CLOCK	266670000
 #define MSM_CPP_TURBO_CLOCK	320000000
@@ -300,7 +301,7 @@ static void msm_enqueue(struct msm_device_queue *queue,
 static int msm_cpp_notify_frame_done(struct cpp_device *cpp_dev,
 	uint8_t put_buf);
 static int32_t cpp_load_fw(struct cpp_device *cpp_dev, char *fw_name_bin);
-static void cpp_timer_callback(unsigned long data);
+static void cpp_timer_callback(struct timer_list *cpp_t);
 
 static uint8_t induce_error;
 static int msm_cpp_enable_debugfs(struct cpp_device *cpp_dev);
@@ -957,13 +958,13 @@ static irqreturn_t msm_cpp_irq(int irq_num, void *data)
 					MSM_CPP_MICRO_FIFO_TX_DATA);
 			}
 		} else {
-			pr_err("Fatal invalid tx level %d", tx_level);
+			pr_err("Fatal invalid tx level %d\n", tx_level);
 			goto err;
 		}
 		spin_lock_irqsave(&cpp_dev->tasklet_lock, flags);
 		queue_cmd = &cpp_dev->tasklet_queue_cmd[cpp_dev->taskletq_idx];
 		if (queue_cmd->cmd_used) {
-			pr_err("%s:%d] cpp tasklet queue overflow tx %d rc %x",
+			pr_err("%s:%d] cpp tasklet queue overflow tx %d rc %x\n",
 				__func__, __LINE__, tx_level, irq_status);
 			list_del(&queue_cmd->list);
 		} else {
@@ -1077,7 +1078,7 @@ static int cpp_init_hardware(struct cpp_device *cpp_dev)
 	int rc = 0;
 	uint32_t vbif_version;
 
-	cpp_dev->turbo_vote = 0;
+	cpp_dev->turbo_vote = false;
 	cpp_dev->fault_status = CPP_IOMMU_FAULT_NONE;
 
 	rc = msm_camera_regulator_enable(cpp_dev->cpp_vdd,
@@ -1223,20 +1224,20 @@ static int32_t cpp_load_fw(struct cpp_device *cpp_dev, char *fw_name_bin)
 	int32_t rc = 0, ret = 0;
 
 	if (!fw_name_bin) {
-		pr_err("%s:%d] invalid fw name", __func__, __LINE__);
+		pr_err("%s:%d] invalid fw name\n", __func__, __LINE__);
 		rc = -EINVAL;
 		goto end;
 	}
 	pr_debug("%s:%d] FW file: %s\n", __func__, __LINE__, fw_name_bin);
 	if (cpp_dev->fw == NULL) {
-		pr_err("%s:%d] fw NULL", __func__, __LINE__);
+		pr_err("%s:%d] fw NULL\n", __func__, __LINE__);
 		rc = -EINVAL;
 		goto end;
 	}
 
 	ptr_bin = (uint32_t *)cpp_dev->fw->data;
 	if (!ptr_bin) {
-		pr_err("%s:%d] Fw bin NULL", __func__, __LINE__);
+		pr_err("%s:%d] Fw bin NULL\n", __func__, __LINE__);
 		rc = -EINVAL;
 		goto end;
 	}
@@ -1254,7 +1255,7 @@ static int32_t cpp_load_fw(struct cpp_device *cpp_dev, char *fw_name_bin)
 
 	rc = msm_cpp_poll(cpp_dev->base, MSM_CPP_MSG_ID_CMD);
 	if (rc) {
-		pr_err("%s:%d] poll command %x failed %d", __func__, __LINE__,
+		pr_err("%s:%d] poll command %x failed %d\n", __func__, __LINE__,
 			MSM_CPP_MSG_ID_CMD, rc);
 		goto vote;
 	}
@@ -1264,7 +1265,7 @@ static int32_t cpp_load_fw(struct cpp_device *cpp_dev, char *fw_name_bin)
 
 	rc = msm_cpp_poll_rx_empty(cpp_dev->base);
 	if (rc) {
-		pr_err("%s:%d] poll rx empty failed %d",
+		pr_err("%s:%d] poll rx empty failed %d\n",
 			__func__, __LINE__, rc);
 		goto vote;
 	}
@@ -1274,7 +1275,7 @@ static int32_t cpp_load_fw(struct cpp_device *cpp_dev, char *fw_name_bin)
 	msm_cpp_write(MSM_CPP_START_ADDRESS, cpp_dev->base);
 	rc = msm_cpp_poll_rx_empty(cpp_dev->base);
 	if (rc) {
-		pr_err("%s:%d] poll rx empty failed %d",
+		pr_err("%s:%d] poll rx empty failed %d\n",
 			__func__, __LINE__, rc);
 		goto vote;
 	}
@@ -1283,7 +1284,7 @@ static int32_t cpp_load_fw(struct cpp_device *cpp_dev, char *fw_name_bin)
 		if (i % MSM_CPP_RX_FIFO_LEVEL == 0) {
 			rc = msm_cpp_poll_rx_empty(cpp_dev->base);
 			if (rc) {
-				pr_err("%s:%d] poll rx empty failed %d",
+				pr_err("%s:%d] poll rx empty failed %d\n",
 					__func__, __LINE__, rc);
 				goto vote;
 			}
@@ -1296,21 +1297,21 @@ static int32_t cpp_load_fw(struct cpp_device *cpp_dev, char *fw_name_bin)
 		pr_err("update cpp gdscr status failed\n");
 	rc = msm_cpp_poll(cpp_dev->base, MSM_CPP_MSG_ID_OK);
 	if (rc) {
-		pr_err("%s:%d] poll command %x failed %d", __func__, __LINE__,
+		pr_err("%s:%d] poll command %x failed %d\n", __func__, __LINE__,
 			MSM_CPP_MSG_ID_OK, rc);
 		goto vote;
 	}
 
 	rc = msm_cpp_poll(cpp_dev->base, MSM_CPP_MSG_ID_CMD);
 	if (rc) {
-		pr_err("%s:%d] poll command %x failed %d", __func__, __LINE__,
+		pr_err("%s:%d] poll command %x failed %d\n", __func__, __LINE__,
 			MSM_CPP_MSG_ID_CMD, rc);
 		goto vote;
 	}
 
 	rc = msm_cpp_poll_rx_empty(cpp_dev->base);
 	if (rc) {
-		pr_err("%s:%d] poll rx empty failed %d",
+		pr_err("%s:%d] poll rx empty failed %d\n",
 			__func__, __LINE__, rc);
 		goto vote;
 	}
@@ -1320,28 +1321,29 @@ static int32_t cpp_load_fw(struct cpp_device *cpp_dev, char *fw_name_bin)
 
 	rc = msm_cpp_poll(cpp_dev->base, MSM_CPP_MSG_ID_CMD);
 	if (rc) {
-		pr_err("%s:%d] poll command %x failed %d", __func__, __LINE__,
+		pr_err("%s:%d] poll command %x failed %d\n", __func__, __LINE__,
 			MSM_CPP_MSG_ID_CMD, rc);
 		goto vote;
 	}
 
 	rc = msm_cpp_poll(cpp_dev->base, 0x1);
 	if (rc) {
-		pr_err("%s:%d] poll command 0x1 failed %d", __func__, __LINE__,
+		pr_err("%s:%d] poll command 0x1 failed %d\n", __func__,
+				__LINE__,
 			rc);
 		goto vote;
 	}
 
 	rc = msm_cpp_poll(cpp_dev->base, MSM_CPP_MSG_ID_JUMP_ACK);
 	if (rc) {
-		pr_err("%s:%d] poll command %x failed %d", __func__, __LINE__,
+		pr_err("%s:%d] poll command %x failed %d\n", __func__, __LINE__,
 			MSM_CPP_MSG_ID_JUMP_ACK, rc);
 		goto vote;
 	}
 
 	rc = msm_cpp_poll(cpp_dev->base, MSM_CPP_MSG_ID_TRAILER);
 	if (rc) {
-		pr_err("%s:%d] poll command %x failed %d", __func__, __LINE__,
+		pr_err("%s:%d] poll command %x failed %d\n", __func__, __LINE__,
 			MSM_CPP_MSG_ID_JUMP_ACK, rc);
 	}
 
@@ -1396,7 +1398,7 @@ static int cpp_vbif_error_handler(void *dev, uint32_t vbif_error)
 	cpp_dev = (struct cpp_device *) dev;
 
 	/* MMSS_A_CPP_IRQ_STATUS_0 = 0x10 */
-	pr_err("%s: before reset halt... read MMSS_A_CPP_IRQ_STATUS_0 = 0x%x",
+	pr_err("%s: before reset halt... read MMSS_A_CPP_IRQ_STATUS_0 = 0x%x\n",
 		__func__, msm_camera_io_r(cpp_dev->cpp_hw_base + 0x10));
 
 	pr_err("%s: start reset bus bridge on FD + CPP!\n", __func__);
@@ -1404,7 +1406,7 @@ static int cpp_vbif_error_handler(void *dev, uint32_t vbif_error)
 	msm_camera_io_w(0x3DF77, cpp_dev->cpp_hw_base + 0x8);
 
 	/* MMSS_A_CPP_IRQ_STATUS_0 = 0x10 */
-	pr_err("%s: after reset halt... read MMSS_A_CPP_IRQ_STATUS_0 = 0x%x",
+	pr_err("%s: after reset halt... read MMSS_A_CPP_IRQ_STATUS_0 = 0x%x\n",
 		__func__, msm_camera_io_r(cpp_dev->cpp_hw_base + 0x10));
 
 	return 0;
@@ -1419,7 +1421,7 @@ static int cpp_open_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	CPP_DBG("E");
 
 	if (!sd || !fh) {
-		pr_err("Wrong input parameters sd %pK fh %pK!",
+		pr_err("Wrong input parameters sd %pK fh %pK!\n",
 			sd, fh);
 		return -EINVAL;
 	}
@@ -1492,7 +1494,7 @@ static int cpp_close_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 	struct msm_device_queue *eventData_q = NULL;
 
 	if (!sd) {
-		pr_err("Wrong input sd parameter");
+		pr_err("Wrong input sd parameter\n");
 		return -EINVAL;
 	}
 	cpp_dev =  v4l2_get_subdevdata(sd);
@@ -1525,14 +1527,14 @@ static int cpp_close_node(struct v4l2_subdev *sd, struct v4l2_subdev_fh *fh)
 		return -ENODEV;
 	}
 
-	if (cpp_dev->turbo_vote == 1) {
+	if (cpp_dev->turbo_vote) {
 		pr_debug("%s:cx_ipeak_update unvote. ipeak bit %d\n",
 			__func__, cpp_dev->cx_ipeak_bit);
 		rc = cam_cx_ipeak_unvote_cx_ipeak(cpp_dev->cx_ipeak_bit);
 			if (rc)
-				pr_err("cx_ipeak_update failed");
+				pr_err("cx_ipeak_update failed\n");
 			else
-				cpp_dev->turbo_vote = 0;
+				cpp_dev->turbo_vote = false;
 	}
 
 	cpp_dev->cpp_open_cnt--;
@@ -1930,7 +1932,8 @@ static void msm_cpp_do_timeout_work(struct work_struct *work)
 	for (i = 0; i < queue_len; i++) {
 		processed_frame[i] = cpp_timer.data.processed_frame[i];
 		if (!processed_frame[i]) {
-			pr_warn("process frame null , queue len %d", queue_len);
+			pr_warn("process frame null , queue len %d\n",
+				queue_len);
 			msm_cpp_flush_queue_and_release_buffer(cpp_dev,
 				queue_len);
 			msm_cpp_set_micro_irq_mask(cpp_dev, 1, 0x8);
@@ -1965,7 +1968,7 @@ static void msm_cpp_do_timeout_work(struct work_struct *work)
 			if (fifo_counter % MSM_CPP_RX_FIFO_LEVEL == 0) {
 				rc = msm_cpp_poll_rx_empty(cpp_dev->base);
 				if (rc) {
-					pr_err("%s:%d] poll failed %d rc %d",
+					pr_err("%s:%d] poll failed %d rc %d\n",
 						__func__, __LINE__, j, rc);
 					goto error;
 				}
@@ -1990,7 +1993,7 @@ static void msm_cpp_do_timeout_work(struct work_struct *work)
 			if (fifo_counter % MSM_CPP_RX_FIFO_LEVEL == 0) {
 				rc = msm_cpp_poll_rx_empty(cpp_dev->base);
 				if (rc) {
-					pr_err("%s:%d] poll failed %d rc %d",
+					pr_err("%s:%d] poll failed %d rc %d\n",
 						__func__, __LINE__, j, rc);
 					break;
 				}
@@ -2036,7 +2039,7 @@ error:
 	pr_debug("%s:%d] exit\n", __func__, __LINE__);
 }
 
-static void cpp_timer_callback(unsigned long data)
+static void cpp_timer_callback(struct timer_list *cpp_t)
 {
 	struct msm_cpp_work_t *work =
 		cpp_timer.data.cpp_dev->work;
@@ -2075,7 +2078,7 @@ static int msm_cpp_send_frame_to_hardware(struct cpp_device *cpp_dev,
 
 		rc = msm_cpp_poll_rx_empty(cpp_dev->base);
 		if (rc) {
-			pr_err("%s:%d: Scheduling payload failed %d",
+			pr_err("%s:%d: Scheduling payload failed %d\n",
 				__func__, __LINE__, rc);
 			goto dequeue_frame;
 		}
@@ -2167,7 +2170,7 @@ static int msm_cpp_send_command_to_hardware(struct cpp_device *cpp_dev,
 
 	rc = msm_cpp_poll_rx_empty(cpp_dev->base);
 	if (rc) {
-		pr_err("%s:%d] poll rx empty failed %d",
+		pr_err("%s:%d] poll rx empty failed %d\n",
 			__func__, __LINE__, rc);
 		goto end;
 	}
@@ -2177,7 +2180,7 @@ static int msm_cpp_send_command_to_hardware(struct cpp_device *cpp_dev,
 		if (i % MSM_CPP_RX_FIFO_LEVEL == 0) {
 			rc = msm_cpp_poll_rx_empty(cpp_dev->base);
 			if (rc) {
-				pr_err("%s:%d] poll rx empty failed %d",
+				pr_err("%s:%d] poll rx empty failed %d\n",
 					__func__, __LINE__, rc);
 				goto end;
 			}
@@ -2990,7 +2993,7 @@ static int msm_cpp_cfg(struct cpp_device *cpp_dev,
 
 	if (copy_to_user((void __user *)ioctl_ptr->ioctl_ptr,
 		&k_frame_info, sizeof(k_frame_info))) {
-		pr_err("Error: cannot copy k_frame_info");
+		pr_err("Error: cannot copy k_frame_info\n");
 		return -EFAULT;
 	}
 
@@ -3031,7 +3034,7 @@ static int msm_cpp_copy_from_ioctl_ptr(void *dst_ptr,
 
 	/* For compat task, source ptr is in kernel space */
 	if (is_compat_task()) {
-		memcpy(dst_ptr, (__force void *)ioctl_ptr->ioctl_ptr,
+		memcpy(dst_ptr, (void *)ioctl_ptr->ioctl_ptr,
 			ioctl_ptr->len);
 		ret = 0;
 	} else {
@@ -3069,7 +3072,7 @@ static int32_t msm_cpp_fw_version(struct cpp_device *cpp_dev)
 
 	rc = msm_cpp_poll_rx_empty(cpp_dev->base);
 	if (rc) {
-		pr_err("%s:%d] poll rx empty failed %d",
+		pr_err("%s:%d] poll rx empty failed %d\n",
 			__func__, __LINE__, rc);
 		goto end;
 	}
@@ -3082,19 +3085,19 @@ static int32_t msm_cpp_fw_version(struct cpp_device *cpp_dev)
 
 	rc = msm_cpp_poll(cpp_dev->base, MSM_CPP_MSG_ID_CMD);
 	if (rc) {
-		pr_err("%s:%d] poll command %x failed %d", __func__, __LINE__,
+		pr_err("%s:%d] poll command %x failed %d\n", __func__, __LINE__,
 			MSM_CPP_MSG_ID_CMD, rc);
 		goto end;
 	}
 	rc = msm_cpp_poll(cpp_dev->base, 0x2);
 	if (rc) {
-		pr_err("%s:%d] poll command 0x2 failed %d", __func__, __LINE__,
-			rc);
+		pr_err("%s:%d] poll command 0x2 failed %d\n", __func__,
+			__LINE__, rc);
 		goto end;
 	}
 	rc = msm_cpp_poll(cpp_dev->base, MSM_CPP_MSG_ID_FW_VER);
 	if (rc) {
-		pr_err("%s:%d] poll command %x failed %d", __func__, __LINE__,
+		pr_err("%s:%d] poll command %x failed %d\n", __func__, __LINE__,
 			MSM_CPP_MSG_ID_FW_VER, rc);
 		goto end;
 	}
@@ -3104,7 +3107,7 @@ static int32_t msm_cpp_fw_version(struct cpp_device *cpp_dev)
 
 	rc = msm_cpp_poll(cpp_dev->base, MSM_CPP_MSG_ID_TRAILER);
 	if (rc) {
-		pr_err("%s:%d] poll command %x failed %d", __func__, __LINE__,
+		pr_err("%s:%d] poll command %x failed %d\n", __func__, __LINE__,
 			MSM_CPP_MSG_ID_TRAILER, rc);
 	}
 
@@ -3131,7 +3134,7 @@ static int msm_cpp_validate_input(unsigned int cmd, void *arg,
 		if (((*ioctl_ptr) == NULL) ||
 			((*ioctl_ptr)->ioctl_ptr == NULL) ||
 			((*ioctl_ptr)->len == 0)) {
-			pr_err("Error invalid ioctl argument cmd %u", cmd);
+			pr_err("Error invalid ioctl argument cmd %u\n", cmd);
 			return -EINVAL;
 		}
 		break;
@@ -3148,30 +3151,30 @@ static unsigned long cpp_cx_ipeak_update(struct cpp_device *cpp_dev,
 
 	if ((clock >= cpp_dev->hw_info.freq_tbl
 		[(cpp_dev->hw_info.freq_tbl_count) - 1]) &&
-		(cpp_dev->turbo_vote == 0)) {
+		(!cpp_dev->turbo_vote)) {
 		pr_debug("%s: clk is more than Nominal cpp, ipeak bit %d\n",
 			__func__, cpp_dev->cx_ipeak_bit);
 		ret = cam_cx_ipeak_update_vote_cx_ipeak(cpp_dev->cx_ipeak_bit);
 		if (ret) {
-			pr_err("cx_ipeak voting failed setting clock below turbo");
+			pr_err("cx_ipeak voting failed setting clock below turbo\n");
 			clock = cpp_dev->hw_info.freq_tbl
 				[(cpp_dev->hw_info.freq_tbl_count) - 2];
 		} else {
-			cpp_dev->turbo_vote = 1;
+			cpp_dev->turbo_vote = true;
 		}
 		clock_rate = msm_cpp_set_core_clk(cpp_dev, clock, idx);
 	} else if (clock < cpp_dev->hw_info.freq_tbl
 		[(cpp_dev->hw_info.freq_tbl_count) - 1]) {
 		clock_rate = msm_cpp_set_core_clk(cpp_dev, clock, idx);
-		if (cpp_dev->turbo_vote == 1) {
+		if (cpp_dev->turbo_vote) {
 			pr_debug("%s:clk is less than Nominal, ipeak bit %d\n",
 				__func__, cpp_dev->cx_ipeak_bit);
 			ret = cam_cx_ipeak_unvote_cx_ipeak(
 				cpp_dev->cx_ipeak_bit);
 			if (ret)
-				pr_err("cx_ipeak unvoting failed");
+				pr_err("cx_ipeak unvoting failed\n");
 			else
-				cpp_dev->turbo_vote = 0;
+				cpp_dev->turbo_vote = false;
 		}
 	}
 	return clock_rate;
@@ -3195,7 +3198,7 @@ static long msm_cpp_subdev_ioctl(struct v4l2_subdev *sd,
 	}
 
 	if (_IOC_DIR(cmd) == _IOC_NONE) {
-		pr_err("Invalid ioctl/subdev cmd %u", cmd);
+		pr_err("Invalid ioctl/subdev cmd %u\n", cmd);
 		return -EINVAL;
 	}
 
@@ -3486,7 +3489,7 @@ STREAM_BUFF_END:
 		CPP_DBG("VIDIOC_MSM_CPP_GET_EVENTPAYLOAD\n");
 		event_qcmd = msm_dequeue(queue, list_eventdata, POP_FRONT);
 		if (!event_qcmd) {
-			pr_err("no queue cmd available");
+			pr_err("no queue cmd available\n");
 			mutex_unlock(&cpp_dev->mutex);
 			return -EINVAL;
 		}
@@ -3695,7 +3698,7 @@ STREAM_BUFF_END:
 			rc = msm_cpp_copy_from_ioctl_ptr(&cpp_attach_info,
 				ioctl_ptr);
 			if (rc < 0) {
-				pr_err("CPP_IOMMU_ATTACH copy from user fail");
+				pr_err("CPP_IOMMU_ATTACH copy from user fail\n");
 				break;
 			}
 
@@ -3703,7 +3706,8 @@ STREAM_BUFF_END:
 			stall_disable = 1;
 			/* disable smmu stall on fault */
 			cam_smmu_set_attr(cpp_dev->iommu_hdl,
-				DOMAIN_ATTR_CB_STALL_DISABLE, &stall_disable);
+				DOMAIN_ATTR_FAULT_MODEL_NO_STALL,
+				&stall_disable);
 			if (cpp_dev->security_mode == SECURE_MODE) {
 				rc = cam_smmu_ops(cpp_dev->iommu_hdl,
 					CAM_SMMU_ATTACH_SEC_CPP);
@@ -3740,7 +3744,7 @@ STREAM_BUFF_END:
 			rc = msm_cpp_copy_from_ioctl_ptr(&cpp_attach_info,
 				ioctl_ptr);
 			if (rc < 0) {
-				pr_err("CPP_IOMMU_DETTACH copy from user fail");
+				pr_err("CPP_IOMMU_DETTACH copy from user fail\n");
 				break;
 			}
 
@@ -4084,7 +4088,7 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 	}
 	cpp_dev = v4l2_get_subdevdata(sd);
 	if (!vdev || !cpp_dev) {
-		pr_err("Invalid vdev %pK or cpp_dev %pK structures!",
+		pr_err("Invalid vdev %pK or cpp_dev %pK structures!\n",
 			vdev, cpp_dev);
 		return -EINVAL;
 	}
@@ -4236,9 +4240,9 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 			&u32_cpp_buff_info->num_buffs);
 		get_user(p, &u32_cpp_buff_info->buffer_info);
 		k_cpp_buff_info.buffer_info =
-			(__force struct msm_cpp_buffer_info_t *)compat_ptr(p);
+			(struct msm_cpp_buffer_info_t *)compat_ptr(p);
 
-		kp_ioctl.ioctl_ptr = (__force void __user *)&k_cpp_buff_info;
+		kp_ioctl.ioctl_ptr = (void __user *)&k_cpp_buff_info;
 		if (is_compat_task()) {
 			if (kp_ioctl.len != sizeof(
 				struct msm_cpp_stream_buff_info32_t)) {
@@ -4262,7 +4266,7 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 			(uint32_t __user *)kp_ioctl.ioctl_ptr;
 
 		get_user(identity_k, identity_u);
-		kp_ioctl.ioctl_ptr = (__force void __user *)&identity_k;
+		kp_ioctl.ioctl_ptr = (void __user *)&identity_k;
 		kp_ioctl.len = sizeof(uint32_t);
 		is_copytouser_req = false;
 		cmd = VIDIOC_MSM_CPP_DEQUEUE_STREAM_BUFF_INFO;
@@ -4278,7 +4282,7 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 		CPP_DBG("VIDIOC_MSM_CPP_GET_EVENTPAYLOAD\n");
 		event_qcmd = msm_dequeue(queue, list_eventdata, POP_FRONT);
 		if (!event_qcmd) {
-			pr_err("no queue cmd available");
+			pr_err("no queue cmd available\n");
 			mutex_unlock(&cpp_dev->mutex);
 			return -EINVAL;
 		}
@@ -4313,7 +4317,7 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 			&clock_settings32->clock_rate);
 		get_user(clock_settings.avg, &clock_settings32->avg);
 		get_user(clock_settings.inst, &clock_settings32->inst);
-		kp_ioctl.ioctl_ptr = (__force void __user *)&clock_settings;
+		kp_ioctl.ioctl_ptr = (void __user *)&clock_settings;
 		if (is_compat_task()) {
 			if (kp_ioctl.len != sizeof(
 				struct msm_cpp_clock_settings32_t)) {
@@ -4348,7 +4352,7 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 		get_user(k_queue_buf.buff_mgr_info.timestamp.tv_usec,
 			&u32_queue_buf->buff_mgr_info.timestamp.tv_usec);
 
-		kp_ioctl.ioctl_ptr = (__force void __user *)&k_queue_buf;
+		kp_ioctl.ioctl_ptr = (void __user *)&k_queue_buf;
 		kp_ioctl.len = sizeof(struct msm_pproc_queue_buf_info);
 		is_copytouser_req = false;
 		cmd = VIDIOC_MSM_CPP_QUEUE_BUF;
@@ -4375,7 +4379,7 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 		k64_frame_info.output_buffer_info[0].index =
 			k32_frame_info.output_buffer_info[0].index;
 
-		kp_ioctl.ioctl_ptr = (__force void __user *)&k64_frame_info;
+		kp_ioctl.ioctl_ptr = (void __user *)&k64_frame_info;
 
 		is_copytouser_req = false;
 		cmd = VIDIOC_MSM_CPP_POP_STREAM_BUFFER;
@@ -4393,7 +4397,7 @@ static long msm_cpp_subdev_fops_compat_ioctl(struct file *file,
 		}
 
 		kp_ioctl.ioctl_ptr =
-			(__force void __user *)&kb_cpp_smmu_attach_info;
+			(void __user *)&kb_cpp_smmu_attach_info;
 		is_copytouser_req = false;
 		cmd = (cmd == VIDIOC_MSM_CPP_IOMMU_ATTACH32) ?
 			VIDIOC_MSM_CPP_IOMMU_ATTACH :
@@ -4655,7 +4659,7 @@ static int cpp_probe(struct platform_device *pdev)
 			pr_debug("%s register cx_ipeak received bit %d\n",
 				__func__, cpp_dev->cx_ipeak_bit);
 		} else
-			pr_err("Cx ipeak Registration Unsuccessful");
+			pr_err("Cx ipeak Registration Unsuccessful\n");
 	}
 
 	rc = msm_camera_get_reset_info(pdev,
@@ -4740,8 +4744,8 @@ static int cpp_probe(struct platform_device *pdev)
 	atomic_set(&cpp_timer.used, 0);
 	/* install timer for cpp timeout */
 	CPP_DBG("Installing cpp_timer\n");
-	setup_timer(&cpp_timer.cpp_timer,
-		cpp_timer_callback, (unsigned long)&cpp_timer);
+	timer_setup(&cpp_timer.cpp_timer,
+		cpp_timer_callback, 0);
 	cpp_dev->fw_name_bin = NULL;
 	cpp_dev->max_timeout_trial_cnt = MSM_CPP_MAX_TIMEOUT_TRIAL;
 
@@ -4835,7 +4839,6 @@ static struct platform_driver cpp_driver = {
 	.remove = cpp_device_remove,
 	.driver = {
 		.name = MSM_CPP_DRV_NAME,
-		.owner = THIS_MODULE,
 		.of_match_table = msm_cpp_dt_match,
 		.suppress_bind_attrs = true,
 	},
@@ -4853,12 +4856,12 @@ static void __exit msm_cpp_exit_module(void)
 
 static int msm_cpp_debugfs_error_s(void *data, u64 val)
 {
-	pr_err("setting error inducement");
+	pr_err("setting error inducement\n");
 	induce_error = val;
 	return 0;
 }
 
-DEFINE_SIMPLE_ATTRIBUTE(cpp_debugfs_error, NULL,
+DEFINE_DEBUGFS_ATTRIBUTE(cpp_debugfs_error, NULL,
 	msm_cpp_debugfs_error_s, "%llu\n");
 
 static int msm_cpp_enable_debugfs(struct cpp_device *cpp_dev)

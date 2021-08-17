@@ -1,20 +1,11 @@
-/* Copyright (c) 2010-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2010-2019, The Linux Foundation. All rights reserved.
  */
 
 #ifndef __KGSL_PWRSCALE_H
 #define __KGSL_PWRSCALE_H
 
-#include <linux/devfreq.h>
 #include <linux/msm_adreno_devfreq.h>
 #include "kgsl_pwrctrl.h"
 
@@ -55,7 +46,6 @@ struct kgsl_pwr_history {
 /**
  * struct kgsl_pwrscale - Power scaling settings for a KGSL device
  * @devfreqptr - Pointer to the devfreq device
- * @bus_devfreq - Pointer to the bus devfreq device
  * @gpu_profile - GPU profile data for the devfreq device
  * @bus_profile - Bus specific data for the bus devfreq device
  * @freq_table - GPU frequencies for the DCVS algorithm
@@ -64,7 +54,8 @@ struct kgsl_pwr_history {
  * @enabled - Whether or not power scaling is enabled
  * @time - Last submitted sample timestamp
  * @on_time - Timestamp when gpu busy begins
- * @freq_change_time - Timestamp of last freq change
+  * @freq_change_time - Timestamp of last freq change
+ * @nh - Notifier for the partner devfreq bus device
  * @devfreq_wq - Main devfreq workqueue
  * @devfreq_suspend_ws - Pass device suspension to devfreq
  * @devfreq_resume_ws - Pass device resume to devfreq
@@ -81,7 +72,6 @@ struct kgsl_pwr_history {
  */
 struct kgsl_pwrscale {
 	struct devfreq *devfreqptr;
-	struct devfreq *bus_devfreq;
 	struct msm_adreno_extended_profile gpu_profile;
 	struct msm_busmon_extended_profile bus_profile;
 	unsigned long freq_table[KGSL_MAX_PWRLEVELS];
@@ -91,6 +81,7 @@ struct kgsl_pwrscale {
 	ktime_t time;
 	s64 on_time;
 	s64 freq_change_time;
+	struct srcu_notifier_head nh;
 	struct workqueue_struct *devfreq_wq;
 	struct work_struct devfreq_suspend_ws;
 	struct work_struct devfreq_resume_ws;

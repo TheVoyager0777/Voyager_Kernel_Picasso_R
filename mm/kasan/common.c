@@ -75,6 +75,9 @@ static inline depot_stack_handle_t save_stack(gfp_t flags)
 
 	save_stack_trace(&trace);
 	filter_irq_stacks(&trace);
+	if (trace.nr_entries != 0 &&
+	    trace.entries[trace.nr_entries-1] == ULONG_MAX)
+		trace.nr_entries--;
 
 	return depot_save_stack(&trace, flags);
 }
@@ -261,7 +264,7 @@ static inline unsigned int optimal_redzone(unsigned int object_size)
 }
 
 void kasan_cache_create(struct kmem_cache *cache, unsigned int *size,
-			unsigned long *flags)
+			slab_flags_t *flags)
 {
 	unsigned int orig_size = *size;
 	unsigned int redzone_size;
@@ -627,55 +630,6 @@ void kasan_report(unsigned long addr, size_t size, bool is_write, unsigned long 
 	user_access_restore(flags);
 }
 
-/* Emitted by compiler to poison alloca()ed objects. */
-void __asan_alloca_poison(unsigned long addr, size_t size)
-{
-	size_t rounded_up_size = round_up(size, KASAN_SHADOW_SCALE_SIZE);
-	size_t padding_size = round_up(size, KASAN_ALLOCA_REDZONE_SIZE) -
-			rounded_up_size;
-	size_t rounded_down_size = round_down(size, KASAN_SHADOW_SCALE_SIZE);
-
-	const void *left_redzone = (const void *)(addr -
-			KASAN_ALLOCA_REDZONE_SIZE);
-	const void *right_redzone = (const void *)(addr + rounded_up_size);
-
-	WARN_ON(!IS_ALIGNED(addr, KASAN_ALLOCA_REDZONE_SIZE));
-
-	kasan_unpoison_shadow((const void *)(addr + rounded_down_size),
-			      size - rounded_down_size);
-	kasan_poison_shadow(left_redzone, KASAN_ALLOCA_REDZONE_SIZE,
-			KASAN_ALLOCA_LEFT);
-	kasan_poison_shadow(right_redzone,
-			padding_size + KASAN_ALLOCA_REDZONE_SIZE,
-			KASAN_ALLOCA_RIGHT);
-}
-EXPORT_SYMBOL(__asan_alloca_poison);
-
-/* Emitted by compiler to unpoison alloca()ed areas when the stack unwinds. */
-void __asan_allocas_unpoison(const void *stack_top, const void *stack_bottom)
-{
-	if (unlikely(!stack_top || stack_top > stack_bottom))
-		return;
-
-	kasan_unpoison_shadow(stack_top, stack_bottom - stack_top);
-}
-EXPORT_SYMBOL(__asan_allocas_unpoison);
-
-/* Emitted by the compiler to [un]poison local variables. */
-#define DEFINE_ASAN_SET_SHADOW(byte) \
-	void __asan_set_shadow_##byte(const void *addr, size_t size)	\
-	{								\
-		__memset((void *)addr, 0x##byte, size);			\
-	}								\
-	EXPORT_SYMBOL(__asan_set_shadow_##byte)
-
-DEFINE_ASAN_SET_SHADOW(00);
-DEFINE_ASAN_SET_SHADOW(f1);
-DEFINE_ASAN_SET_SHADOW(f2);
-DEFINE_ASAN_SET_SHADOW(f3);
-DEFINE_ASAN_SET_SHADOW(f5);
-DEFINE_ASAN_SET_SHADOW(f8);
-
 #ifdef CONFIG_MEMORY_HOTPLUG
 static bool shadow_mapped(unsigned long addr)
 {
@@ -741,7 +695,7 @@ static int __meminit kasan_mem_notifier(struct notifier_block *nb,
 			return NOTIFY_OK;
 
 		ret = __vmalloc_node_range(shadow_size, PAGE_SIZE, shadow_start,
-					shadow_end, GFP_KERNEL,
+					shadow_end, GFP_KERNEL | __GFP_ZERO,
 					PAGE_KERNEL, VM_NO_GUARD,
 					pfn_to_nid(mem_data->start_pfn),
 					__builtin_return_address(0));

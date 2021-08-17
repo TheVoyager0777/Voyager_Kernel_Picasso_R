@@ -1,15 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2014-2015, 2017-2018, The Linux Foundation.
- * All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2014-2015, 2017-2018, 2019, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "devfreq-simple-dev: " fmt
@@ -122,7 +113,7 @@ static int parse_freq_table(struct device *dev, struct dev_data *d)
 	for (i = 0; i < len; i++) {
 		f = clk_round_rate(d->clk, data[i] * 1000);
 		if (IS_ERR_VALUE(f))
-			dev_warn(dev, "Unable to find dev rate for %d KHz",
+			dev_warn(dev, "Unable to find dev rate for %d KHz\n",
 				 data[i]);
 		else
 			p->freq_table[j++] = f / 1000;
@@ -182,7 +173,7 @@ static int devfreq_clock_probe(struct platform_device *pdev)
 
 	d->df = devfreq_add_device(dev, p, gov_name, NULL);
 	if (IS_ERR(d->df)) {
-		ret = PTR_ERR(d->df);
+		ret = PTR_ERR_OR_ZERO(d->df);
 		goto add_err;
 	}
 

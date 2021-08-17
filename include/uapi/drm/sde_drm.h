@@ -1,3 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
+/*
+ * Copyright (c) 2017-2018, 2020, The Linux Foundation. All rights reserved.
+ */
+
 #ifndef _SDE_DRM_H_
 #define _SDE_DRM_H_
 
@@ -221,6 +226,7 @@ struct sde_drm_de_v1 {
 
 #define SDE_DRM_QSEED3LITE
 #define SDE_DRM_QSEED4
+#define SDE_DRM_INLINE_PREDOWNSCALE
 
 /**
  * struct sde_drm_scaler_v2 - version 2 of struct sde_drm_scaler
@@ -254,6 +260,10 @@ struct sde_drm_de_v1 {
  * @unsharp_mask_blend: Unsharp Blend Filter Ratio
  * @de_blend:          Ratio of two unsharp mask filters
  * @flags:             Scaler configuration flags
+ * @pre_downscale_x_0  Pre-downscale ratio, x-direction, plane 0(Y/RGB)
+ * @pre_downscale_x_1  Pre-downscale ratio, x-direction, plane 1(UV)
+ * @pre_downscale_y_0  Pre-downscale ratio, y-direction, plane 0(Y/RGB)
+ * @pre_downscale_y_1  Pre-downscale ratio, y-direction, plane 1(UV)
  */
 struct sde_drm_scaler_v2 {
 	/*
@@ -311,6 +321,14 @@ struct sde_drm_scaler_v2 {
 	uint32_t unsharp_mask_blend;
 	uint32_t de_blend;
 	uint32_t flags;
+
+	/*
+	 * Inline pre-downscale settings
+	 */
+	uint32_t pre_downscale_x_0;
+	uint32_t pre_downscale_x_1;
+	uint32_t pre_downscale_y_0;
+	uint32_t pre_downscale_y_1;
 };
 
 /* Number of dest scalers supported */
@@ -452,30 +470,6 @@ struct sde_drm_wb_cfg {
 struct sde_drm_roi_v1 {
 	uint32_t num_rects;
 	struct drm_clip_rect roi[SDE_MAX_ROI_V1];
-};
-
-/**
- * struct sde_drm_roi_misr_v1 - version 1 struct sde_drm_roi_misr
- *
- * @fence_fd_ptr:      roi misr fence fd pointer
- * @roi_rect_num:      number of roi should be enabled
- * @roi_ids:           the order number of every roi, this order
- *                     are matches with roi range index in mode_info
- * @roi_rects:         the rectangle information of every roi
- * @roi_golden_value:  golden value is used to compare with the
- *                     misr value calculated by h/w. if there is
- *                     a mismatch, the misr fence will be signaled
- *                     and the h/w calculated value will be returned
- *                     in the misr fence. NULL if using default
- *                     value of -1 for all roi misrs.
- */
-#define SDE_DRM_ROI_MISR_V1
-struct sde_drm_roi_misr_v1 {
-	int64_t *fence_fd_ptr;
-	uint32_t roi_rect_num;
-	uint32_t *roi_ids;
-	struct drm_clip_rect *roi_rects;
-	uint32_t *roi_golden_value;
 };
 
 /**

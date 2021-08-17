@@ -157,7 +157,6 @@
 #define PA_SAVECONFIGTIME	0x15A4
 #define PA_PEERRXHSADAPTINITIAL	0x15D3
 #define PA_TXHSADAPTTYPE	0x15D4
-
 /*
  * Default value of PA_PEERRXHSADAPTINITIAL.
  * TODO: This may need to be tuned if required.
@@ -186,6 +185,9 @@
 #define DL_FC0ProtectionTimeOutVal_Default	8191
 #define DL_TC0ReplayTimeOutVal_Default		65535
 #define DL_AFC0ReqTimeOutVal_Default		32767
+#define DL_FC1ProtectionTimeOutVal_Default	8191
+#define DL_TC1ReplayTimeOutVal_Default		65535
+#define DL_AFC1ReqTimeOutVal_Default		32767
 
 #define DME_LocalFC0ProtectionTimeOutVal	0xD041
 #define DME_LocalTC0ReplayTimeOutVal		0xD042

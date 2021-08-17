@@ -1,4 +1,5 @@
-/* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -403,7 +404,7 @@ void msm_vfe48_set_dual_vfe_mode(struct vfe_device *vfe_dev)
 		/* Enable the dual vfe IRQ */
 		msm_camera_enable_irq(vfe_dev->dual_vfe_irq, 1);
 		msm_camera_io_w(1, vfe_dev->camss_base + 0x130);
-		vfe_dev->dual_isp_sync_irq_enabled =  1;
+		vfe_dev->dual_isp_sync_irq_enabled =  true;
 	}
 }
 
@@ -425,7 +426,7 @@ void msm_vfe48_clear_dual_vfe_mode(struct vfe_device *vfe_dev)
 		/* Disable the dual vfe IRQ */
 		msm_camera_enable_irq(vfe_dev->dual_vfe_irq, 0);
 		msm_camera_io_w(0, vfe_dev->camss_base + 0x130);
-		vfe_dev->dual_isp_sync_irq_enabled = 0;
+		vfe_dev->dual_isp_sync_irq_enabled = false;
 	}
 }
 
@@ -654,7 +655,6 @@ static struct platform_driver vfe48_driver = {
 	.probe = vfe_hw_probe,
 	.driver = {
 		.name = "msm_vfe48",
-		.owner = THIS_MODULE,
 		.of_match_table = msm_vfe48_dt_match,
 	},
 };

@@ -1,14 +1,6 @@
-/* Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2019-2020, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "AXI: %s(): " fmt, __func__
@@ -50,6 +42,7 @@ struct msm_bus_cldata {
 	int index;
 	uint32_t clid;
 	int size;
+	int vote_count;
 	struct dentry *file;
 	struct list_head list;
 	char buffer[MAX_BUFF_SIZE];
@@ -199,7 +192,7 @@ static int msm_bus_dbg_mas_set(void  *data, u64 val)
 	clstate.cl = msm_bus_dbg_register_client();
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(shell_client_mas_fops, msm_bus_dbg_mas_get,
+DEFINE_DEBUGFS_ATTRIBUTE(shell_client_mas_fops, msm_bus_dbg_mas_get,
 	msm_bus_dbg_mas_set, "%llu\n");
 
 static int msm_bus_dbg_slv_get(void  *data, u64 *val)
@@ -216,7 +209,7 @@ static int msm_bus_dbg_slv_set(void  *data, u64 val)
 	clstate.cl = msm_bus_dbg_register_client();
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(shell_client_slv_fops, msm_bus_dbg_slv_get,
+DEFINE_DEBUGFS_ATTRIBUTE(shell_client_slv_fops, msm_bus_dbg_slv_get,
 	msm_bus_dbg_slv_set, "%llu\n");
 
 static int msm_bus_dbg_ab_get(void  *data, u64 *val)
@@ -232,7 +225,7 @@ static int msm_bus_dbg_ab_set(void  *data, u64 val)
 	MSM_BUS_DBG("Set ab: %llu\n", val);
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(shell_client_ab_fops, msm_bus_dbg_ab_get,
+DEFINE_DEBUGFS_ATTRIBUTE(shell_client_ab_fops, msm_bus_dbg_ab_get,
 	msm_bus_dbg_ab_set, "%llu\n");
 
 static int msm_bus_dbg_ib_get(void  *data, u64 *val)
@@ -248,7 +241,7 @@ static int msm_bus_dbg_ib_set(void  *data, u64 val)
 	MSM_BUS_DBG("Set ib: %llu\n", val);
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(shell_client_ib_fops, msm_bus_dbg_ib_get,
+DEFINE_DEBUGFS_ATTRIBUTE(shell_client_ib_fops, msm_bus_dbg_ib_get,
 	msm_bus_dbg_ib_set, "%llu\n");
 
 static int msm_bus_dbg_en_get(void  *data, u64 *val)
@@ -278,7 +271,7 @@ static int msm_bus_dbg_en_set(void  *data, u64 val)
 	MSM_BUS_DBG("Set enable: %llu\n", val);
 	return ret;
 }
-DEFINE_SIMPLE_ATTRIBUTE(shell_client_en_fops, msm_bus_dbg_en_get,
+DEFINE_DEBUGFS_ATTRIBUTE(shell_client_en_fops, msm_bus_dbg_en_get,
 	msm_bus_dbg_en_set, "%llu\n");
 
 /**
@@ -318,14 +311,8 @@ static ssize_t client_data_read(struct file *file, char __user *buf,
 	return ret;
 }
 
-static int client_data_open(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-	return 0;
-}
-
 static const struct file_operations client_data_fops = {
-	.open		= client_data_open,
+	.open		= simple_open,
 	.read		= client_data_read,
 };
 
@@ -469,6 +456,7 @@ static int msm_bus_dbg_record_client(const struct msm_bus_scale_pdata *pdata,
 	dbg_cldata2->clid = clid;
 	dbg_cldata2->file = file;
 	dbg_cldata2->size = 0;
+	dbg_cldata2->vote_count = 0;
 	rt_mutex_lock(&msm_bus_dbg_cllist_lock);
 	list_add_tail(&dbg_cldata2->list, &cl_list);
 	rt_mutex_unlock(&msm_bus_dbg_cllist_lock);
@@ -523,6 +511,7 @@ static int msm_bus_dbg_fill_cl_buffer(const struct msm_bus_scale_pdata *pdata,
 			clients, clid);
 	}
 
+	cldata->vote_count++;
 	if (cldata->size < (MAX_BUFF_SIZE - FILL_LIMIT))
 		i = cldata->size;
 	else {
@@ -580,11 +569,9 @@ static ssize_t  msm_bus_dbg_update_request_write(struct file *file,
 	ssize_t res = cnt;
 
 	dbg_buf = kmalloc((sizeof(char) * (cnt + 1)), GFP_KERNEL);
-
-	if (!dbg_buf || IS_ERR(dbg_buf)) {
-		MSM_BUS_ERR("Memory allocation for buffer failed\n");
+	if (!dbg_buf)
 		return -ENOMEM;
-	}
+
 	if (cnt == 0) {
 		res = 0;
 		goto out;
@@ -669,7 +656,7 @@ static ssize_t fabric_data_read(struct file *file, char __user *buf,
 }
 
 static const struct file_operations fabric_data_fops = {
-	.open		= client_data_open,
+	.open		= simple_open,
 	.read		= fabric_data_read,
 };
 
@@ -685,14 +672,8 @@ static ssize_t rules_dbg_read(struct file *file, char __user *buf,
 	return ret;
 }
 
-static int rules_dbg_open(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-	return 0;
-}
-
 static const struct file_operations rules_dbg_fops = {
-	.open		= rules_dbg_open,
+	.open		= simple_open,
 	.read		= rules_dbg_read,
 };
 
@@ -782,16 +763,9 @@ static int msm_bus_dbg_fill_fab_buffer(const char *fabname,
 }
 
 static const struct file_operations msm_bus_dbg_update_request_fops = {
-	.open = client_data_open,
+	.open = simple_open,
 	.write = msm_bus_dbg_update_request_write,
 };
-
-static int bcm_client_open(struct inode *inode,
-	struct file *file)
-{
-	file->private_data = inode->i_private;
-	return 0;
-}
 
 static ssize_t bcm_client_read(struct file *file,
 	char __user *buf, size_t count, loff_t *ppos)
@@ -860,15 +834,9 @@ exit_dump_bcm_clients_read:
 }
 
 static const struct file_operations msm_bus_dbg_dump_bcm_clients_fops = {
-	.open = bcm_client_open,
+	.open = simple_open,
 	.read = bcm_client_read,
 };
-
-static int msm_bus_dbg_dump_clients_open(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-	return 0;
-}
 
 static ssize_t msm_bus_dbg_dump_clients_read(struct file *file,
 	char __user *buf, size_t count, loff_t *ppos)
@@ -895,7 +863,8 @@ static ssize_t msm_bus_dbg_dump_clients_read(struct file *file,
 			cldata->pdata->usecase[cldata->index].vectors[j].dst,
 			cldata->pdata->usecase[cldata->index].vectors[j].ab,
 			cldata->pdata->usecase[cldata->index].vectors[j].ib,
-			cldata->pdata->active_only);
+			cldata->pdata->active_only,
+			cldata->vote_count);
 		}
 	}
 	rt_mutex_unlock(&msm_bus_dbg_cllist_lock);
@@ -904,7 +873,7 @@ exit_dump_clients_read:
 }
 
 static const struct file_operations msm_bus_dbg_dump_clients_fops = {
-	.open		= msm_bus_dbg_dump_clients_open,
+	.open		= simple_open,
 	.read		= msm_bus_dbg_dump_clients_read,
 };
 

@@ -1,14 +1,6 @@
-/* Copyright (c) 2014-2017, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  */
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM msm_vidc_events
@@ -143,6 +135,47 @@ DEFINE_EVENT(venus_hfi_var, venus_hfi_var_done,
 		u32 cp_nonpixel_start, u32 cp_nonpixel_size),
 
 	TP_ARGS(cp_start, cp_size, cp_nonpixel_start, cp_nonpixel_size)
+);
+
+DECLARE_EVENT_CLASS(msm_v4l2_vidc_count_events,
+
+	TP_PROTO(char *event_type,
+		 u32 etb, u32 ebd, u32 ftb, u32 fbd),
+
+	TP_ARGS(event_type, etb, ebd, ftb, fbd),
+
+	TP_STRUCT__entry(
+		__field(char *, event_type)
+		__field(u32, etb)
+		__field(u32, ebd)
+		__field(u32, ftb)
+		__field(u32, fbd)
+	),
+
+	TP_fast_assign(
+		__entry->event_type = event_type;
+		__entry->etb = etb;
+		__entry->ebd = ebd;
+		__entry->ftb = ftb;
+		__entry->fbd = fbd;
+	),
+
+	TP_printk(
+		"%s, ETB %u EBD %u FTB %u FBD %u",
+		__entry->event_type,
+		__entry->etb,
+		__entry->ebd,
+		__entry->ftb,
+		__entry->fbd)
+);
+
+DEFINE_EVENT(msm_v4l2_vidc_count_events, msm_v4l2_vidc_buffer_counter,
+
+	TP_PROTO(char *event_type,
+		u32 etb, u32 ebd, u32 ftb, u32 fbd),
+
+	TP_ARGS(event_type,
+		etb, ebd, ftb, fbd)
 );
 
 DECLARE_EVENT_CLASS(msm_v4l2_vidc_buffer_events,
@@ -343,6 +376,39 @@ DEFINE_EVENT(msm_vidc_perf, msm_vidc_perf_bus_vote,
 	TP_ARGS(governor_mode, ab)
 );
 
+#define MAX_TRACER_LOG_LENGTH 128
+
+DECLARE_EVENT_CLASS(msm_v4l2_vidc_log,
+
+	TP_PROTO(char *dummy, int length),
+
+	TP_ARGS(dummy, length),
+
+	TP_STRUCT__entry(
+		__array(char, dummy, MAX_TRACER_LOG_LENGTH)
+		__field(int, length)
+	),
+
+	TP_fast_assign(
+		__entry->length = length < MAX_TRACER_LOG_LENGTH ?
+						length  : MAX_TRACER_LOG_LENGTH;
+		__entry->dummy[0] = '\0';
+		if (__entry->length > 0) {
+			memcpy(__entry->dummy, dummy, __entry->length);
+			if (__entry->dummy[__entry->length - 1] == '\n')
+				__entry->dummy[__entry->length - 1] = '\0';
+		}
+	),
+
+	TP_printk("%s", __entry->dummy)
+);
+
+DEFINE_EVENT(msm_v4l2_vidc_log, msm_vidc_printf,
+
+	TP_PROTO(char *dummy, int length),
+
+	TP_ARGS(dummy, length)
+);
 #endif
 
 #include <trace/define_trace.h>

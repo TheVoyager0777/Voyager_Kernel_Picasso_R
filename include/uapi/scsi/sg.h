@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: GPL-2.0 */
+/* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 #ifndef _SCSI_GENERIC_H
 #define _SCSI_GENERIC_H
 
@@ -34,27 +34,24 @@
 extern int sg_big_buff; /* for sysctl */
 #endif
 
-
 typedef struct sg_iovec /* same structure as used by readv() Linux system */
 {                       /* call. It defines one scatter-gather element. */
 	void __user *iov_base;      /* Starting address  */
 	size_t iov_len;             /* Length in bytes  */
 } sg_iovec_t;
 
-
-typedef struct sg_io_hdr
-{
+typedef struct sg_io_hdr {
 	int interface_id;           /* [i] 'S' for SCSI generic (required) */
 	int dxfer_direction;        /* [i] data transfer direction  */
 	unsigned char cmd_len;      /* [i] SCSI command length */
 	unsigned char mx_sb_len;    /* [i] max length to write to sbp */
 	unsigned short iovec_count; /* [i] 0 implies no scatter gather */
 	unsigned int dxfer_len;     /* [i] byte count of data transfer */
-	void __user *dxferp;	/* [i], [*io] points to data transfer memory
-				   or scatter gather list */
+	void __user *dxferp;	/* [i], [*io] points to data transfer memory */
+				/* or scatter gather list */
 	unsigned char __user *cmdp; /* [i], [*i] points to command to perform */
-	void __user *sbp;		/* [i], [*o] points to sense_buffer memory */
-	unsigned int timeout;       /* [i] MAX_UINT->no timeout (unit: millisec) */
+	void __user *sbp;	/* [i], [*o] points to sense_buffer meimory */
+	unsigned int timeout;	/* [i] MAX_UINT->no timeout (unit: millisec) */
 	unsigned int flags;         /* [i] 0 -> default, see SG_FLAG... */
 	int pack_id;                /* [i->o] unused internally (normally) */
 	void __user *usr_ptr;       /* [i->o] unused internally */
@@ -104,7 +101,7 @@ typedef struct sg_io_hdr
 
 
 typedef struct sg_scsi_id { /* used by SG_GET_SCSI_ID ioctl() */
-	int host_no;        /* as in "scsi<n>" where 'n' is one of 0, 1, 2 etc */
+	int host_no;	/* as in "scsi<n>" where 'n' is one of 0, 1, 2 etc */
 	int channel;
 	int scsi_id;        /* scsi id of target device */
 	int lun;
@@ -115,14 +112,15 @@ typedef struct sg_scsi_id { /* used by SG_GET_SCSI_ID ioctl() */
 } sg_scsi_id_t; /* 32 bytes long on i386 */
 
 typedef struct sg_req_info { /* used by SG_GET_REQUEST_TABLE ioctl() */
-	char req_state;     /* 0 -> not used, 1 -> written, 2 -> ready to read */
-	char orphan;        /* 0 -> normal request, 1 -> from interruped SG_IO */
+	char req_state;	/* 0 -> not used, 1 -> written, 2 -> ready to read */
+	char orphan;	/* 0 -> normal request, 1 -> from interruped SG_IO */
 	char sg_io_owned;   /* 0 -> complete with read(), 1 -> owned by SG_IO */
 	char problem;       /* 0 -> no problem detected, 1 -> error to report */
 	int pack_id;        /* pack_id associated with request */
 	void __user *usr_ptr;     /* user provided pointer (in new interface) */
-	unsigned int duration; /* millisecs elapsed since written (req_state==1)
-				  or request duration (req_state==2) */
+	unsigned int duration;	/* millisecs elapsed since written */
+				/* (req_state==1) or request duration */
+				/* (req_state==2) */
 	int unused;
 } sg_req_info_t; /* 20 bytes long on i386 */
 
@@ -222,8 +220,7 @@ typedef struct sg_req_info Sg_req_info;
 
 #define SG_MAX_SENSE 16   /* this only applies to the sg_header interface */
 
-struct sg_header
-{
+struct sg_header {
 	int pack_len;    /* [o] reply_len (ie useless), ignored as input */
 	int reply_len;   /* [i] max length of expected reply (inc. sg_header) */
 	int pack_id;     /* [io] id number of packet (use ints >= 0) */
@@ -234,10 +231,9 @@ struct sg_header
 	unsigned int host_status:8;     /* [o] host status (see "DID" codes) */
 	unsigned int driver_status:8;   /* [o] driver status+suggestion */
 	unsigned int other_flags:10;    /* unused */
-	unsigned char sense_buffer[SG_MAX_SENSE]; /* [o] Output in 3 cases:
-						     when target_status is CHECK_CONDITION or
-						     when target_status is COMMAND_TERMINATED or
-						     when (driver_status & DRIVER_SENSE) is true. */
+	unsigned char sense_buffer[SG_MAX_SENSE]; /* [o] Output in 3 cases: */
+	/* when target_status is CHECK_CONDITION or when target_status is */
+	/* COMMAND_TERMINATED or when (driver_status & DRIVER_SENSE) is true. */
 };      /* This structure is 36 bytes long on i386 */
 
 

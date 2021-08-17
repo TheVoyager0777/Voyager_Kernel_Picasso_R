@@ -1,6 +1,6 @@
 /**
 * Copyright MI 2015-2016
-* Copyright (C) 2021 XiaoMi, Inc.
+ * Copyright (C) 2021 XiaoMi, Inc.
 *
 */
 
@@ -41,7 +41,7 @@
 #define MIUS_ULTRASOUND_SUSPEND             6
 #define MIUS_ULTRASOUND_CL_DATA             7
 #define MIUS_ULTRASOUND_MODE                8
-#define MIUS_ULTRASOUND_UPLOAD_NONE        9
+#define MIUS_ULTRASOUND_UPLOAD_NONE         9
 
 /** Param ID definition */
 #define MIUS_ULTRASOUND_PARAM_ID_ENGINE_DATA           3

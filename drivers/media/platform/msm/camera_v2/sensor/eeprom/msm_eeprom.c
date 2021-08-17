@@ -1,4 +1,5 @@
-/* Copyright (c) 2011-2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2011-2018, 2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -40,7 +41,7 @@ static int msm_get_read_mem_size
 
 	if (eeprom_map_array->msm_size_of_max_mappings >
 		MSM_EEPROM_MAX_MEM_MAP_CNT) {
-		pr_err("%s:%d Memory map cnt greter then expected: %d",
+		pr_err("%s:%d Memory map cnt greter then expected: %d\n",
 			__func__, __LINE__,
 			eeprom_map_array->msm_size_of_max_mappings);
 		return -EINVAL;
@@ -49,7 +50,7 @@ static int msm_get_read_mem_size
 		eeprom_map = &(eeprom_map_array->memory_map[j]);
 		if (eeprom_map->memory_map_size >
 			MSM_EEPROM_MEMORY_MAP_MAX_SIZE) {
-			pr_err("%s:%d Memory map size greter then expected: %d",
+			pr_err("%s:%d Memory map size greter then expected: %d\n",
 				__func__, __LINE__,
 				eeprom_map->memory_map_size);
 			return -EINVAL;
@@ -109,7 +110,7 @@ static uint32_t msm_eeprom_match_crc(struct msm_eeprom_memory_block_t *data)
 	struct msm_eeprom_memory_map_t *map;
 
 	if (!data) {
-		pr_err("%s data is NULL", __func__);
+		pr_err("%s data is NULL\n", __func__);
 		return -EINVAL;
 	}
 	map = data->map;
@@ -154,7 +155,7 @@ static int read_eeprom_memory(struct msm_eeprom_ctrl_t *e_ctrl,
 	uint8_t *memptr = block->mapdata;
 
 	if (!e_ctrl) {
-		pr_err("%s e_ctrl is NULL", __func__);
+		pr_err("%s e_ctrl is NULL\n", __func__);
 		return -EINVAL;
 	}
 
@@ -443,7 +444,7 @@ static int msm_eeprom_power_up(struct msm_eeprom_ctrl_t *e_ctrl,
 		power_info->cam_vreg, power_info->num_vreg,
 		power_info->power_setting, power_info->power_setting_size);
 	if (rc < 0) {
-		pr_err("%s:%d failed in camera_fill_vreg_params  rc %d",
+		pr_err("%s:%d failed in camera_fill_vreg_params  rc %d\n",
 			__func__, __LINE__, rc);
 		return rc;
 	}
@@ -454,7 +455,7 @@ static int msm_eeprom_power_up(struct msm_eeprom_ctrl_t *e_ctrl,
 		power_info->power_down_setting,
 		power_info->power_down_setting_size);
 	if (rc < 0) {
-		pr_err("%s:%d failed msm_camera_fill_vreg_params for PDOWN rc %d",
+		pr_err("%s:%d failed msm_camera_fill_vreg_params for PDOWN rc %d\n",
 			__func__, __LINE__, rc);
 		return rc;
 	}
@@ -629,7 +630,7 @@ static int msm_eeprom_config(struct msm_eeprom_ctrl_t *e_ctrl,
 	switch (cdata->cfgtype) {
 	case CFG_EEPROM_GET_INFO:
 		if (e_ctrl->userspace_probe == 1) {
-			pr_err("%s:%d Eeprom name should be module driver",
+			pr_err("%s:%d Eeprom name should be module driver\n",
 				__func__, __LINE__);
 			rc = -EINVAL;
 			break;
@@ -661,7 +662,7 @@ static int msm_eeprom_config(struct msm_eeprom_ctrl_t *e_ctrl,
 		break;
 	case CFG_EEPROM_INIT:
 		if (e_ctrl->userspace_probe == 0) {
-			pr_err("%s:%d Eeprom already probed at kernel boot",
+			pr_err("%s:%d Eeprom already probed at kernel boot\n",
 				__func__, __LINE__);
 			rc = -EINVAL;
 			break;
@@ -934,7 +935,7 @@ static int msm_eeprom_i2c_probe(struct i2c_client *client,
 		&power_info->clk_ptr,
 		&power_info->clk_info_size);
 	if (rc < 0) {
-		pr_err("failed: msm_camera_get_clk_info rc %d", rc);
+		pr_err("failed: msm_camera_get_clk_info rc %d\n", rc);
 		goto board_free;
 	}
 
@@ -1251,7 +1252,7 @@ static int msm_eeprom_spi_setup(struct spi_device *spi)
 		&power_info->clk_ptr,
 		&power_info->clk_info_size);
 	if (rc < 0) {
-		pr_err("failed: msm_camera_get_clk_info rc %d", rc);
+		pr_err("failed: msm_camera_get_clk_info rc %d\n", rc);
 		goto board_free;
 	}
 
@@ -1606,7 +1607,7 @@ static int msm_eeprom_config32(struct msm_eeprom_ctrl_t *e_ctrl,
 	switch (cdata->cfgtype) {
 	case CFG_EEPROM_GET_INFO:
 		if (e_ctrl->userspace_probe == 1) {
-			pr_err("%s:%d Eeprom name should be module driver",
+			pr_err("%s:%d Eeprom name should be module driver\n",
 				__func__, __LINE__);
 			rc = -EINVAL;
 			break;
@@ -1634,7 +1635,7 @@ static int msm_eeprom_config32(struct msm_eeprom_ctrl_t *e_ctrl,
 		break;
 	case CFG_EEPROM_INIT:
 		if (e_ctrl->userspace_probe == 0) {
-			pr_err("%s:%d Eeprom already probed at kernel boot",
+			pr_err("%s:%d Eeprom already probed at kernel boot\n",
 				__func__, __LINE__);
 			rc = -EINVAL;
 			break;
@@ -1757,7 +1758,7 @@ static int msm_eeprom_platform_probe(struct platform_device *pdev)
 		&power_info->clk_ptr,
 		&power_info->clk_info_size);
 	if (rc < 0) {
-		pr_err("failed: msm_camera_get_clk_info rc %d", rc);
+		pr_err("failed: msm_camera_get_clk_info rc %d\n", rc);
 		goto board_free;
 	}
 
@@ -1935,7 +1936,6 @@ MODULE_DEVICE_TABLE(of, msm_eeprom_dt_match);
 static struct platform_driver msm_eeprom_platform_driver = {
 	.driver = {
 		.name = "qcom,eeprom",
-		.owner = THIS_MODULE,
 		.of_match_table = msm_eeprom_dt_match,
 	},
 	.probe = msm_eeprom_platform_probe,

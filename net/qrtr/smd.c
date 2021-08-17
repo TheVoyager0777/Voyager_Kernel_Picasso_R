@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2015, Sony Mobile Communications Inc.
- * Copyright (c) 2013, 2018-2019 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2013, 2018 The Linux Foundation. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -31,8 +23,10 @@ static int qcom_smd_qrtr_callback(struct rpmsg_device *rpdev,
 	struct qrtr_smd_dev *qdev = dev_get_drvdata(&rpdev->dev);
 	int rc;
 
-	if (!qdev)
+	if (!qdev) {
+		pr_err("%d:Not ready\n", __func__);
 		return -EAGAIN;
+	}
 
 	rc = qrtr_endpoint_post(&qdev->ep, data, len);
 	if (rc == -EINVAL) {
@@ -70,6 +64,7 @@ static int qcom_smd_qrtr_probe(struct rpmsg_device *rpdev)
 	u32 net_id;
 	bool rt;
 	int rc;
+	pr_err("%d:Entered\n", __func__);
 
 	qdev = devm_kzalloc(&rpdev->dev, sizeof(*qdev), GFP_KERNEL);
 	if (!qdev)
@@ -91,7 +86,8 @@ static int qcom_smd_qrtr_probe(struct rpmsg_device *rpdev)
 
 	dev_set_drvdata(&rpdev->dev, qdev);
 
-	dev_dbg(&rpdev->dev, "Qualcomm SMD QRTR driver probed\n");
+	pr_err("%d:SMD QRTR driver probed\n", __func__);
+	dev_dbg(&rpdev->dev, "SMD QRTR driver probed\n");
 
 	return 0;
 }

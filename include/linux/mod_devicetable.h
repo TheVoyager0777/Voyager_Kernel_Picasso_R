@@ -229,6 +229,12 @@ struct hda_device_id {
 	unsigned long driver_data;
 };
 
+struct sdw_device_id {
+	__u16 mfg_id;
+	__u16 part_id;
+	kernel_ulong_t driver_data;
+};
+
 /*
  * Struct used for matching a device
  */
@@ -442,6 +448,23 @@ struct pci_epf_device_id {
 	kernel_ulong_t driver_data;
 };
 
+/* i3c */
+
+#define I3C_MATCH_DCR			0x1
+#define I3C_MATCH_MANUF			0x2
+#define I3C_MATCH_PART			0x4
+#define I3C_MATCH_EXTRA_INFO		0x8
+
+struct i3c_device_id {
+	__u8 match_flags;
+	__u8 dcr;
+	__u16 manuf_id;
+	__u16 part_id;
+	__u16 extra_info;
+
+	const void *data;
+};
+
 /* spi */
 
 #define SPI_NAME_SIZE	32
@@ -452,12 +475,21 @@ struct spi_device_id {
 	kernel_ulong_t driver_data;	/* Data private to the driver */
 };
 
-/* gpr */
-#define GPR_NAME_SIZE	32
-#define GPR_MODULE_PREFIX "gpr:"
+/* SLIMbus */
 
-struct gpr_device_id {
-	char name[GPR_NAME_SIZE];
+#define SLIMBUS_NAME_SIZE	32
+#define SLIMBUS_MODULE_PREFIX	"slim:"
+
+struct slim_device_id {
+	char name[SLIMBUS_NAME_SIZE];
+	kernel_ulong_t driver_data;     /* Data private to the driver */
+};
+
+#define APR_NAME_SIZE	32
+#define APR_MODULE_PREFIX "apr:"
+
+struct apr_device_id {
+	char name[APR_NAME_SIZE];
 	__u32 domain_id;
 	__u32 svc_id;
 	__u32 svc_version;
@@ -493,6 +525,7 @@ enum dmi_field {
 	DMI_PRODUCT_VERSION,
 	DMI_PRODUCT_SERIAL,
 	DMI_PRODUCT_UUID,
+	DMI_PRODUCT_SKU,
 	DMI_PRODUCT_FAMILY,
 	DMI_BOARD_VENDOR,
 	DMI_BOARD_NAME,
@@ -505,6 +538,7 @@ enum dmi_field {
 	DMI_CHASSIS_SERIAL,
 	DMI_CHASSIS_ASSET_TAG,
 	DMI_STRING_MAX,
+	DMI_OEM_STRING,	/* special case - will not be in dmi_ident */
 };
 
 struct dmi_strmatch {
@@ -529,14 +563,6 @@ struct dmi_system_id {
 
 #define DMI_MATCH(a, b)	{ .slot = a, .substr = b }
 #define DMI_EXACT_MATCH(a, b)	{ .slot = a, .substr = b, .exact_match = 1 }
-
-#define SLIMBUS_NAME_SIZE	32
-#define SLIMBUS_MODULE_PREFIX "slim:"
-
-struct slim_device_id {
-	char name[SLIMBUS_NAME_SIZE];
-	kernel_ulong_t driver_data;	/* Data private to the driver */
-};
 
 #define PLATFORM_NAME_SIZE	20
 #define PLATFORM_MODULE_PREFIX	"platform:"
@@ -723,6 +749,49 @@ struct fsl_mc_device_id {
 	const char obj_type[16];
 };
 
+/**
+ * struct tb_service_id - Thunderbolt service identifiers
+ * @match_flags: Flags used to match the structure
+ * @protocol_key: Protocol key the service supports
+ * @protocol_id: Protocol id the service supports
+ * @protocol_version: Version of the protocol
+ * @protocol_revision: Revision of the protocol software
+ * @driver_data: Driver specific data
+ *
+ * Thunderbolt XDomain services are exposed as devices where each device
+ * carries the protocol information the service supports. Thunderbolt
+ * XDomain service drivers match against that information.
+ */
+struct tb_service_id {
+	__u32 match_flags;
+	char protocol_key[8 + 1];
+	__u32 protocol_id;
+	__u32 protocol_version;
+	__u32 protocol_revision;
+	kernel_ulong_t driver_data;
+};
+
+#define TBSVC_MATCH_PROTOCOL_KEY	0x0001
+#define TBSVC_MATCH_PROTOCOL_ID		0x0002
+#define TBSVC_MATCH_PROTOCOL_VERSION	0x0004
+#define TBSVC_MATCH_PROTOCOL_REVISION	0x0008
+
+/* USB Type-C Alternate Modes */
+
+#define TYPEC_ANY_MODE	0x7
+
+/**
+ * struct typec_device_id - USB Type-C alternate mode identifiers
+ * @svid: Standard or Vendor ID
+ * @mode: Mode index
+ * @driver_data: Driver specific data
+ */
+struct typec_device_id {
+	__u16 svid;
+	__u8 mode;
+	kernel_ulong_t driver_data;
+};
+
 #define MHI_NAME_SIZE 32
 
 /**
@@ -735,8 +804,5 @@ struct mhi_device_id {
 	const char chan[MHI_NAME_SIZE];
 	kernel_ulong_t driver_data;
 };
-
-
-
 
 #endif /* LINUX_MOD_DEVICETABLE_H */

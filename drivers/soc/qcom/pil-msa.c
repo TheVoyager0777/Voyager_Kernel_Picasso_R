@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -243,16 +244,9 @@ static int pil_mss_restart_reg(struct q6v5_data *drv, u32 mss_restart)
 		mb();
 		udelay(2);
 	} else if (drv->restart_reg_sec) {
-		if (!is_scm_armv8()) {
-			ret = scm_call(SCM_SVC_PIL, MSS_RESTART_ID,
-			&mss_restart, sizeof(mss_restart),
-					&scm_ret, sizeof(scm_ret));
-		} else {
-			ret = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL,
-			MSS_RESTART_ID), &desc);
-			scm_ret = desc.ret[0];
-		}
-
+		ret = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL,
+					MSS_RESTART_ID), &desc);
+		scm_ret = desc.ret[0];
 		if (ret || scm_ret)
 			pr_err("Secure MSS restart failed\n");
 	}
@@ -302,10 +296,8 @@ static int pil_msa_wait_for_mba_ready(struct q6v5_data *drv)
 	u32 status;
 	u64 val;
 
-#ifdef CONFIG_QCOM_MINIDUMP
 	if (of_property_read_bool(dev->of_node, "qcom,minidump-id"))
 		pbl_mba_boot_timeout_ms = MBA_ENCRYPTION_TIMEOUT;
-#endif
 
 	val = is_timeout_disabled() ? 0 : pbl_mba_boot_timeout_ms * 1000;
 
@@ -546,18 +538,13 @@ static int pil_mss_mem_setup(struct pil_desc *pil,
 	request.start_addr = addr;
 	request.len = size;
 
-	if (!is_scm_armv8()) {
-		ret = scm_call(SCM_SVC_PIL, PAS_MEM_SETUP_CMD, &request,
-			sizeof(request), &scm_ret, sizeof(scm_ret));
-	} else {
-		desc.args[0] = md->pas_id;
-		desc.args[1] = addr;
-		desc.args[2] = size;
-		desc.arginfo = SCM_ARGS(3);
-		ret = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL, PAS_MEM_SETUP_CMD),
-								&desc);
-		scm_ret = desc.ret[0];
-	}
+	desc.args[0] = md->pas_id;
+	desc.args[1] = addr;
+	desc.args[2] = size;
+	desc.arginfo = SCM_ARGS(3);
+	ret = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL, PAS_MEM_SETUP_CMD),
+			&desc);
+	scm_ret = desc.ret[0];
 
 	if (ret)
 		return ret;
@@ -569,7 +556,6 @@ static int pil_mss_reset(struct pil_desc *pil)
 	struct q6v5_data *drv = container_of(pil, struct q6v5_data, desc);
 	phys_addr_t start_addr = pil_get_entry_addr(pil);
 	u32 debug_val = 0;
-	bool minidump_ss;
 	int ret;
 
 	trace_pil_func(__func__);
@@ -588,13 +574,7 @@ static int pil_mss_reset(struct pil_desc *pil)
 	if (ret)
 		goto err_clks;
 
-	minidump_ss = true;
-#ifdef CONFIG_QCOM_MINIDUMP
-	if (pil->minidump_ss)
-		minidump_ss = false;
-#endif
-
-	if (minidump_ss || !pil->modem_ssr) {
+	if (!pil->minidump_ss || !pil->modem_ssr) {
 		/* Save state of modem debug register before full reset */
 		debug_val = readl_relaxed(drv->reg_base + QDSP6SS_DBG_CFG);
 	}
@@ -607,7 +587,7 @@ static int pil_mss_reset(struct pil_desc *pil)
 	if (ret)
 		goto err_restart;
 
-	if (minidump_ss || !pil->modem_ssr) {
+	if (!pil->minidump_ss || !pil->modem_ssr) {
 		writel_relaxed(debug_val, drv->reg_base + QDSP6SS_DBG_CFG);
 		if (modem_dbg_cfg)
 			writel_relaxed(modem_dbg_cfg,
@@ -806,7 +786,6 @@ err_invalid_fw:
 	return ret;
 }
 
-#ifdef CONFIG_QCOM_MINIDUMP
 int pil_mss_debug_reset(struct pil_desc *pil)
 {
 	struct q6v5_data *drv = container_of(pil, struct q6v5_data, desc);
@@ -869,7 +848,6 @@ err_restart:
 		clk_disable_unprepare(drv->ahb_clk);
 	return ret;
 }
-#endif
 
 static int pil_msa_auth_modem_mdt(struct pil_desc *pil, const u8 *metadata,
 				  size_t size)

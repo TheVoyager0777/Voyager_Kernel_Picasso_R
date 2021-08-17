@@ -59,25 +59,18 @@ int initTestToDo(void)
 	limit_file.size = 0;
 	limit_file.data = NULL;
 	strlcpy(limit_file.name, " ", MAX_LIMIT_FILE_NAME);
-	tests.SelfHoverForceRaw = 0;	/* /< SS Hover Force Raw min/Max test */
-	tests.SelfHoverSenceRaw = 0;	/* /< SS Hover Sence Raw min/Max test */
-	tests.SelfHoverForceIxTotal = 0;	/* /< SS Hover Total Force Ix min/Max (for each node)* test */
-	tests.SelfHoverSenceIxTotal = 0;
-
-	tests.MutualRawAdjITO = 1;
-
-	tests.MutualRaw = 1;	/* in case of YOCTA please use Map */
-	tests.MutualRawMap = 1;
+	tests.SelfHoverForceRaw=1;		/* /< SS Hover Force Raw min/Max test */
+	tests.SelfHoverSenceRaw=1;		/* /< SS Hover Sence Raw min/Max test */
+	tests.SelfHoverForceIxTotal=1;	/* /< SS Hover Total Force Ix min/Max (for each node)* test */
+	tests.SelfHoverSenceIxTotal=1;
+	tests.MutualRawAdjITO = 0;
+	tests.MutualRaw = 0;
+	tests.MutualRawEachNode = 1;
 	tests.MutualRawGap = 0;
 	tests.MutualRawAdj = 0;
-	tests.MutualRawAdjGap = 0;
-	tests.MutualRawAdjPeak = 0;
-
-	tests.MutualRawLP = 0;	/* in case of YOCTA please use Map */
+	tests.MutualRawLP = 0;
 	tests.MutualRawGapLP = 0;
-	tests.MutualRawMapLP = 0;
 	tests.MutualRawAdjLP = 0;
-
 	tests.MutualCx1 = 0;
 	tests.MutualCx2 = 0;
 	tests.MutualCx2Adj = 0;
@@ -86,31 +79,25 @@ int initTestToDo(void)
 
 	tests.MutualCx1LP = 0;
 	tests.MutualCx2LP = 1;
-	tests.MutualCx2TotalLP = 1;
+	tests.MutualCx2AdjLP = 1;
 	tests.MutualCxTotalLP = 0;
 	tests.MutualCxTotalAdjLP = 0;
-
 #ifdef PHONE_KEY
-	tests.MutualKeyRaw = 1;
+	tests.MutualKeyRaw = 0;
 #else
 	tests.MutualKeyRaw = 0;
 #endif
 	tests.MutualKeyCx1 = 0;
 	tests.MutualKeyCx2 = 0;
 #ifdef PHONE_KEY
-	tests.MutualKeyCxTotal = 1;
+	tests.MutualKeyCxTotal = 0;
 #else
 	tests.MutualKeyCxTotal = 0;
 #endif
-
-	tests.SelfForceRaw = 1;	/* in case of YOCTA please use Map */
+	tests.SelfForceRaw = 1;
 	tests.SelfForceRawGap = 0;
-	tests.SelfForceRawMap = 1;
-
-	tests.SelfForceRawLP = 0;	/* in case of YOCTA please use Map */
+	tests.SelfForceRawLP = 0;
 	tests.SelfForceRawGapLP = 0;
-	tests.SelfForceRawMapLP = 0;
-
 	tests.SelfForceIx1 = 0;
 	tests.SelfForceIx2 = 0;
 	tests.SelfForceIx2Adj = 0;
@@ -121,26 +108,10 @@ int initTestToDo(void)
 	tests.SelfForceCx2Adj = 0;
 	tests.SelfForceCxTotal = 0;
 	tests.SelfForceCxTotalAdj = 0;
-	tests.SelfForceIx1LP = 0;
-	tests.SelfForceIx2LP = 0;
-	tests.SelfForceIx2AdjLP = 0;
-	tests.SelfForceIxTotalLP = 0;
-	tests.SelfForceIxTotalAdjLP = 0;
-	tests.SelfForceCx1LP = 0;
-	tests.SelfForceCx2LP = 0;
-	tests.SelfForceCx2AdjLP = 0;
-	tests.SelfForceCxTotalLP = 0;
-	tests.SelfForceCxTotalAdjLP = 0;
-
 	tests.SelfSenseRaw = 1;
 	tests.SelfSenseRawGap = 0;
-
-	tests.SelfSenseRawMap = 1;
-
 	tests.SelfSenseRawLP = 0;
 	tests.SelfSenseRawGapLP = 0;
-	tests.SelfSenseRawMapLP = 0;
-
 	tests.SelfSenseIx1 = 0;
 	tests.SelfSenseIx2 = 0;
 	tests.SelfSenseIx2Adj = 0;
@@ -151,16 +122,6 @@ int initTestToDo(void)
 	tests.SelfSenseCx2Adj = 0;
 	tests.SelfSenseCxTotal = 0;
 	tests.SelfSenseCxTotalAdj = 0;
-	tests.SelfSenseIx1LP = 0;
-	tests.SelfSenseIx2LP = 0;
-	tests.SelfSenseIx2AdjLP = 0;
-	tests.SelfSenseIxTotalLP = 0;
-	tests.SelfSenseIxTotalAdjLP = 0;
-	tests.SelfSenseCx1LP = 0;
-	tests.SelfSenseCx2LP = 0;
-	tests.SelfSenseCx2AdjLP = 0;
-	tests.SelfSenseCxTotalLP = 0;
-	tests.SelfSenseCxTotalAdjLP = 0;
 	return OK;
 }
 
@@ -196,8 +157,8 @@ int computeAdjHoriz(i8 *data, int row, int column, u8 **result)
 	for (i = 0; i < row; i++) {
 		for (j = 1; j < column; j++) {
 			*(*result + (i * (column - 1) + (j - 1))) =
-			    abs(data[i * column + j] -
-				data[i * column + (j - 1)]);
+				abs(data[i * column + j] -
+				    data[i * column + (j - 1)]);
 		}
 	}
 
@@ -236,8 +197,8 @@ int computeAdjHorizTotal(short *data, int row, int column, u16 **result)
 	for (i = 0; i < row; i++) {
 		for (j = 1; j < column; j++) {
 			*(*result + (i * (column - 1) + (j - 1))) =
-			    abs(data[i * column + j] -
-				data[i * column + (j - 1)]);
+				abs(data[i * column + j] -
+				    data[i * column + (j - 1)]);
 		}
 	}
 
@@ -276,8 +237,8 @@ int computeAdjVert(i8 *data, int row, int column, u8 **result)
 	for (i = 1; i < row; i++) {
 		for (j = 0; j < column; j++) {
 			*(*result + ((i - 1) * column + j)) =
-			    abs(data[i * column + j] -
-				data[(i - 1) * column + j]);
+				abs(data[i * column + j] -
+				    data[(i - 1) * column + j]);
 		}
 	}
 
@@ -316,8 +277,8 @@ int computeAdjVertTotal(short *data, int row, int column, u16 **result)
 	for (i = 1; i < row; i++) {
 		for (j = 0; j < column; j++) {
 			*(*result + ((i - 1) * column + j)) =
-			    abs(data[i * column + j] -
-				data[(i - 1) * column + j]);
+				abs(data[i * column + j] -
+				    data[(i - 1) * column + j]);
 		}
 	}
 
@@ -356,8 +317,8 @@ int computeAdjHorizFromU(u8 *data, int row, int column, u8 **result)
 	for (i = 0; i < row; i++) {
 		for (j = 1; j < column; j++) {
 			*(*result + (i * (column - 1) + (j - 1))) =
-			    abs(data[i * column + j] -
-				data[i * column + (j - 1)]);
+				abs(data[i * column + j] -
+				    data[i * column + (j - 1)]);
 		}
 	}
 
@@ -396,8 +357,8 @@ int computeAdjHorizTotalFromU(u16 *data, int row, int column, u16 **result)
 	for (i = 0; i < row; i++) {
 		for (j = 1; j < column; j++) {
 			*(*result + (i * (column - 1) + (j - 1))) =
-			    abs(data[i * column + j] -
-				data[i * column + (j - 1)]);
+				abs(data[i * column + j] -
+				    data[i * column + (j - 1)]);
 		}
 	}
 
@@ -436,8 +397,8 @@ int computeAdjVertFromU(u8 *data, int row, int column, u8 **result)
 	for (i = 1; i < row; i++) {
 		for (j = 0; j < column; j++) {
 			*(*result + ((i - 1) * column + j)) =
-			    abs(data[i * column + j] -
-				data[(i - 1) * column + j]);
+				abs(data[i * column + j] -
+				    data[(i - 1) * column + j]);
 		}
 	}
 
@@ -476,8 +437,8 @@ int computeAdjVertTotalFromU(u16 *data, int row, int column, u16 **result)
 	for (i = 1; i < row; i++) {
 		for (j = 0; j < column; j++) {
 			*(*result + ((i - 1) * column + j)) =
-			    abs(data[i * column + j] -
-				data[(i - 1) * column + j]);
+				abs(data[i * column + j] -
+				    data[(i - 1) * column + j]);
 		}
 	}
 
@@ -499,7 +460,7 @@ int computeTotal(u8 *data, u8 main, int row, int column, int m, int n,
 	for (i = 0; i < row; i++) {
 		for (j = 0; j < column; j++) {
 			*(*result + (i * column + j)) =
-			    m * main + n * data[i * column + j];
+				m * main + n * data[i * column + j];
 		}
 	}
 
@@ -707,7 +668,8 @@ int checkLimitsMapTotalFromU(u16 *data, int row, int column, int *min,
 			logError(1,
 				 "%s checkLimitsMapTotal: Node[%d,%d] = %d\n",
 				 tag, i, j, data[i * column + j],
-				 min[i * column + j], max[i * column + j]);
+				 min[i * column + j],
+				 max[i * column + j]);
 		}
 	}
 
@@ -795,7 +757,7 @@ int production_test_ito(char *path_limits, TestToDo *todo)
 	}
 
 	sett[0] = SPECIAL_TUNING_IOFF;
-	logError(1, "%s Trimming Ioff... \n", tag);
+	logError(0, "%s Trimming Ioff... \n", tag);
 	res = writeSysCmd(SYS_CMD_SPECIAL_TUNING, sett, 2);
 
 	if (res < OK) {
@@ -805,8 +767,8 @@ int production_test_ito(char *path_limits, TestToDo *todo)
 	}
 
 	sett[0] = 0xFF;
-	sett[1] = 0x01;
-	logError(1, "%s ITO Check command sent... \n", tag);
+	sett[1] = 0xFF;
+	logError(0, "%s ITO Check command sent... \n", tag);
 	res = writeSysCmd(SYS_CMD_ITO, sett, 2);
 
 	if (res < OK) {
@@ -815,11 +777,11 @@ int production_test_ito(char *path_limits, TestToDo *todo)
 		return (res | ERROR_PROD_TEST_ITO);
 	}
 
-	logError(1, "%s ITO Command = OK! \n", tag);
+	logError(0, "%s ITO Command = OK! \n", tag);
 
 	if (todo->MutualRawAdjITO == 1) {
 		logError(1, "%s MS RAW ITO ADJ TEST: \n", tag);
-		logError(1, "%s Collecting MS Raw data... \n", tag);
+		logError(0, "%s Collecting MS Raw data... \n", tag);
 		res |= getMSFrame3(MS_RAW, &msRawFrame);
 
 		if (res < OK) {
@@ -828,11 +790,11 @@ int production_test_ito(char *path_limits, TestToDo *todo)
 			goto ERROR;
 		}
 
-		logError(1, "%s MS RAW ITO ADJ HORIZONTAL TEST: \n", tag);
+		logError(0, "%s MS RAW ITO ADJ HORIZONTAL TEST: \n", tag);
 		res =
-		    computeAdjHorizTotal(msRawFrame.node_data,
-					 msRawFrame.header.force_node,
-					 msRawFrame.header.sense_node, &adj);
+			computeAdjHorizTotal(msRawFrame.node_data,
+					     msRawFrame.header.force_node,
+					     msRawFrame.header.sense_node, &adj);
 
 		if (res < OK) {
 			logError(1,
@@ -842,9 +804,9 @@ int production_test_ito(char *path_limits, TestToDo *todo)
 		}
 
 		res =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      MS_RAW_ITO_ADJH, &thresholds,
-					      &trows, &tcolumns);
+			parseProductionTestLimits(path_limits, &limit_file,
+						  MS_RAW_ITO_ADJH, &thresholds,
+						  &trows, &tcolumns);
 
 		if (res < OK
 		    || (trows != msRawFrame.header.force_node
@@ -856,15 +818,15 @@ int production_test_ito(char *path_limits, TestToDo *todo)
 		}
 
 		res =
-		    checkLimitsMapAdjTotal(adj, msRawFrame.header.force_node,
-					   msRawFrame.header.sense_node - 1,
-					   thresholds);
+			checkLimitsMapAdjTotal(adj, msRawFrame.header.force_node,
+					       msRawFrame.header.sense_node - 1,
+					       thresholds);
 
 		if (res != OK) {
 			logError(1,
 				 "%s production_test_data: checkLimitsAdj MS RAW ITO ADJH failed... ERROR COUNT = %d \n",
 				 tag, res);
-			logError(1,
+			logError(0,
 				 "%s MS RAW ITO ADJ HORIZONTAL TEST:.................FAIL \n\n",
 				 tag);
 			print_frame_short("MS Raw ITO frame =",
@@ -877,7 +839,7 @@ int production_test_ito(char *path_limits, TestToDo *todo)
 			res = ERROR_PROD_TEST_ITO;
 			goto ERROR;
 		} else
-			logError(1,
+			logError(0,
 				 "%s MS RAW ITO ADJ HORIZONTAL TEST:.................OK  \n",
 				 tag);
 
@@ -885,11 +847,11 @@ int production_test_ito(char *path_limits, TestToDo *todo)
 		thresholds = NULL;
 		kfree(adj);
 		adj = NULL;
-		logError(1, "%s MS RAW ITO ADJ VERTICAL TEST: \n", tag);
+		logError(0, "%s MS RAW ITO ADJ VERTICAL TEST: \n", tag);
 		res =
-		    computeAdjVertTotal(msRawFrame.node_data,
-					msRawFrame.header.force_node,
-					msRawFrame.header.sense_node, &adj);
+			computeAdjVertTotal(msRawFrame.node_data,
+					    msRawFrame.header.force_node,
+					    msRawFrame.header.sense_node, &adj);
 
 		if (res < OK) {
 			logError(1,
@@ -899,9 +861,9 @@ int production_test_ito(char *path_limits, TestToDo *todo)
 		}
 
 		res =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      MS_RAW_ITO_ADJV, &thresholds,
-					      &trows, &tcolumns);
+			parseProductionTestLimits(path_limits, &limit_file,
+						  MS_RAW_ITO_ADJV, &thresholds,
+						  &trows, &tcolumns);
 
 		if (res < OK
 		    || (trows != msRawFrame.header.force_node - 1
@@ -913,16 +875,16 @@ int production_test_ito(char *path_limits, TestToDo *todo)
 		}
 
 		res =
-		    checkLimitsMapAdjTotal(adj,
-					   msRawFrame.header.force_node - 1,
-					   msRawFrame.header.sense_node,
-					   thresholds);
+			checkLimitsMapAdjTotal(adj,
+					       msRawFrame.header.force_node - 1,
+					       msRawFrame.header.sense_node,
+					       thresholds);
 
 		if (res != OK) {
 			logError(1,
 				 "%s %s: checkLimitsAdj MS RAW ITO ADJV failed... ERROR COUNT = %d \n",
 				 tag, __func__, res);
-			logError(1,
+			logError(0,
 				 "%s MS RAW ITO ADJ VERTICAL TEST:.................FAIL \n\n",
 				 tag);
 			print_frame_short("MS Raw ITO frame =",
@@ -935,7 +897,7 @@ int production_test_ito(char *path_limits, TestToDo *todo)
 			res = ERROR_PROD_TEST_ITO;
 			goto ERROR;
 		} else
-			logError(1,
+			logError(0,
 				 "%s MS RAW ITO ADJ VERTICAL TEST:.................OK  \n",
 				 tag);
 
@@ -944,7 +906,7 @@ int production_test_ito(char *path_limits, TestToDo *todo)
 		kfree(adj);
 		adj = NULL;
 	} else
-		logError(1,
+		logError(0,
 			 "%s MS RAW ITO ADJ TEST:.................SKIPPED  \n",
 			 tag);
 
@@ -982,8 +944,7 @@ ERROR:
 int production_test_initialization(u8 type)
 {
 	int res;
-	logError(1, "%s INITIALIZATION Production test is starting,type:%d\n",
-		 tag, type);
+	logError(1, "%s INITIALIZATION Production test is starting,type:%d\n", tag, type);
 
 	if (type != SPECIAL_PANEL_INIT && type != SPECIAL_FULL_PANEL_INIT) {
 		logError(1,
@@ -1001,7 +962,7 @@ int production_test_initialization(u8 type)
 		return (res | ERROR_PROD_TEST_INITIALIZATION);
 	}
 
-	logError(1, "%s INITIALIZATION command sent... %02X \n", tag, type);
+	logError(0, "%s INITIALIZATION command sent... %02X \n", tag, type);
 	res = writeSysCmd(SYS_CMD_SPECIAL, &type, 1);
 
 	if (res < OK) {
@@ -1010,7 +971,7 @@ int production_test_initialization(u8 type)
 		return (res | ERROR_PROD_TEST_INITIALIZATION);
 	}
 
-	logError(1, "%s Refresh Sys Info...\n", tag);
+	logError(0, "%s Refresh Sys Info...\n", tag);
 	res |= readSysInfo(1);
 
 	if (res < 0) {
@@ -1035,13 +996,13 @@ int production_test_main(char *pathThresholds, int stop_on_fail, int saveInit,
 			 TestToDo *todo)
 {
 	int res, ret;
-	logError(1, "%s MAIN Production test is starting...\n", tag);
+	logError(0, "%s MAIN Production test is starting...\n", tag);
 	logError(0, "%s \n", tag);
-	logError(1, "%s ITO TEST: \n", tag);
+	logError(0, "%s ITO TEST: \n", tag);
 	res = production_test_ito(pathThresholds, todo);
 
 	if (res < 0) {
-		logError(1, "%s Error during ITO TEST! ERROR %08X\n", tag, res);
+		logError(0, "%s Error during ITO TEST! ERROR %08X\n", tag, res);
 		goto END;
 	} else {
 		logError(0, "%s ITO TEST OK!\n", tag);
@@ -1054,24 +1015,24 @@ int production_test_main(char *pathThresholds, int stop_on_fail, int saveInit,
 		res = production_test_initialization((u8) saveInit);
 
 		if (res < 0) {
-			logError(1,
+			logError(0,
 				 "%s Error during  INITIALIZATION TEST! ERROR %08X\n",
 				 tag, res);
 
 			if (stop_on_fail)
 				goto END;
 		} else {
-			logError(1, "%s INITIALIZATION TEST OK!\n", tag);
+			logError(0, "%s INITIALIZATION TEST OK!\n", tag);
 		}
 	} else
-		logError(1,
+		logError(0,
 			 "%s INITIALIZATION TEST :................. SKIPPED  \n",
 			 tag);
 
 	logError(0, "%s \n", tag);
 
 	if (saveInit == 1) {
-		logError(1, "%s Cleaning up...\n", tag);
+		logError(0, "%s Cleaning up...\n", tag);
 		ret = fts_system_reset();
 
 		if (ret < 0) {
@@ -1091,23 +1052,23 @@ int production_test_main(char *pathThresholds, int stop_on_fail, int saveInit,
 	ret = production_test_data(pathThresholds, stop_on_fail, todo);
 
 	if (ret < 0) {
-		logError(1,
+		logError(0,
 			 "%s Error during PRODUCTION DATA TEST! ERROR %08X\n",
 			 tag, ret);
 	} else {
-		logError(1, "%s PRODUCTION DATA TEST OK!\n", tag);
+		logError(0, "%s PRODUCTION DATA TEST OK!\n", tag);
 	}
 
 	res |= ret;
 END:
 
 	if (res < 0) {
-		logError(1,
+		logError(0,
 			 "%s MAIN Production test finished.................FAILED \n",
 			 tag);
 		return res;
 	} else {
-		logError(1,
+		logError(0,
 			 "%s MAIN Production test finished.................OK\n",
 			 tag);
 		return OK;
@@ -1131,7 +1092,7 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 	int trows, tcolumns;
 	u16 *adj = NULL;
 	/******************************* Mutual Sense Test *******************************/
-	logError(1, "%s %s begin\n", tag, __func__);
+	logError(0, "%s \n", tag);
 
 	if (todo->MutualRaw == 1 || todo->MutualRawGap == 1
 	    || todo->MutualRawAdj == 1 || todo->MutualRawEachNode == 1) {
@@ -1148,13 +1109,14 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 			return (ret | ERROR_PROD_TEST_DATA);
 		}
 
+
 		if (todo->MutualRaw == 1) {
 			logError(1, "%s MS RAW MIN MAX TEST:  \n", tag);
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      MS_RAW_MIN_MAX,
-						      &thresholds, &trows,
-						      &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  MS_RAW_MIN_MAX,
+							  &thresholds, &trows,
+							  &tcolumns);
 
 			if (ret < OK || (trows != 1 || tcolumns != 2)) {
 				logError(1,
@@ -1165,16 +1127,16 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 			}
 
 			ret =
-			    checkLimitsMinMax(msRawFrame.node_data,
-					      msRawFrame.header.force_node,
-					      msRawFrame.header.sense_node,
-					      thresholds[0], thresholds[1]);
+				checkLimitsMinMax(msRawFrame.node_data,
+						  msRawFrame.header.force_node,
+						  msRawFrame.header.sense_node,
+						  thresholds[0], thresholds[1]);
 
 			if (ret != OK) {
 				logError(1,
 					 "%s production_test_data: checkLimitsMinMax MS RAW failed... ERROR COUNT = %d \n",
 					 tag, ret);
-				logError(1,
+				logError(0,
 					 "%s MS RAW MIN MAX TEST:.................FAIL \n\n",
 					 tag);
 				count_fail += 1;
@@ -1182,65 +1144,45 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 				if (stop_on_fail == 1)
 					goto ERROR;
 			} else
-				logError(1,
+				logError(0,
 					 "%s MS RAW MIN MAX TEST:.................OK  \n",
 					 tag);
 
 			kfree(thresholds);
 			thresholds = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s MS RAW MIN MAX TEST:.................SKIPPED  \n",
 				 tag);
-		if (todo->MutualRawMap == 1) {
+		if (todo->MutualRawEachNode == 1) {
 			logError(1, "%s MS RAW EACH NODE MIN MAX TEST:\n", tag);
-			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      MS_RAW_EACH_NODE_MIN,
-						      &thresholds_min, &trows,
-						      &tcolumns);
-			if (ret < OK
-			    || (trows != msRawFrame.header.force_node
-				|| tcolumns != msRawFrame.header.sense_node)) {
-				logError(1,
-					 "%s production_test_data: parseProductionTestLimits MS_RAW_EACH_NODE_MIN failed... ERROR %08X\n",
+			ret = parseProductionTestLimits(path_limits, &limit_file, MS_RAW_EACH_NODE_MIN, &thresholds_min, &trows, &tcolumns);
+			if (ret < OK || (trows != msRawFrame.header.force_node || tcolumns != msRawFrame.header.sense_node)) {
+				logError(1, "%s production_test_data: parseProductionTestLimits MS_RAW_EACH_NODE_MIN failed... ERROR %08X\n",
 					 tag, ERROR_PROD_TEST_DATA);
 				ret |= ERROR_PROD_TEST_DATA;
 				goto ERROR_LIMITS;
 			}
-			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      MS_RAW_EACH_NODE_MAX,
-						      &thresholds_max, &trows,
-						      &tcolumns);
-			if (ret < OK
-			    || (trows != msRawFrame.header.force_node
-				|| tcolumns != msRawFrame.header.sense_node)) {
-				logError(1,
-					 "%s production_test_data: parseProductionTestLimits MS_RAW_EACH_NODE_MAX failed... ERROR %08X\n",
+			ret = parseProductionTestLimits(path_limits, &limit_file, MS_RAW_EACH_NODE_MAX, &thresholds_max, &trows, &tcolumns);
+			if (ret < OK || (trows != msRawFrame.header.force_node ||
+					 tcolumns != msRawFrame.header.sense_node)) {
+				logError(1, "%s production_test_data: parseProductionTestLimits MS_RAW_EACH_NODE_MAX failed... ERROR %08X\n",
 					 tag, ERROR_PROD_TEST_DATA);
 				ret |= ERROR_PROD_TEST_DATA;
 				goto ERROR_LIMITS;
 			}
-			ret =
-			    checkLimitsMapTotal(msRawFrame.node_data,
-						msRawFrame.header.force_node,
-						msRawFrame.header.sense_node,
-						thresholds_min, thresholds_max);
+			ret = checkLimitsMapTotal(msRawFrame.node_data, msRawFrame.header.force_node, msRawFrame.header.sense_node, thresholds_min, thresholds_max);
 			if (ret != OK) {
 				logError(1,
 					 "%s production_test_data: checkLimitsMinMaxEachNodeData failed... ERROR COUNT = %d\n",
 					 tag, ret);
-				logError(1,
-					 "%s MS_RAW MAP TEST:.................FAIL\n\n",
-					 tag);
+				logError(0,
+					 "%s MS_RAW EACH NODE MIN MAX TEST:.................FAIL\n\n", tag);
 				count_fail += 1;
 				if (stop_on_fail == 1)
 					goto ERROR;
 			} else {
-				logError(1,
-					 "%s MS_RAW_MAP TEST:.................OK\n",
-					 tag);
+				logError(0, "%s MS_RAW_EACH_NODE_MAX TEST:.................OK\n", tag);
 			}
 			if (thresholds_min != NULL) {
 				kfree(thresholds_min);
@@ -1251,9 +1193,7 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 				thresholds_max = NULL;
 			}
 		} else {
-			logError(1,
-				 "%s MS RAW EACH MAP TEST:.................SKIPPED\n",
-				 tag);
+			logError(0, "%s MS RAW EACH NODE MIN MAX TEST:.................SKIPPED\n", tag);
 		}
 
 		logError(0, "%s \n", tag);
@@ -1261,9 +1201,9 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 		if (todo->MutualRawGap == 1) {
 			logError(1, "%s MS RAW GAP TEST: \n", tag);
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      MS_RAW_GAP, &thresholds,
-						      &trows, &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  MS_RAW_GAP, &thresholds,
+							  &trows, &tcolumns);
 
 			if (ret < OK || (trows != 1 || tcolumns != 1)) {
 				logError(1,
@@ -1274,10 +1214,10 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 			}
 
 			ret =
-			    checkLimitsGap(msRawFrame.node_data,
-					   msRawFrame.header.force_node,
-					   msRawFrame.header.sense_node,
-					   thresholds[0]);
+				checkLimitsGap(msRawFrame.node_data,
+					       msRawFrame.header.force_node,
+					       msRawFrame.header.sense_node,
+					       thresholds[0]);
 
 			if (ret != OK) {
 				logError(1,
@@ -1288,14 +1228,14 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 				if (stop_on_fail == 1)
 					goto ERROR;
 			} else
-				logError(1,
+				logError(0,
 					 "%s MS RAW GAP TEST:.................OK \n\n",
 					 tag);
 
 			kfree(thresholds);
 			thresholds = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s MS RAW GAP TEST:.................SKIPPED  \n",
 				 tag);
 
@@ -1304,10 +1244,10 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 		if (todo->MutualRawAdj == 1) {
 			logError(1, "%s MS RAW ADJ HORIZONTAL TEST: \n", tag);
 			ret =
-			    computeAdjHorizTotal(msRawFrame.node_data,
-						 msRawFrame.header.force_node,
-						 msRawFrame.header.sense_node,
-						 &adj);
+				computeAdjHorizTotal(msRawFrame.node_data,
+						     msRawFrame.header.force_node,
+						     msRawFrame.header.sense_node,
+						     &adj);
 
 			if (ret < OK) {
 				logError(1,
@@ -1318,9 +1258,9 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 			}
 
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      MS_RAW_ADJH, &thresholds,
-						      &trows, &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  MS_RAW_ADJH, &thresholds,
+							  &trows, &tcolumns);
 
 			if (ret < OK
 			    || (trows != msRawFrame.header.force_node
@@ -1334,17 +1274,16 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 			}
 
 			ret =
-			    checkLimitsMapAdjTotal(adj,
-						   msRawFrame.header.force_node,
-						   msRawFrame.
-						   header.sense_node - 1,
-						   thresholds);
+				checkLimitsMapAdjTotal(adj,
+						       msRawFrame.header.force_node,
+						       msRawFrame.header.
+						       sense_node - 1, thresholds);
 
 			if (ret != OK) {
 				logError(1,
 					 "%s production_test_data: checkLimitsAdj MS RAW ADJH failed... ERROR COUNT = %d \n",
 					 tag, ret);
-				logError(1,
+				logError(0,
 					 "%s MS RAW ADJ HORIZONTAL TEST:.................FAIL \n\n",
 					 tag);
 				count_fail += 1;
@@ -1352,7 +1291,7 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 				if (stop_on_fail == 1)
 					goto ERROR;
 			} else
-				logError(1,
+				logError(0,
 					 "%s MS RAW ADJ HORIZONTAL TEST:.................OK  \n",
 					 tag);
 
@@ -1360,12 +1299,12 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 			thresholds = NULL;
 			kfree(adj);
 			adj = NULL;
-			logError(1, "%s MS RAW ADJ VERTICAL TEST: \n", tag);
+			logError(0, "%s MS RAW ADJ VERTICAL TEST: \n", tag);
 			ret =
-			    computeAdjVertTotal(msRawFrame.node_data,
-						msRawFrame.header.force_node,
-						msRawFrame.header.sense_node,
-						&adj);
+				computeAdjVertTotal(msRawFrame.node_data,
+						    msRawFrame.header.force_node,
+						    msRawFrame.header.sense_node,
+						    &adj);
 
 			if (ret < OK) {
 				logError(1,
@@ -1376,9 +1315,9 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 			}
 
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      MS_RAW_ADJV, &thresholds,
-						      &trows, &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  MS_RAW_ADJV, &thresholds,
+							  &trows, &tcolumns);
 
 			if (ret < OK
 			    || (trows != msRawFrame.header.force_node - 1
@@ -1391,17 +1330,17 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 			}
 
 			ret =
-			    checkLimitsMapAdjTotal(adj,
-						   msRawFrame.
-						   header.force_node - 1,
-						   msRawFrame.header.sense_node,
-						   thresholds);
+				checkLimitsMapAdjTotal(adj,
+						       msRawFrame.header.
+						       force_node - 1,
+						       msRawFrame.header.sense_node,
+						       thresholds);
 
 			if (ret != OK) {
 				logError(1,
 					 "%s production_test_data: checkLimitsAdj MS RAW ADJV failed... ERROR COUNT = %d \n",
 					 tag, ret);
-				logError(1,
+				logError(0,
 					 "%s MS RAW ADJ VERTICAL TEST:.................FAIL \n\n",
 					 tag);
 				count_fail += 1;
@@ -1409,7 +1348,7 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 				if (stop_on_fail == 1)
 					goto ERROR;
 			} else
-				logError(1,
+				logError(0,
 					 "%s MS RAW ADJ VERTICAL TEST:.................OK  \n",
 					 tag);
 
@@ -1418,11 +1357,11 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 			kfree(adj);
 			adj = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s MS RAW ADJ TEST:.................SKIPPED  \n",
 				 tag);
 	} else
-		logError(1, "%s MS RAW FRAME TEST:.................SKIPPED  \n",
+		logError(0, "%s MS RAW FRAME TEST:.................SKIPPED  \n",
 			 tag);
 
 	logError(0, "%s \n", tag);
@@ -1438,14 +1377,14 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 			count_fail += 1;
 
 			if (count_fail == 1) {
-				logError(1,
+				logError(0,
 					 "%s MS RAW DATA TEST:.................FAIL fails_count = %d\n\n",
 					 tag, count_fail);
 				goto ERROR_LIMITS;
 			}
 		}
 	} else
-		logError(1, "%s MS KEY RAW TEST:.................SKIPPED  \n",
+		logError(0, "%s MS KEY RAW TEST:.................SKIPPED  \n",
 			 tag);
 
 	ret = production_test_ms_raw_lp(path_limits, stop_on_fail, todo);
@@ -1457,7 +1396,7 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 		count_fail += 1;
 
 		if (count_fail == 1) {
-			logError(1,
+			logError(0,
 				 "%s MS RAW DATA TEST:.................FAIL fails_count = %d\n\n",
 				 tag, count_fail);
 			goto ERROR_LIMITS;
@@ -1473,7 +1412,7 @@ ERROR:
 			msRawFrame.node_data = NULL;
 		}
 
-		logError(1,
+		logError(0,
 			 "%s MS RAW DATA TEST finished!.................OK\n",
 			 tag);
 		return OK;
@@ -1481,8 +1420,8 @@ ERROR:
 		print_frame_short("MS Raw frame =",
 				  array1dTo2d_short(msRawFrame.node_data,
 						    msRawFrame.node_data_size,
-						    msRawFrame.
-						    header.sense_node),
+						    msRawFrame.header.
+						    sense_node),
 				  msRawFrame.header.force_node,
 				  msRawFrame.header.sense_node);
 
@@ -1498,7 +1437,7 @@ ERROR:
 			kfree(adj);
 			adj = NULL;
 		}
-		logError(1,
+		logError(0,
 			 "%s MS RAW DATA TEST:.................FAIL fails_count = %d\n\n",
 			 tag, count_fail);
 		return (ERROR_PROD_TEST_DATA | ERROR_TEST_CHECK_FAIL);
@@ -1551,13 +1490,14 @@ int production_test_ms_raw_lp(char *path_limits, int stop_on_fail,
 			return (ret | ERROR_PROD_TEST_DATA);
 		}
 
+
 		if (todo->MutualRawLP == 1) {
 			logError(1, "%s MS RAW LP MIN MAX TEST:  \n", tag);
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      MS_RAW_LP_MIN_MAX,
-						      &thresholds, &trows,
-						      &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  MS_RAW_LP_MIN_MAX,
+							  &thresholds, &trows,
+							  &tcolumns);
 
 			if (ret < 0 || (trows != 1 || tcolumns != 2)) {
 				logError(1,
@@ -1568,10 +1508,10 @@ int production_test_ms_raw_lp(char *path_limits, int stop_on_fail,
 			}
 
 			ret =
-			    checkLimitsMinMax(msRawFrame.node_data,
-					      msRawFrame.header.force_node,
-					      msRawFrame.header.sense_node,
-					      thresholds[0], thresholds[1]);
+				checkLimitsMinMax(msRawFrame.node_data,
+						  msRawFrame.header.force_node,
+						  msRawFrame.header.sense_node,
+						  thresholds[0], thresholds[1]);
 
 			if (ret != OK) {
 				logError(1,
@@ -1601,10 +1541,10 @@ int production_test_ms_raw_lp(char *path_limits, int stop_on_fail,
 		if (todo->MutualRawGapLP == 1) {
 			logError(1, "%s MS RAW LP GAP TEST: \n", tag);
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      MS_RAW_LP_GAP,
-						      &thresholds, &trows,
-						      &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  MS_RAW_LP_GAP,
+							  &thresholds, &trows,
+							  &tcolumns);
 
 			if (ret < 0 || (trows != 1 || tcolumns != 1)) {
 				logError(1,
@@ -1615,10 +1555,10 @@ int production_test_ms_raw_lp(char *path_limits, int stop_on_fail,
 			}
 
 			ret =
-			    checkLimitsGap(msRawFrame.node_data,
-					   msRawFrame.header.force_node,
-					   msRawFrame.header.sense_node,
-					   thresholds[0]);
+				checkLimitsGap(msRawFrame.node_data,
+					       msRawFrame.header.force_node,
+					       msRawFrame.header.sense_node,
+					       thresholds[0]);
 
 			if (ret != OK) {
 				logError(1,
@@ -1646,10 +1586,10 @@ int production_test_ms_raw_lp(char *path_limits, int stop_on_fail,
 			logError(1, "%s MS RAW LP ADJ HORIZONTAL TEST: \n",
 				 tag);
 			ret =
-			    computeAdjHorizTotal(msRawFrame.node_data,
-						 msRawFrame.header.force_node,
-						 msRawFrame.header.sense_node,
-						 &adj);
+				computeAdjHorizTotal(msRawFrame.node_data,
+						     msRawFrame.header.force_node,
+						     msRawFrame.header.sense_node,
+						     &adj);
 
 			if (ret < 0) {
 				logError(1,
@@ -1660,10 +1600,10 @@ int production_test_ms_raw_lp(char *path_limits, int stop_on_fail,
 			}
 
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      MS_RAW_LP_ADJH,
-						      &thresholds, &trows,
-						      &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  MS_RAW_LP_ADJH,
+							  &thresholds, &trows,
+							  &tcolumns);
 
 			if (ret < 0
 			    || (trows != msRawFrame.header.force_node
@@ -1677,11 +1617,10 @@ int production_test_ms_raw_lp(char *path_limits, int stop_on_fail,
 			}
 
 			ret =
-			    checkLimitsMapAdjTotal(adj,
-						   msRawFrame.header.force_node,
-						   msRawFrame.
-						   header.sense_node - 1,
-						   thresholds);
+				checkLimitsMapAdjTotal(adj,
+						       msRawFrame.header.force_node,
+						       msRawFrame.header.
+						       sense_node - 1, thresholds);
 
 			if (ret != OK) {
 				logError(1,
@@ -1705,10 +1644,10 @@ int production_test_ms_raw_lp(char *path_limits, int stop_on_fail,
 			adj = NULL;
 			logError(0, "%s MS RAW LP ADJ VERTICAL TEST: \n", tag);
 			ret =
-			    computeAdjVertTotal(msRawFrame.node_data,
-						msRawFrame.header.force_node,
-						msRawFrame.header.sense_node,
-						&adj);
+				computeAdjVertTotal(msRawFrame.node_data,
+						    msRawFrame.header.force_node,
+						    msRawFrame.header.sense_node,
+						    &adj);
 
 			if (ret < 0) {
 				logError(1,
@@ -1719,10 +1658,10 @@ int production_test_ms_raw_lp(char *path_limits, int stop_on_fail,
 			}
 
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      MS_RAW_LP_ADJV,
-						      &thresholds, &trows,
-						      &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  MS_RAW_LP_ADJV,
+							  &thresholds, &trows,
+							  &tcolumns);
 
 			if (ret < 0
 			    || (trows != msRawFrame.header.force_node - 1
@@ -1735,11 +1674,11 @@ int production_test_ms_raw_lp(char *path_limits, int stop_on_fail,
 			}
 
 			ret =
-			    checkLimitsMapAdjTotal(adj,
-						   msRawFrame.
-						   header.force_node - 1,
-						   msRawFrame.header.sense_node,
-						   thresholds);
+				checkLimitsMapAdjTotal(adj,
+						       msRawFrame.header.
+						       force_node - 1,
+						       msRawFrame.header.sense_node,
+						       thresholds);
 
 			if (ret != OK) {
 				logError(1,
@@ -1850,9 +1789,9 @@ int production_test_ms_key_raw(char *path_limits)
 	}
 
 	ret =
-	    parseProductionTestLimits(path_limits, &limit_file,
-				      MS_KEY_RAW_MIN_MAX, &thresholds, &trows,
-				      &tcolumns);
+		parseProductionTestLimits(path_limits, &limit_file,
+					  MS_KEY_RAW_MIN_MAX, &thresholds, &trows,
+					  &tcolumns);
 
 	if (ret < 0 || (trows != 1 || tcolumns != 2)) {
 		logError(1,
@@ -1863,10 +1802,10 @@ int production_test_ms_key_raw(char *path_limits)
 	}
 
 	ret =
-	    checkLimitsMinMax(msRawFrame.node_data,
-			      msRawFrame.header.force_node,
-			      msRawFrame.header.sense_node, thresholds[0],
-			      thresholds[1]);
+		checkLimitsMinMax(msRawFrame.node_data,
+				  msRawFrame.header.force_node,
+				  msRawFrame.header.sense_node, thresholds[0],
+				  thresholds[1]);
 
 	if (ret != OK) {
 		logError(1,
@@ -1934,7 +1873,7 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 	u16 container;
 	u16 *total_adjhor = NULL;
 	u16 *total_adjvert = NULL;
-	logError(1, "%s %s begin\n", tag, __func__);
+	logError(0, "%s \n", tag);
 	ret = readMutualSenseCompensationData(LOAD_CX_MS_TOUCH, &msCompData);
 
 	if (ret < 0) {
@@ -1945,8 +1884,8 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 	}
 
 	ret =
-	    readTotMutualSenseCompensationData(LOAD_PANEL_CX_TOT_MS_TOUCH,
-					       &totCompData);
+		readTotMutualSenseCompensationData(LOAD_PANEL_CX_TOT_MS_TOUCH,
+				&totCompData);
 
 	if (ret < 0) {
 		logError(1,
@@ -1957,12 +1896,13 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 		return (ret | ERROR_PROD_TEST_DATA);
 	}
 
+
 	if (todo->MutualCx1 == 1) {
 		logError(1, "%s MS CX1 TEST: \n", tag);
 		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      MS_CX1_MIN_MAX, &thresholds,
-					      &trows, &tcolumns);
+			parseProductionTestLimits(path_limits, &limit_file,
+						  MS_CX1_MIN_MAX, &thresholds,
+						  &trows, &tcolumns);
 
 		if (ret < 0 || (trows != 1 || tcolumns != 2)) {
 			logError(1,
@@ -1974,21 +1914,21 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 
 		container = (u16) msCompData.cx1;
 		ret =
-		    checkLimitsMinMax(&container, 1, 1, thresholds[0],
-				      thresholds[1]);
+			checkLimitsMinMax(&container, 1, 1, thresholds[0],
+					  thresholds[1]);
 
 		if (ret != OK) {
 			logError(1,
 				 "%s production_test_data: checkLimitsMinMax MS CX1 failed... ERROR COUNT = %d \n",
 				 tag, ret);
-			logError(1, "%s MS CX1 TEST:.................FAIL \n\n",
+			logError(0, "%s MS CX1 TEST:.................FAIL \n\n",
 				 tag);
 			count_fail += 1;
 
 			if (stop_on_fail)
 				goto ERROR;
 		} else
-			logError(1, "%s MS CX1 TEST:.................OK \n\n",
+			logError(0, "%s MS CX1 TEST:.................OK \n\n",
 				 tag);
 	} else
 		logError(0, "%s MS CX1 TEST:.................SKIPPED \n\n",
@@ -1999,10 +1939,7 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 
 	if (todo->MutualCx2 == 1) {
 		logError(1, "%s MS CX2 MIN MAX TEST: \n", tag);
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      MS_CX2_MAP_MIN, &thresholds_min,
-					      &trows, &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, MS_CX2_MAP_MIN, &thresholds_min, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != msCompData.header.force_node
@@ -2014,10 +1951,7 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      MS_CX2_MAP_MAX, &thresholds_max,
-					      &trows, &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, MS_CX2_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != msCompData.header.force_node
@@ -2029,17 +1963,13 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    checkLimitsMap(msCompData.node_data,
-				   msCompData.header.force_node,
-				   msCompData.header.sense_node, thresholds_min,
-				   thresholds_max);
+		ret = checkLimitsMap(msCompData.node_data, msCompData.header.force_node, msCompData.header.sense_node, thresholds_min, thresholds_max);
 
 		if (ret != OK) {
 			logError(1,
 				 "%s production_test_data: checkLimitsMap MS CX2 MIN MAX failed... ERROR COUNT = %d \n",
 				 tag, ret);
-			logError(1,
+			logError(0,
 				 "%s MS CX2 MIN MAX TEST:.................FAIL \n\n",
 				 tag);
 			count_fail += 1;
@@ -2047,7 +1977,7 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 			if (stop_on_fail)
 				goto ERROR;
 		} else
-			logError(1,
+			logError(0,
 				 "%s MS CX2 MIN MAX TEST:.................OK \n\n",
 				 tag);
 
@@ -2056,16 +1986,17 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 		kfree(thresholds_max);
 		thresholds_max = NULL;
 	} else
-		logError(1,
+		logError(0,
 			 "%s MS CX2 MIN MAX TEST:.................SKIPPED \n\n",
 			 tag);
+
 
 	if (todo->MutualCx2Adj == 1) {
 		logError(1, "%s MS CX2 ADJ TEST: \n", tag);
 		ret =
-		    computeAdjHoriz(msCompData.node_data,
-				    msCompData.header.force_node,
-				    msCompData.header.sense_node, &adjhor);
+			computeAdjHoriz(msCompData.node_data,
+					msCompData.header.force_node,
+					msCompData.header.sense_node, &adjhor);
 
 		if (ret < 0) {
 			logError(1,
@@ -2075,12 +2006,12 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 			goto ERROR_LIMITS;
 		}
 
-		logError(1, "%s MS CX2 ADJ HORIZ computed! \n", tag);
+		logError(0, "%s MS CX2 ADJ HORIZ computed! \n", tag);
 		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      MS_CX2_ADJH_MAP_MAX,
-					      &thresholds_max, &trows,
-					      &tcolumns);
+			parseProductionTestLimits(path_limits, &limit_file,
+						  MS_CX2_ADJH_MAP_MAX,
+						  &thresholds_max, &trows,
+						  &tcolumns);
 
 		if (ret < 0
 		    || (trows != msCompData.header.force_node
@@ -2093,15 +2024,15 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 		}
 
 		ret =
-		    checkLimitsMapAdj(adjhor, msCompData.header.force_node,
-				      msCompData.header.sense_node - 1,
-				      thresholds_max);
+			checkLimitsMapAdj(adjhor, msCompData.header.force_node,
+					  msCompData.header.sense_node - 1,
+					  thresholds_max);
 
 		if (ret != OK) {
 			logError(1,
 				 "%s production_test_data: checkLimitsMapAdj CX2 ADJH failed... ERROR COUNT = %d \n",
 				 tag, ret);
-			logError(1,
+			logError(0,
 				 "%s MS CX2 ADJ HORIZ TEST:.................FAIL \n\n",
 				 tag);
 			count_fail += 1;
@@ -2109,7 +2040,7 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 			if (stop_on_fail)
 				goto ERROR;
 		} else
-			logError(1,
+			logError(0,
 				 "%s MS CX2 ADJ HORIZ TEST:.................OK \n\n",
 				 tag);
 
@@ -2117,11 +2048,11 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 		thresholds_max = NULL;
 		kfree(adjhor);
 		adjhor = NULL;
-		logError(1, "%s MS CX2 ADJ VERT TEST: \n", tag);
+		logError(0, "%s MS CX2 ADJ VERT TEST: \n", tag);
 		ret =
-		    computeAdjVert(msCompData.node_data,
-				   msCompData.header.force_node,
-				   msCompData.header.sense_node, &adjvert);
+			computeAdjVert(msCompData.node_data,
+				       msCompData.header.force_node,
+				       msCompData.header.sense_node, &adjvert);
 
 		if (ret < 0) {
 			logError(1,
@@ -2131,12 +2062,12 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 			goto ERROR_LIMITS;
 		}
 
-		logError(1, "%s MS CX2 ADJ VERT computed! \n", tag);
+		logError(0, "%s MS CX2 ADJ VERT computed! \n", tag);
 		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      MS_CX2_ADJV_MAP_MAX,
-					      &thresholds_max, &trows,
-					      &tcolumns);
+			parseProductionTestLimits(path_limits, &limit_file,
+						  MS_CX2_ADJV_MAP_MAX,
+						  &thresholds_max, &trows,
+						  &tcolumns);
 
 		if (ret < 0
 		    || (trows != msCompData.header.force_node - 1
@@ -2149,9 +2080,9 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 		}
 
 		ret =
-		    checkLimitsMapAdj(adjvert, msCompData.header.force_node - 1,
-				      msCompData.header.sense_node - 1,
-				      thresholds_max);
+			checkLimitsMapAdj(adjvert, msCompData.header.force_node - 1,
+					  msCompData.header.sense_node - 1,
+					  thresholds_max);
 
 		if (ret != OK) {
 			logError(1,
@@ -2165,7 +2096,7 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 			if (stop_on_fail)
 				goto ERROR;
 		} else
-			logError(1,
+			logError(0,
 				 "%s MS CX2 ADJ VERT TEST:.................OK \n\n",
 				 tag);
 
@@ -2177,15 +2108,12 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 		logError(0, "%s MS CX2 ADJ TEST:.................SKIPPED \n\n",
 			 tag);
 
+
 	if (todo->MutualCxTotal == 1 || todo->MutualCxTotalAdj == 1) {
 
 		if (todo->MutualCxTotal == 1) {
 			logError(1, "%s MS TOTAL CX MIN MAX TEST: \n", tag);
-			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      MS_TOTAL_CX_MAP_MIN,
-						      &thresholds_min, &trows,
-						      &tcolumns);
+			ret = parseProductionTestLimits(path_limits, &limit_file, MS_TOTAL_CX_MAP_MIN, &thresholds_min, &trows, &tcolumns);
 
 			if (ret < 0
 			    || (trows != totCompData.header.force_node
@@ -2197,11 +2125,7 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 				goto ERROR_LIMITS;
 			}
 
-			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      MS_TOTAL_CX_MAP_MAX,
-						      &thresholds_max, &trows,
-						      &tcolumns);
+			ret = parseProductionTestLimits(path_limits, &limit_file, MS_TOTAL_CX_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 			if (ret < 0
 			    || (trows != totCompData.header.force_node
@@ -2213,11 +2137,7 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 				goto ERROR_LIMITS;
 			}
 
-			ret =
-			    checkLimitsMapTotal(totCompData.node_data,
-						totCompData.header.force_node,
-						totCompData.header.sense_node,
-						thresholds_min, thresholds_max);
+			ret = checkLimitsMapTotal(totCompData.node_data, totCompData.header.force_node, totCompData.header.sense_node, thresholds_min, thresholds_max);
 
 			if (ret != OK) {
 				logError(1,
@@ -2231,7 +2151,7 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 				if (stop_on_fail)
 					goto ERROR;
 			} else
-				logError(1,
+				logError(0,
 					 "%s MS TOTAL CX MIN MAX TEST:.................OK \n\n",
 					 tag);
 
@@ -2240,17 +2160,18 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 			kfree(thresholds_max);
 			thresholds_max = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s MS TOTAL CX MIN MAX TEST:.................SKIPPED \n\n",
 				 tag);
+
 
 		if (todo->MutualCxTotalAdj == 1) {
 			logError(1, "%s MS TOTAL CX ADJ HORIZ TEST: \n", tag);
 			ret =
-			    computeAdjHorizTotal(totCompData.node_data,
-						 totCompData.header.force_node,
-						 totCompData.header.sense_node,
-						 &total_adjhor);
+				computeAdjHorizTotal(totCompData.node_data,
+						     totCompData.header.force_node,
+						     totCompData.header.sense_node,
+						     &total_adjhor);
 
 			if (ret < 0) {
 				logError(1,
@@ -2260,13 +2181,13 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 				goto ERROR_LIMITS;
 			}
 
-			logError(1, "%s MS TOTAL CX ADJ HORIZ computed! \n",
+			logError(0, "%s MS TOTAL CX ADJ HORIZ computed! \n",
 				 tag);
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      MS_TOTAL_CX_ADJH_MAP_MAX,
-						      &thresholds_max, &trows,
-						      &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  MS_TOTAL_CX_ADJH_MAP_MAX,
+							  &thresholds_max, &trows,
+							  &tcolumns);
 
 			if (ret < 0
 			    || (trows != totCompData.header.force_node
@@ -2280,12 +2201,12 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 			}
 
 			ret =
-			    checkLimitsMapAdjTotal(total_adjhor,
-						   totCompData.
-						   header.force_node,
-						   totCompData.
-						   header.sense_node - 1,
-						   thresholds_max);
+				checkLimitsMapAdjTotal(total_adjhor,
+						       totCompData.header.
+						       force_node,
+						       totCompData.header.
+						       sense_node - 1,
+						       thresholds_max);
 
 			if (ret != OK) {
 				logError(1,
@@ -2299,7 +2220,7 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 				if (stop_on_fail)
 					goto ERROR;
 			} else
-				logError(1,
+				logError(0,
 					 "%s MS TOTAL CX ADJ HORIZ TEST:.................OK \n\n",
 					 tag);
 
@@ -2307,12 +2228,12 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 			thresholds_max = NULL;
 			kfree(total_adjhor);
 			total_adjhor = NULL;
-			logError(1, "%s MS TOTAL CX ADJ VERT TEST: \n", tag);
+			logError(0, "%s MS TOTAL CX ADJ VERT TEST: \n", tag);
 			ret =
-			    computeAdjVertTotal(totCompData.node_data,
-						totCompData.header.force_node,
-						totCompData.header.sense_node,
-						&total_adjvert);
+				computeAdjVertTotal(totCompData.node_data,
+						    totCompData.header.force_node,
+						    totCompData.header.sense_node,
+						    &total_adjvert);
 
 			if (ret < 0) {
 				logError(1,
@@ -2325,10 +2246,10 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 			logError(0, "%s MS TOTAL CX ADJ VERT computed! \n",
 				 tag);
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      MS_TOTAL_CX_ADJV_MAP_MAX,
-						      &thresholds_max, &trows,
-						      &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  MS_TOTAL_CX_ADJV_MAP_MAX,
+							  &thresholds_max, &trows,
+							  &tcolumns);
 
 			if (ret < 0
 			    || (trows != totCompData.header.force_node - 1
@@ -2341,12 +2262,12 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 			}
 
 			ret =
-			    checkLimitsMapAdjTotal(total_adjvert,
-						   totCompData.
-						   header.force_node - 1,
-						   totCompData.
-						   header.sense_node - 1,
-						   thresholds_max);
+				checkLimitsMapAdjTotal(total_adjvert,
+						       totCompData.header.
+						       force_node - 1,
+						       totCompData.header.
+						       sense_node - 1,
+						       thresholds_max);
 
 			if (ret != OK) {
 				logError(1,
@@ -2360,7 +2281,7 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 				if (stop_on_fail)
 					goto ERROR;
 			} else
-				logError(1,
+				logError(0,
 					 "%s MS TOTAL CX ADJ VERT TEST:.................OK \n",
 					 tag);
 
@@ -2369,17 +2290,17 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 			kfree(total_adjvert);
 			total_adjvert = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s MS TOTAL CX ADJ TEST:.................SKIPPED \n",
 				 tag);
 
 		kfree(totCompData.node_data);
 		totCompData.node_data = NULL;
 	} else
-		logError(1, "%s MS TOTAL CX TEST:.................SKIPPED \n",
+		logError(0, "%s MS TOTAL CX TEST:.................SKIPPED \n",
 			 tag);
 
-	if ((todo->MutualCx1LP | todo->MutualCx2LP | todo->MutualCx2TotalLP |
+	if ((todo->MutualCx1LP | todo->MutualCx2LP | todo->MutualCx2AdjLP |
 	     todo->MutualCxTotalLP | todo->MutualCxTotalAdjLP) == 1) {
 		ret = production_test_ms_cx_lp(path_limits, stop_on_fail, todo);
 		if (ret < OK) {
@@ -2393,13 +2314,13 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 			return ret;
 		}
 	} else
-		logError(1, "%s MS KEY CX TEST:.................SKIPPED\n",
+		logError(0, "%s MS KEY CX TEST:.................SKIPPED\n",
 			 tag);
 
 	if ((todo->MutualKeyCx1 |
 	     todo->MutualKeyCx2 | todo->MutualKeyCxTotal) == 1) {
 		ret =
-		    production_test_ms_key_cx(path_limits, stop_on_fail, todo);
+			production_test_ms_key_cx(path_limits, stop_on_fail, todo);
 
 		if (ret < 0) {
 			count_fail += 1;
@@ -2412,14 +2333,14 @@ int production_test_ms_cx(char *path_limits, int stop_on_fail, TestToDo *todo)
 			return ret;
 		}
 	} else
-		logError(1, "%s MS KEY CX TEST:.................SKIPPED \n",
+		logError(0, "%s MS KEY CX TEST:.................SKIPPED \n",
 			 tag);
 
 ERROR:
 	logError(0, "%s \n", tag);
 
 	if (count_fail == 0) {
-		logError(1, "%s MS CX testes finished!.................OK\n",
+		logError(0, "%s MS CX testes finished!.................OK\n",
 			 tag);
 		kfree(msCompData.node_data);
 		msCompData.node_data = NULL;
@@ -2434,11 +2355,11 @@ ERROR:
 		print_frame_short(" TOT MS Init Data (Cx) =",
 				  array1dTo2d_short(totCompData.node_data,
 						    totCompData.node_data_size,
-						    totCompData.
-						    header.sense_node),
+						    totCompData.header.
+						    sense_node),
 				  totCompData.header.force_node,
 				  totCompData.header.sense_node);
-		logError(1,
+		logError(0,
 			 "%s MS CX testes finished!.................FAILED  fails_count = %d\n\n",
 			 tag, count_fail);
 
@@ -2556,12 +2477,13 @@ int production_test_ms_key_cx(char *path_limits, int stop_on_fail,
 	else
 		num_keys = msCompData.header.sense_node;
 
+
 	if (todo->MutualKeyCx1 == 1) {
 		logError(1, "%s MS KEY CX1 TEST: \n", tag);
 		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      MS_KEY_CX1_MIN_MAX, &thresholds,
-					      &trows, &tcolumns);
+			parseProductionTestLimits(path_limits, &limit_file,
+						  MS_KEY_CX1_MIN_MAX, &thresholds,
+						  &trows, &tcolumns);
 
 		if (ret < 0 || (trows != 1 || tcolumns != 2)) {
 			logError(1,
@@ -2573,8 +2495,8 @@ int production_test_ms_key_cx(char *path_limits, int stop_on_fail,
 
 		container = (short)msCompData.cx1;
 		ret =
-		    checkLimitsMinMax(&container, 1, 1, thresholds[0],
-				      thresholds[1]);
+			checkLimitsMinMax(&container, 1, 1, thresholds[0],
+					  thresholds[1]);
 
 		if (ret != OK) {
 			logError(1,
@@ -2600,11 +2522,7 @@ int production_test_ms_key_cx(char *path_limits, int stop_on_fail,
 
 	if (todo->MutualKeyCx2 == 1) {
 		logError(1, "%s MS KEY CX2 TEST: \n", tag);
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      MS_KEY_CX2_MAP_MIN,
-					      &thresholds_min, &trows,
-					      &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, MS_KEY_CX2_MAP_MIN, &thresholds_min, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != msCompData.header.force_node
@@ -2616,11 +2534,7 @@ int production_test_ms_key_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      MS_KEY_CX2_MAP_MAX,
-					      &thresholds_max, &trows,
-					      &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, MS_KEY_CX2_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != msCompData.header.force_node
@@ -2632,11 +2546,7 @@ int production_test_ms_key_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    checkLimitsMap(msCompData.node_data,
-				   msCompData.header.force_node,
-				   msCompData.header.sense_node, thresholds_min,
-				   thresholds_max);
+		ret = checkLimitsMap(msCompData.node_data, msCompData.header.force_node, msCompData.header.sense_node, thresholds_min, thresholds_max);
 
 		if (ret != OK) {
 			logError(1,
@@ -2662,11 +2572,12 @@ int production_test_ms_key_cx(char *path_limits, int stop_on_fail,
 		logError(0, "%s MS CX2 TEST:.................SKIPPED \n\n",
 			 tag);
 
+
 	if (todo->MutualKeyCxTotal == 1) {
 		logError(1, "%s MS KEY TOTAL CX TEST: \n", tag);
 		ret =
-		    readTotMutualSenseCompensationData(LOAD_PANEL_CX_TOT_MS_KEY,
-						       &totCompData);
+			readTotMutualSenseCompensationData(LOAD_PANEL_CX_TOT_MS_KEY,
+					&totCompData);
 
 		if (ret < 0) {
 			logError(1,
@@ -2676,11 +2587,7 @@ int production_test_ms_key_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      MS_KEY_TOTAL_CX_MAP_MIN,
-					      &thresholds_min, &trows,
-					      &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, MS_KEY_TOTAL_CX_MAP_MIN, &thresholds_min, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != totCompData.header.force_node
@@ -2692,11 +2599,7 @@ int production_test_ms_key_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      MS_KEY_TOTAL_CX_MAP_MAX,
-					      &thresholds_max, &trows,
-					      &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, MS_KEY_TOTAL_CX_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != totCompData.header.force_node
@@ -2708,11 +2611,7 @@ int production_test_ms_key_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    checkLimitsMapTotal(totCompData.node_data,
-					totCompData.header.force_node,
-					totCompData.header.sense_node,
-					thresholds_min, thresholds_max);
+		ret = checkLimitsMapTotal(totCompData.node_data, totCompData.header.force_node, totCompData.header.sense_node, thresholds_min, thresholds_max);
 
 		if (ret != OK) {
 			logError(1,
@@ -2820,8 +2719,7 @@ ERROR_LIMITS:
   * @param todo pointer to a TestToDo variable which select the test to do
   * @return OK if success or an error code which specify the type of error
   */
-int production_test_ms_cx_lp(char *path_limits, int stop_on_fail,
-			     TestToDo *todo)
+int production_test_ms_cx_lp(char *path_limits, int stop_on_fail, TestToDo *todo)
 {
 	int ret;
 	int count_fail = 0;
@@ -2843,11 +2741,11 @@ int production_test_ms_cx_lp(char *path_limits, int stop_on_fail,
 	u16 *total_adjhor = NULL;
 	u16 *total_adjvert = NULL;
 
+
 	/* MS CX TEST */
 	logError(0, "%s\n", tag);
 
-	ret =
-	    readMutualSenseCompensationData(LOAD_CX_MS_LOW_POWER, &msCompData);
+	ret = readMutualSenseCompensationData(LOAD_CX_MS_LOW_POWER, &msCompData);
 	/* read MS compensation data */
 	if (ret < 0) {
 		logError(1,
@@ -2881,7 +2779,7 @@ int production_test_ms_cx_lp(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		container = (u16) msCompData.cx1;
+		container = (u16)msCompData.cx1;
 		ret = checkLimitsMinMax(&container, 1, 1, thresholds[0],
 					thresholds[1]);
 		/* check the limits */
@@ -2889,8 +2787,7 @@ int production_test_ms_cx_lp(char *path_limits, int stop_on_fail,
 			logError(1,
 				 "%s production_test_data: checkLimitsMinMax MS LP CX1 failed... ERROR COUNT = %d\n",
 				 tag, ret);
-			logError(0,
-				 "%s MS LP CX1 TEST:.................FAIL\n\n",
+			logError(0, "%s MS LP CX1 TEST:.................FAIL\n\n",
 				 tag);
 			count_fail += 1;
 			if (stop_on_fail)
@@ -2908,10 +2805,9 @@ int production_test_ms_cx_lp(char *path_limits, int stop_on_fail,
 	if (todo->MutualCx2LP == 1) {
 		logError(1, "%s MS LP CX2 MIN MAX TEST:\n", tag);
 		ret = parseProductionTestLimits(path_limits, &limit_file,
-						MS_CX2_LP_MAP_MIN,
-						&thresholds_min, &trows,
-						&tcolumns);
-		/* load min thresholds */
+						MS_CX2_LP_MAP_MIN, &thresholds_min,
+						&trows, &tcolumns);
+						/* load min thresholds */
 		if (ret < 0 || (trows != msCompData.header.force_node ||
 				tcolumns != msCompData.header.sense_node)) {
 			logError(1,
@@ -2922,10 +2818,9 @@ int production_test_ms_cx_lp(char *path_limits, int stop_on_fail,
 		}
 
 		ret = parseProductionTestLimits(path_limits, &limit_file,
-						MS_CX2_LP_MAP_MAX,
-						&thresholds_max, &trows,
-						&tcolumns);
-		/* load max thresholds */
+						MS_CX2_LP_MAP_MAX, &thresholds_max,
+						&trows, &tcolumns);
+						/* load max thresholds */
 		if (ret < 0 || (trows != msCompData.header.force_node ||
 				tcolumns != msCompData.header.sense_node)) {
 			logError(1,
@@ -2939,7 +2834,7 @@ int production_test_ms_cx_lp(char *path_limits, int stop_on_fail,
 				     msCompData.header.force_node,
 				     msCompData.header.sense_node,
 				     thresholds_min, thresholds_max);
-		/* check the limits */
+					 /* check the limits */
 		if (ret != OK) {
 			logError(1,
 				 "%s production_test_data: checkLimitsMap MS LP CX2 MIN MAX failed... ERROR COUNT = %d\n",
@@ -2964,14 +2859,15 @@ int production_test_ms_cx_lp(char *path_limits, int stop_on_fail,
 			 "%s MS LP CX2 MIN MAX TEST:.................SKIPPED\n\n",
 			 tag);
 
-	if (todo->MutualCx2TotalLP == 1) {
+	if (todo->MutualCx2AdjLP == 1) {
 		logError(1, "%s MS LP CX2 ADJ TEST:\n", tag);
 		/* MS CX2 ADJ HORIZ */
 		logError(0, "%s MS LP CX2 ADJ HORIZ TEST:\n", tag);
 
 		ret = computeAdjHoriz(msCompData.node_data,
 				      msCompData.header.force_node,
-				      msCompData.header.sense_node, &adjhor);
+				      msCompData.header.sense_node,
+				      &adjhor);
 		if (ret < 0) {
 			logError(1,
 				 "%s production_test_data: computeAdjHoriz failed... ERROR %08X\n",
@@ -3022,7 +2918,8 @@ int production_test_ms_cx_lp(char *path_limits, int stop_on_fail,
 
 		ret = computeAdjVert(msCompData.node_data,
 				     msCompData.header.force_node,
-				     msCompData.header.sense_node, &adjvert);
+				     msCompData.header.sense_node,
+				     &adjvert);
 		if (ret < 0) {
 			logError(1,
 				 "%s production_test_data: computeAdjVert failed... ERROR %08X\n",
@@ -3068,8 +2965,7 @@ int production_test_ms_cx_lp(char *path_limits, int stop_on_fail,
 		kfree(adjvert);
 		adjvert = NULL;
 	} else
-		logError(0,
-			 "%s MS LP CX2 ADJ TEST:.................SKIPPED\n\n",
+		logError(0, "%s MS LP CX2 ADJ TEST:.................SKIPPED\n\n",
 			 tag);
 
 	/* START OF TOTAL CHECK */
@@ -3141,15 +3037,15 @@ int production_test_ms_cx_lp(char *path_limits, int stop_on_fail,
 				 "%s MS TOTAL CX LP MIN MAX TEST:.................SKIPPED\n\n",
 				 tag);
 
+
 		if (todo->MutualCxTotalAdjLP == 1) {
 			/* MS TOTAL CX ADJ HORIZ */
 			logError(1, "%s MS TOTAL CX ADJ HORIZ LP TEST:\n", tag);
 
 			ret = computeAdjHorizTotal(totCompData.node_data,
-						   totCompData.header.
-						   force_node,
-						   totCompData.header.
-						   sense_node, &total_adjhor);
+						   totCompData.header.force_node,
+						   totCompData.header.sense_node,
+						   &total_adjhor);
 			if (ret < 0) {
 				logError(1,
 					 "%s production_test_data: computeAdjHoriz failed... ERROR %08X\n",
@@ -3177,10 +3073,10 @@ int production_test_ms_cx_lp(char *path_limits, int stop_on_fail,
 			}
 
 			ret = checkLimitsMapAdjTotal(total_adjhor,
-						     totCompData.
-						     header.force_node,
-						     totCompData.
-						     header.sense_node - 1,
+						     totCompData.header.
+						     force_node,
+						     totCompData.header.
+						     sense_node - 1,
 						     thresholds_max);
 			if (ret != OK) {
 				logError(1,
@@ -3216,8 +3112,7 @@ int production_test_ms_cx_lp(char *path_limits, int stop_on_fail,
 				ret |= ERROR_PROD_TEST_DATA;
 				goto ERROR_LIMITS;
 			}
-			logError(0, "%s MS TOTAL CX ADJ VERT LP computed!\n",
-				 tag);
+			logError(0, "%s MS TOTAL CX ADJ VERT LP computed!\n", tag);
 
 			ret = parseProductionTestLimits(path_limits,
 							&limit_file,
@@ -3235,10 +3130,10 @@ int production_test_ms_cx_lp(char *path_limits, int stop_on_fail,
 			}
 
 			ret = checkLimitsMapAdjTotal(total_adjvert,
-						     totCompData.
-						     header.force_node - 1,
-						     totCompData.
-						     header.sense_node - 1,
+						     totCompData.header.
+						     force_node - 1,
+						     totCompData.header.
+						     sense_node - 1,
 						     thresholds_max);
 			if (ret != OK) {
 				logError(1,
@@ -3270,6 +3165,8 @@ int production_test_ms_cx_lp(char *path_limits, int stop_on_fail,
 		logError(0, "%s MS TOTAL CX LP TEST:.................SKIPPED\n",
 			 tag);
 
+
+
 ERROR:
 	logError(0, "%s\n", tag);
 	if (count_fail == 0) {
@@ -3279,17 +3176,16 @@ ERROR:
 		msCompData.node_data = NULL;
 		return OK;
 	} else {
-		print_frame_i8("MS LP Init Data (Cx2) =",
-			       array1dTo2d_i8(msCompData.node_data,
-					      msCompData.node_data_size,
-					      msCompData.header.sense_node),
+		print_frame_i8("MS LP Init Data (Cx2) =", array1dTo2d_i8(
+				       msCompData.node_data,
+				       msCompData.node_data_size,
+				       msCompData.header.sense_node),
 			       msCompData.header.force_node,
 			       msCompData.header.sense_node);
-		print_frame_short(" TOT MS LP Init Data (Cx) =",
-				  array1dTo2d_short(totCompData.node_data,
-						    totCompData.node_data_size,
-						    totCompData.header.
-						    sense_node),
+		print_frame_short(" TOT MS LP Init Data (Cx) =", array1dTo2d_short(
+					  totCompData.node_data,
+					  totCompData.node_data_size,
+					  totCompData.header.sense_node),
 				  totCompData.header.force_node,
 				  totCompData.header.sense_node);
 		logError(0,
@@ -3375,20 +3271,20 @@ ERROR_LIMITS:
 }
 
 int production_test_ss_hover_raw(char *path_limits, int stop_on_fail,
-				 TestToDo *todo)
-{
+			      TestToDo *todo){
 	int ret;
 	int rows, columns;
 	int *thresholds = NULL;
 	int trows, tcolumns;
-	u8 hover_cnt[4] = { 0xa8, 0x0b, 0x01, 0x00 };
+	u8 hover_cnt[4] = {0xa8, 0x0b, 0x01, 0x00};
 
 	SelfSenseFrame ssHoverRawFrame;
 	int count_fail = 0;
 
 	ret = fts_write_dma_safe(hover_cnt, sizeof(hover_cnt));
 	if (ret != OK) {
-		logError(1, "%s hover clear count ERROR = %d\n", tag, ret);
+		logError(1,
+			 "%s hover clear count ERROR = %d\n",tag, ret);
 		goto ERROR_LIMITS;
 	}
 
@@ -3408,7 +3304,8 @@ int production_test_ss_hover_raw(char *path_limits, int stop_on_fail,
 		ret = parseProductionTestLimits(path_limits,
 						&limit_file,
 						SS_HOVER_RAW_FORCE_MIN_MAX,
-						&thresholds, &trows, &tcolumns);
+						&thresholds, &trows,
+						&tcolumns);
 		if (ret < 0 || (trows != 1 || tcolumns != 2)) {
 			logError(1,
 				 "%s production_test_data: parseProductionTestLimits SS_HOVER_RAW_FORCE_MIN_MAX failed... ERROR %08X\n",
@@ -3417,26 +3314,23 @@ int production_test_ss_hover_raw(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    checkLimitsMinMax(ssHoverRawFrame.force_data, rows, columns,
-				      thresholds[0], thresholds[1]);
+		ret = checkLimitsMinMax(ssHoverRawFrame.force_data, rows,columns, thresholds[0],thresholds[1]);
 		if (ret != OK) {
 			logError(1,
-				 "%s production_test_data: checkLimitsMinMax SS HOVER RAW FORCE failed... ERROR COUNT = %d\n",
-				 tag, ret);
+				 "%s production_test_data: checkLimitsMinMax SS HOVER RAW FORCE failed... ERROR COUNT = %d\n",tag, ret);
 			logError(0,
-				 "%s SS Hover RAW FORCE MIN MAX TEST:.................FAIL\n\n",
-				 tag);
+				 "%s SS Hover RAW FORCE MIN MAX TEST:.................FAIL\n\n", tag);
 			count_fail += 1;
 			print_frame_short("SS Raw force frame =",
-					  array1dTo2d_short(ssHoverRawFrame.
-							    force_data,
-							    rows * columns,
-							    columns), rows,
+					  array1dTo2d_short(
+						  ssHoverRawFrame.force_data,
+						  rows *
+						  columns,
+						  columns), rows,
 					  columns);
 			if (stop_on_fail) {
 				ret = ERROR_PROD_TEST_DATA |
-				    ERROR_TEST_CHECK_FAIL;
+				      ERROR_TEST_CHECK_FAIL;
 				goto ERROR_LIMITS;
 			}
 		} else
@@ -3447,9 +3341,9 @@ int production_test_ss_hover_raw(char *path_limits, int stop_on_fail,
 		kfree(thresholds);
 		thresholds = NULL;
 	} else
-		logError(0,
-			 "%s SS RAW FORCE MIN MAX TEST:.................SKIPPED\n\n",
-			 tag);
+			logError(0,
+				 "%s SS RAW FORCE MIN MAX TEST:.................SKIPPED\n\n",
+				 tag);
 	logError(0, "%s\n", tag);
 	/* SS Hover RAW SENSE TEST */
 	logError(0, "%s SS Hover RAW SENSE TEST:\n", tag);
@@ -3461,7 +3355,8 @@ int production_test_ss_hover_raw(char *path_limits, int stop_on_fail,
 		ret = parseProductionTestLimits(path_limits,
 						&limit_file,
 						SS_HOVER_RAW_SENSE_MIN_MAX,
-						&thresholds, &trows, &tcolumns);
+						&thresholds, &trows,
+						&tcolumns);
 		if (ret < 0 || (trows != 1 || tcolumns != 2)) {
 			logError(1,
 				 "%s production_test_data: parseProductionTestLimits SS_RAW_SENSE_MIN_MAX failed... ERROR %08X\n",
@@ -3470,9 +3365,7 @@ int production_test_ss_hover_raw(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    checkLimitsMinMax(ssHoverRawFrame.sense_data, rows, columns,
-				      thresholds[0], thresholds[1]);
+		ret = checkLimitsMinMax(ssHoverRawFrame.sense_data, rows,columns, thresholds[0],thresholds[1]);
 		if (ret != OK) {
 			logError(1,
 				 "%s production_test_data: checkLimitsMinMax SS Hover RAW SENSE failed... ERROR COUNT = %d\n",
@@ -3482,20 +3375,20 @@ int production_test_ss_hover_raw(char *path_limits, int stop_on_fail,
 				 tag);
 			count_fail += 1;
 			print_frame_short("SS Hover Raw sense frame =",
-					  array1dTo2d_short(ssHoverRawFrame.
-							    sense_data,
-							    rows * columns,
-							    columns), rows,
+					  array1dTo2d_short(
+						  ssHoverRawFrame.sense_data,
+						  rows *
+						  columns,
+						  columns), rows,
 					  columns);
 			if (stop_on_fail) {
 				ret = ERROR_PROD_TEST_DATA |
-				    ERROR_TEST_CHECK_FAIL;
+					  ERROR_TEST_CHECK_FAIL;
 				goto ERROR_LIMITS;
 			}
 		} else
 			logError(0,
-				 "%s SS Hover RAW SENSE MIN MAX TEST:.................OK\n",
-				 tag);
+				 "%s SS Hover RAW SENSE MIN MAX TEST:.................OK\n",tag);
 
 		kfree(thresholds);
 		thresholds = NULL;
@@ -3526,12 +3419,10 @@ int production_test_ss_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 	int rows, columns;
 	SelfSenseFrame ssRawFrame;
 	int *thresholds = NULL;
-	int *thresholds_min = NULL;
-	int *thresholds_max = NULL;
 	int trows, tcolumns;
-	logError(1, "%s %s begin \n", tag, __func__);
+	logError(0, "%s \n", tag);
 	/******************************* Self Sense Test *******************************/
-	logError(1, "%s Getting SS Frame... \n", tag);
+	logError(0, "%s Getting SS Frame... \n", tag);
 	ret = setScanMode(SCAN_MODE_LOCKED, LOCKED_ACTIVE);
 	mdelay(WAIT_FOR_FRESH_FRAMES);
 	ret |= setScanMode(SCAN_MODE_ACTIVE, 0x00);
@@ -3545,18 +3436,19 @@ int production_test_ss_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 		return (ret | ERROR_PROD_TEST_DATA);
 	}
 
-	if (todo->SelfForceRaw == 1 || todo->SelfForceRawGap == 1 || todo->SelfForceRawMap == 1) {
+
+	if (todo->SelfForceRaw == 1 || todo->SelfForceRawGap == 1) {
 		columns = 1;
 		rows = ssRawFrame.header.force_node;
-		logError(1, "%s SS RAW FORCE MIN MAX TEST:  \n", tag);
+		logError(0, "%s SS RAW FORCE MIN MAX TEST:  \n", tag);
 
 		if (todo->SelfForceRaw == 1) {
 			logError(1, "%s SS RAW FORCE MIN MAX TEST:  \n", tag);
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_RAW_FORCE_MIN_MAX,
-						      &thresholds, &trows,
-						      &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  SS_RAW_FORCE_MIN_MAX,
+							  &thresholds, &trows,
+							  &tcolumns);
 
 			if (ret < 0 || (trows != 1 || tcolumns != 2)) {
 				logError(1,
@@ -3567,9 +3459,9 @@ int production_test_ss_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 			}
 
 			ret =
-			    checkLimitsMinMax(ssRawFrame.force_data, rows,
-					      columns, thresholds[0],
-					      thresholds[1]);
+				checkLimitsMinMax(ssRawFrame.force_data, rows,
+						  columns, thresholds[0],
+						  thresholds[1]);
 
 			if (ret != OK) {
 				logError(1,
@@ -3587,95 +3479,31 @@ int production_test_ss_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 
 				if (stop_on_fail) {
 					ret =
-					    ERROR_PROD_TEST_DATA |
-					    ERROR_TEST_CHECK_FAIL;
+						ERROR_PROD_TEST_DATA |
+						ERROR_TEST_CHECK_FAIL;
 					goto ERROR_LIMITS;
 				}
 			} else
-				logError(1,
+				logError(0,
 					 "%s SS RAW (PROXIMITY) FORCE MIN MAX TEST:.................OK \n\n",
 					 tag);
 
 			kfree(thresholds);
 			thresholds = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS RAW (PROXIMITY) FORCE MIN MAX TEST:.................SKIPPED \n\n",
 				 tag);
 
-		logError(1, "%s SS RAW FORCE MAP MIN MAX TEST:\n", tag);
-		if (todo->SelfForceRawMap == 1) {
-			ret = parseProductionTestLimits(path_limits,
-				&limit_file, SS_RAW_FORCE_EACH_NODE_MIN,
-				&thresholds_min, &trows, &tcolumns);
-			if (ret < OK || (trows != rows ||
-					 tcolumns != columns)) {
-				logError(1,
-					 "%s production_test_data: parseProductionTestLimits SS_RAW_FORCE_EACH_NODE_MIN failed... ERROR %08X\n",
-					 tag, ERROR_PROD_TEST_DATA);
-				ret |= ERROR_PROD_TEST_DATA;
-				goto ERROR_LIMITS;
-			}
-			ret = parseProductionTestLimits(path_limits,
-				&limit_file, SS_RAW_FORCE_EACH_NODE_MAX,
-				&thresholds_max, &trows, &tcolumns);
-			if (ret < OK || (trows != rows ||
-					 tcolumns != columns)) {
-				logError(1,
-					 "%s production_test_data: parseProductionTestLimits SS_RAW_FORCE_EACH_NODE_MAX failed... ERROR %08X\n",
-					 tag, ERROR_PROD_TEST_DATA);
-				ret |= ERROR_PROD_TEST_DATA;
-				goto ERROR_LIMITS;
-			}
-
-			ret = checkLimitsMapTotal(ssRawFrame.force_data, rows,
-						columns, thresholds_min,
-						thresholds_max);
-			if (ret != OK) {
-				logError(1,
-					 "%s production_test_data: checkLimitsMinMax SS RAW FORCE MAP failed... ERROR COUNT = %d\n",
-					 tag, ret);
-				logError(0,
-					 "%s SS RAW FORCE MAP MIN MAX TEST:.................FAIL\n\n",
-					 tag);
-				count_fail += 1;
-				print_frame_short("SS Raw force frame =",
-						  array1dTo2d_short(
-							  ssRawFrame.force_data,
-							  rows *
-							  columns,
-							  columns), rows,
-						  columns);
-				if (stop_on_fail) {
-					ret = ERROR_PROD_TEST_DATA |
-					      ERROR_TEST_CHECK_FAIL;
-					goto ERROR_LIMITS;
-				}
-			} else
-				logError(1,
-					 "%s SS RAW FORCE MAP MIN MAX TEST:.................OK\n\n",
-					 tag);
-
-			if (thresholds_min != NULL) {
-				kfree(thresholds_min);
-				thresholds_min = NULL;
-			}
-			if (thresholds_max != NULL) {
-				kfree(thresholds_max);
-				thresholds_max = NULL;
-			}
-		} else
-			logError(1,
-				 "%s SS RAW FORCE MAP MIN MAX TEST:.................SKIPPED\n\n",
-				 tag);
+		logError(0, "%s \n", tag);
 
 		if (todo->SelfForceRawGap == 1) {
 			logError(1, "%s SS RAW FORCE GAP TEST:  \n", tag);
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_RAW_FORCE_GAP,
-						      &thresholds, &trows,
-						      &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  SS_RAW_FORCE_GAP,
+							  &thresholds, &trows,
+							  &tcolumns);
 
 			if (ret < 0 || (trows != 1 || tcolumns != 1)) {
 				logError(1,
@@ -3686,8 +3514,8 @@ int production_test_ss_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 			}
 
 			ret =
-			    checkLimitsGap(ssRawFrame.force_data, rows, columns,
-					   thresholds[0]);
+				checkLimitsGap(ssRawFrame.force_data, rows, columns,
+					       thresholds[0]);
 
 			if (ret != OK) {
 				logError(1,
@@ -3705,42 +3533,42 @@ int production_test_ss_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 
 				if (stop_on_fail) {
 					ret =
-					    ERROR_PROD_TEST_DATA |
-					    ERROR_TEST_CHECK_FAIL;
+						ERROR_PROD_TEST_DATA |
+						ERROR_TEST_CHECK_FAIL;
 					goto ERROR_LIMITS;
 				}
 			} else
-				logError(1,
+				logError(0,
 					 "%s SS RAW (PROXIMITY) FORCE GAP TEST:.................OK \n\n",
 					 tag);
 
 			kfree(thresholds);
 			thresholds = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS RAW (PROXIMITY) FORCE GAP TEST:.................SKIPPED \n\n",
 				 tag);
 
 		kfree(ssRawFrame.force_data);
 		ssRawFrame.force_data = NULL;
 	} else
-		logError(1,
+		logError(0,
 			 "%s SS RAW (PROXIMITY) FORCE TEST:.................SKIPPED \n\n",
 			 tag);
 
 	logError(0, "%s \n", tag);
 
-	if (todo->SelfSenseRaw == 1 || todo->SelfSenseRawGap == 1 || todo->SelfSenseRawMap == 1) {
+	if (todo->SelfSenseRaw == 1 || todo->SelfSenseRawGap == 1) {
 		columns = ssRawFrame.header.sense_node;
 		rows = 1;
 
 		if (todo->SelfSenseRaw == 1) {
 			logError(1, "%s SS RAW SENSE MIN MAX TEST:  \n", tag);
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_RAW_SENSE_MIN_MAX,
-						      &thresholds, &trows,
-						      &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  SS_RAW_SENSE_MIN_MAX,
+							  &thresholds, &trows,
+							  &tcolumns);
 
 			if (ret < 0 || (trows != 1 || tcolumns != 2)) {
 				logError(1,
@@ -3751,9 +3579,9 @@ int production_test_ss_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 			}
 
 			ret =
-			    checkLimitsMinMax(ssRawFrame.sense_data, rows,
-					      columns, thresholds[0],
-					      thresholds[1]);
+				checkLimitsMinMax(ssRawFrame.sense_data, rows,
+						  columns, thresholds[0],
+						  thresholds[1]);
 
 			if (ret != OK) {
 				logError(1,
@@ -3771,96 +3599,31 @@ int production_test_ss_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 
 				if (stop_on_fail) {
 					ret =
-					    ERROR_PROD_TEST_DATA |
-					    ERROR_TEST_CHECK_FAIL;
+						ERROR_PROD_TEST_DATA |
+						ERROR_TEST_CHECK_FAIL;
 					goto ERROR_LIMITS;
 				}
 			} else
-				logError(1,
+				logError(0,
 					 "%s SS RAW (PROXIMITY) SENSE MIN MAX TEST:.................OK \n",
 					 tag);
 
 			kfree(thresholds);
 			thresholds = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS RAW (PROXIMITY) SENSE MIN MAX TEST:.................SKIPPED \n",
 				 tag);
 
-		logError(1, "%s SS RAW SENSE MAP MIN MAX TEST:\n", tag);
-		if (todo->SelfSenseRawMap == 1) {
-			ret = parseProductionTestLimits(path_limits,
-				&limit_file, SS_RAW_SENSE_EACH_NODE_MIN,
-				&thresholds_min, &trows, &tcolumns);
-			if (ret < OK || (trows != rows ||
-					 tcolumns != columns)) {
-				logError(1,
-					 "%s production_test_data: parseProductionTestLimits SS_RAW_SENSE_EACH_NODE_MIN failed... ERROR %08X\n",
-					 tag, ERROR_PROD_TEST_DATA);
-				ret |= ERROR_PROD_TEST_DATA;
-				goto ERROR_LIMITS;
-			}
-			ret = parseProductionTestLimits(path_limits,
-				&limit_file, SS_RAW_SENSE_EACH_NODE_MAX,
-				&thresholds_max, &trows, &tcolumns);
-			if (ret < OK || (trows != rows ||
-					 tcolumns != columns)) {
-				logError(1,
-					 "%s production_test_data: parseProductionTestLimits SS_RAW_SENSE_EACH_NODE_MAX failed... ERROR %08X\n",
-					 tag, ERROR_PROD_TEST_DATA);
-				ret |= ERROR_PROD_TEST_DATA;
-				goto ERROR_LIMITS;
-			}
-
-			ret = checkLimitsMapTotal(ssRawFrame.sense_data, rows,
-						columns, thresholds_min,
-						thresholds_max);
-			if (ret != OK) {
-				logError(1,
-					 "%s production_test_data: checkLimitsMinMax SS RAW SENSE MAP failed... ERROR COUNT = %d\n",
-					 tag, ret);
-				logError(0,
-					 "%s SS RAW SENSE MAP MIN MAX TEST:.................FAIL\n\n",
-					 tag);
-				count_fail += 1;
-				print_frame_short("SS Raw sense frame =",
-						  array1dTo2d_short(
-							  ssRawFrame.sense_data,
-							  rows *
-							  columns,
-							  columns), rows,
-						  columns);
-				if (stop_on_fail) {
-					ret = ERROR_PROD_TEST_DATA |
-					      ERROR_TEST_CHECK_FAIL;
-					goto ERROR_LIMITS;
-				}
-			} else
-				logError(1,
-					 "%s SS RAW SENSE MAP MIN MAX TEST:.................OK\n\n",
-					 tag);
-
-			if (thresholds_min != NULL) {
-				kfree(thresholds_min);
-				thresholds_min = NULL;
-			}
-			if (thresholds_max != NULL) {
-				kfree(thresholds_max);
-				thresholds_max = NULL;
-			}
-		} else
-			logError(1,
-				 "%s SS RAW SENSE MAP MIN MAX TEST:.................SKIPPED\n\n",
-				 tag);
 		logError(0, "%s \n", tag);
 
 		if (todo->SelfSenseRawGap == 1) {
 			logError(1, "%s SS RAW SENSE GAP TEST:  \n", tag);
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_RAW_SENSE_GAP,
-						      &thresholds, &trows,
-						      &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  SS_RAW_SENSE_GAP,
+							  &thresholds, &trows,
+							  &tcolumns);
 
 			if (ret < 0 || (trows != 1 || tcolumns != 1)) {
 				logError(1,
@@ -3871,8 +3634,8 @@ int production_test_ss_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 			}
 
 			ret =
-			    checkLimitsGap(ssRawFrame.sense_data, rows, columns,
-					   thresholds[0]);
+				checkLimitsGap(ssRawFrame.sense_data, rows, columns,
+					       thresholds[0]);
 
 			if (ret != OK) {
 				logError(1,
@@ -3890,19 +3653,19 @@ int production_test_ss_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 
 				if (stop_on_fail) {
 					ret =
-					    ERROR_PROD_TEST_DATA |
-					    ERROR_TEST_CHECK_FAIL;
+						ERROR_PROD_TEST_DATA |
+						ERROR_TEST_CHECK_FAIL;
 					goto ERROR_LIMITS;
 				}
 			} else
-				logError(1,
+				logError(0,
 					 "%s SS RAW (PROXIMITY) SENSE GAP TEST:.................OK \n",
 					 tag);
 
 			kfree(thresholds);
 			thresholds = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS RAW (PROXIMITY) SENSE GAP TEST:.................SKIPPED \n",
 				 tag);
 
@@ -3919,9 +3682,7 @@ int production_test_ss_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 		count_fail += 1;
 	}
 	if (todo->SelfHoverForceRaw == 1 || todo->SelfHoverSenceRaw) {
-		ret =
-		    production_test_ss_hover_raw(path_limits, stop_on_fail,
-						 todo);
+		ret = production_test_ss_hover_raw(path_limits, stop_on_fail, todo);
 		if (ret < OK) {
 			logError(1,
 				 "%s production_test_data: production_test_ss_hover_raw failed... ERROR = %08X\n",
@@ -3933,11 +3694,11 @@ int production_test_ss_raw(char *path_limits, int stop_on_fail, TestToDo *todo)
 	logError(0, "%s \n", tag);
 
 	if (count_fail == 0) {
-		logError(1, "%s SS RAW testes finished!.................OK\n\n",
+		logError(0, "%s SS RAW testes finished!.................OK\n\n",
 			 tag);
 		return OK;
 	} else {
-		logError(1,
+		logError(0,
 			 "%s SS RAW testes finished!.................FAILED  fails_count = %d\n\n",
 			 tag, count_fail);
 		return (ERROR_TEST_CHECK_FAIL | ERROR_PROD_TEST_DATA);
@@ -3988,18 +3749,18 @@ int production_test_ss_raw_lp(char *path_limits, int stop_on_fail,
 		return (ret | ERROR_PROD_TEST_DATA);
 	}
 
+
 	if (todo->SelfForceRawLP == 1 || todo->SelfForceRawGapLP == 1) {
 		columns = 1;
 		rows = ssRawFrame.header.force_node;
 
 		if (todo->SelfForceRawLP == 1) {
-			logError(1, "%s SS RAW LP FORCE MIN MAX TEST:  \n",
-				 tag);
+			logError(1, "%s SS RAW LP FORCE MIN MAX TEST:  \n", tag);
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_RAW_LP_FORCE_MIN_MAX,
-						      &thresholds, &trows,
-						      &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  SS_RAW_LP_FORCE_MIN_MAX,
+							  &thresholds, &trows,
+							  &tcolumns);
 
 			if (ret < 0 || (trows != 1 || tcolumns != 2)) {
 				logError(1,
@@ -4010,9 +3771,9 @@ int production_test_ss_raw_lp(char *path_limits, int stop_on_fail,
 			}
 
 			ret =
-			    checkLimitsMinMax(ssRawFrame.force_data, rows,
-					      columns, thresholds[0],
-					      thresholds[1]);
+				checkLimitsMinMax(ssRawFrame.force_data, rows,
+						  columns, thresholds[0],
+						  thresholds[1]);
 
 			if (ret != OK) {
 				logError(1,
@@ -4030,8 +3791,8 @@ int production_test_ss_raw_lp(char *path_limits, int stop_on_fail,
 
 				if (stop_on_fail) {
 					ret =
-					    ERROR_PROD_TEST_DATA |
-					    ERROR_TEST_CHECK_FAIL;
+						ERROR_PROD_TEST_DATA |
+						ERROR_TEST_CHECK_FAIL;
 					goto ERROR_LIMITS;
 				}
 			} else
@@ -4051,10 +3812,10 @@ int production_test_ss_raw_lp(char *path_limits, int stop_on_fail,
 		if (todo->SelfForceRawGapLP == 1) {
 			logError(1, "%s SS RAW LP FORCE GAP TEST:  \n", tag);
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_RAW_LP_FORCE_GAP,
-						      &thresholds, &trows,
-						      &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  SS_RAW_LP_FORCE_GAP,
+							  &thresholds, &trows,
+							  &tcolumns);
 
 			if (ret < OK || (trows != 1 || tcolumns != 1)) {
 				logError(1,
@@ -4065,8 +3826,8 @@ int production_test_ss_raw_lp(char *path_limits, int stop_on_fail,
 			}
 
 			ret =
-			    checkLimitsGap(ssRawFrame.force_data, rows, columns,
-					   thresholds[0]);
+				checkLimitsGap(ssRawFrame.force_data, rows, columns,
+					       thresholds[0]);
 
 			if (ret != OK) {
 				logError(1,
@@ -4084,8 +3845,8 @@ int production_test_ss_raw_lp(char *path_limits, int stop_on_fail,
 
 				if (stop_on_fail) {
 					ret =
-					    ERROR_PROD_TEST_DATA |
-					    ERROR_TEST_CHECK_FAIL;
+						ERROR_PROD_TEST_DATA |
+						ERROR_TEST_CHECK_FAIL;
 					goto ERROR_LIMITS;
 				}
 			} else
@@ -4115,13 +3876,12 @@ int production_test_ss_raw_lp(char *path_limits, int stop_on_fail,
 		logError(0, "%s SS RAW LP SENSE MIN MAX TEST:  \n", tag);
 
 		if (todo->SelfSenseRawLP == 1) {
-			logError(1, "%s SS RAW LP SENSE MIN MAX TEST:  \n",
-				 tag);
+			logError(1, "%s SS RAW LP SENSE MIN MAX TEST:  \n", tag);
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_RAW_LP_SENSE_MIN_MAX,
-						      &thresholds, &trows,
-						      &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  SS_RAW_LP_SENSE_MIN_MAX,
+							  &thresholds, &trows,
+							  &tcolumns);
 
 			if (ret < OK || (trows != 1 || tcolumns != 2)) {
 				logError(1,
@@ -4132,9 +3892,9 @@ int production_test_ss_raw_lp(char *path_limits, int stop_on_fail,
 			}
 
 			ret =
-			    checkLimitsMinMax(ssRawFrame.sense_data, rows,
-					      columns, thresholds[0],
-					      thresholds[1]);
+				checkLimitsMinMax(ssRawFrame.sense_data, rows,
+						  columns, thresholds[0],
+						  thresholds[1]);
 
 			if (ret != OK) {
 				logError(1,
@@ -4152,8 +3912,8 @@ int production_test_ss_raw_lp(char *path_limits, int stop_on_fail,
 
 				if (stop_on_fail) {
 					ret =
-					    ERROR_PROD_TEST_DATA |
-					    ERROR_TEST_CHECK_FAIL;
+						ERROR_PROD_TEST_DATA |
+						ERROR_TEST_CHECK_FAIL;
 					goto ERROR_LIMITS;
 				}
 			} else
@@ -4173,10 +3933,10 @@ int production_test_ss_raw_lp(char *path_limits, int stop_on_fail,
 		if (todo->SelfSenseRawGapLP == 1) {
 			logError(1, "%s SS RAW LP SENSE GAP TEST:  \n", tag);
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_RAW_LP_SENSE_GAP,
-						      &thresholds, &trows,
-						      &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  SS_RAW_LP_SENSE_GAP,
+							  &thresholds, &trows,
+							  &tcolumns);
 
 			if (ret < OK || (trows != 1 || tcolumns != 1)) {
 				logError(1,
@@ -4187,8 +3947,8 @@ int production_test_ss_raw_lp(char *path_limits, int stop_on_fail,
 			}
 
 			ret =
-			    checkLimitsGap(ssRawFrame.sense_data, rows, columns,
-					   thresholds[0]);
+				checkLimitsGap(ssRawFrame.sense_data, rows, columns,
+					       thresholds[0]);
 
 			if (ret != OK) {
 				logError(1,
@@ -4206,8 +3966,8 @@ int production_test_ss_raw_lp(char *path_limits, int stop_on_fail,
 
 				if (stop_on_fail) {
 					ret =
-					    ERROR_PROD_TEST_DATA |
-					    ERROR_TEST_CHECK_FAIL;
+						ERROR_PROD_TEST_DATA |
+						ERROR_TEST_CHECK_FAIL;
 					goto ERROR_LIMITS;
 				}
 			} else
@@ -4254,9 +4014,7 @@ ERROR_LIMITS:
 	return ret;
 }
 
-int production_test_ss_hover_ix(char *path_limits, int stop_on_fail,
-				TestToDo *todo)
-{
+int production_test_ss_hover_ix(char *path_limits, int stop_on_fail,TestToDo *todo){
 	TotSelfSenseData ssHoverCompData;
 	int ret;
 	int trows, tcolumns;
@@ -4265,29 +4023,20 @@ int production_test_ss_hover_ix(char *path_limits, int stop_on_fail,
 	int count_fail = 0;
 
 	/* ret = readSelfSenseCompensationData(LOAD_CX_SS_HOVER, &ssHoverCompData); */
-	ret =
-	    readTotSelfSenseCompensationData(STAPI_HOST_DATA_ID_PANEL_CX_SS_HVR,
-					     &ssHoverCompData);
+	ret = readTotSelfSenseCompensationData(STAPI_HOST_DATA_ID_PANEL_CX_SS_HVR, &ssHoverCompData);
 	/* read the SS compensation data */
 	if (ret < 0) {
 		logError(1,
-			 "%s production_test_data: readSelfSenseCompensationData failed... ERROR %08X\n",
-			 tag, ERROR_PROD_TEST_DATA);
+		"%s production_test_data: readSelfSenseCompensationData failed... ERROR %08X\n",tag, ERROR_PROD_TEST_DATA);
 		return ret | ERROR_PROD_TEST_DATA;
 	}
 
 	logError(0, "%s SS Hover TOTAL IX FORCE TEST:\n", tag);
 	logError(0, "%s SS Hover TOTAL IX FORCE MIN MAX TEST:\n", tag);
 	if (todo->SelfHoverForceIxTotal == 1) {
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_HOVER_TOTAL_IX_FORCE_MAP_MIN,
-					      &thresholds_min, &trows,
-					      &tcolumns);
-		/* load the min thresholds */
-		if (ret < 0
-		    || (trows != ssHoverCompData.header.force_node
-			|| tcolumns != 1)) {
+		ret = parseProductionTestLimits(path_limits,&limit_file,SS_HOVER_TOTAL_IX_FORCE_MAP_MIN,&thresholds_min,&trows, &tcolumns);
+					/* load the min thresholds */
+		if (ret < 0 || (trows != ssHoverCompData.header.force_node ||tcolumns != 1)) {
 			logError(1,
 				 "%s production_test_data: parseProductionTestLimits SS_TOTAL_IX_FORCE_MAP_MIN failed... ERROR %08X\n",
 				 tag, ERROR_PROD_TEST_DATA);
@@ -4295,12 +4044,8 @@ int production_test_ss_hover_ix(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_TOTAL_IX_FORCE_MAP_MAX,
-					      &thresholds_max, &trows,
-					      &tcolumns);
-		/* load the max thresholds */
+		ret = parseProductionTestLimits(path_limits,&limit_file,SS_TOTAL_IX_FORCE_MAP_MAX,&thresholds_max,&trows, &tcolumns);
+					/* load the max thresholds */
 		if (ret < 0 || (trows !=
 				ssHoverCompData.header.force_node ||
 				tcolumns != 1)) {
@@ -4311,10 +4056,10 @@ int production_test_ss_hover_ix(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    checkLimitsMapTotalFromU(ssHoverCompData.ix_fm,
-					     ssHoverCompData.header.force_node,
-					     1, thresholds_min, thresholds_max);
+		ret = checkLimitsMapTotalFromU(ssHoverCompData.ix_fm,ssHoverCompData.header.
+						   force_node, 1,
+						   thresholds_min,
+						   thresholds_max);
 		/* check the values with thresholds */
 		if (ret != OK) {
 			logError(1,
@@ -4336,70 +4081,71 @@ int production_test_ss_hover_ix(char *path_limits, int stop_on_fail,
 		kfree(thresholds_max);
 		thresholds_max = NULL;
 	} else
-		logError(0,
+	logError(0,
 			 "%s SS Hover TOTAL IX FORCE MIN MAX TEST:.................SKIPPED\n",
 			 tag);
 
 	logError(0, "%s SS HOVER TOTAL IX SENSE MIN MAX TEST:\n", tag);
-	if (todo->SelfHoverSenceIxTotal == 1) {
-		ret = parseProductionTestLimits(path_limits,
-						&limit_file,
-						SS_TOTAL_IX_SENSE_MAP_MIN,
-						&thresholds_min,
-						&trows, &tcolumns);
-		/* load the min thresholds */
-		if (ret < 0 || (trows != 1 || tcolumns !=
-				ssHoverCompData.header.sense_node)) {
-			logError(1,
-				 "%s production_test_data: parseProductionTestLimits SS_TOTAL_IX_SENSE_MAP_MIN failed... ERROR %08X\n",
-				 tag, ERROR_PROD_TEST_DATA);
-			ret |= ERROR_PROD_TEST_DATA;
-			goto ERROR_LIMITS;
-		}
+		if (todo->SelfHoverSenceIxTotal == 1) {
+			ret = parseProductionTestLimits(path_limits,
+							&limit_file,
+							SS_TOTAL_IX_SENSE_MAP_MIN,
+							&thresholds_min,
+							&trows, &tcolumns);
+			/* load the min thresholds */
+			if (ret < 0 || (trows != 1 || tcolumns !=
+					ssHoverCompData.header.sense_node)) {
+				logError(1,
+					 "%s production_test_data: parseProductionTestLimits SS_TOTAL_IX_SENSE_MAP_MIN failed... ERROR %08X\n",
+					 tag, ERROR_PROD_TEST_DATA);
+				ret |= ERROR_PROD_TEST_DATA;
+				goto ERROR_LIMITS;
+			}
 
-		ret = parseProductionTestLimits(path_limits,
-						&limit_file,
-						SS_TOTAL_IX_SENSE_MAP_MAX,
-						&thresholds_max,
-						&trows, &tcolumns);
-		/* load the max thresholds */
-		if (ret < 0 || (trows != 1 || tcolumns !=
-				ssHoverCompData.header.sense_node)) {
-			logError(1,
-				 "%s production_test_data: parseProductionTestLimits SS_TOTAL_IX_SENSE_MAP_MAX failed... ERROR %08X\n",
-				 tag, ERROR_PROD_TEST_DATA);
-			ret |= ERROR_PROD_TEST_DATA;
-			goto ERROR_LIMITS;
-		}
+			ret = parseProductionTestLimits(path_limits,
+							&limit_file,
+							SS_TOTAL_IX_SENSE_MAP_MAX,
+							&thresholds_max,
+							&trows, &tcolumns);
+			/* load the max thresholds */
+			if (ret < 0 || (trows != 1 || tcolumns !=
+					ssHoverCompData.header.sense_node)) {
+				logError(1,
+					 "%s production_test_data: parseProductionTestLimits SS_TOTAL_IX_SENSE_MAP_MAX failed... ERROR %08X\n",
+					 tag, ERROR_PROD_TEST_DATA);
+				ret |= ERROR_PROD_TEST_DATA;
+				goto ERROR_LIMITS;
+			}
 
-		ret = checkLimitsMapTotalFromU(ssHoverCompData.ix_sn, 1,
-					       ssHoverCompData.
-					       header.sense_node,
-					       thresholds_min, thresholds_max);
-		/* check the values with thresholds */
-		if (ret != OK) {
-			logError(1,
-				 "%s production_test_data: checkLimitsMap SS TOTAL IX SENSE failed... ERROR COUNT = %d\n",
-				 tag, ret);
-			logError(0,
-				 "%s SS Hover TOTAL IX SENSE MIN MAX TEST:.................FAIL\n\n",
-				 tag);
-			count_fail += 1;
-			if (stop_on_fail)
-				goto ERROR;
+			ret = checkLimitsMapTotalFromU(ssHoverCompData.ix_sn, 1,
+						       ssHoverCompData.header.
+						       sense_node,
+						       thresholds_min,
+						       thresholds_max);
+			/* check the values with thresholds */
+			if (ret != OK) {
+				logError(1,
+					 "%s production_test_data: checkLimitsMap SS TOTAL IX SENSE failed... ERROR COUNT = %d\n",
+					 tag, ret);
+				logError(0,
+					 "%s SS Hover TOTAL IX SENSE MIN MAX TEST:.................FAIL\n\n",
+					 tag);
+				count_fail += 1;
+				if (stop_on_fail)
+					goto ERROR;
+			} else
+				logError(0,
+					 "%s SS TOTAL IX SENSE MIN MAX TEST:.................OK\n\n",
+					 tag);
+
+			kfree(thresholds_min);
+			thresholds_min = NULL;
+			kfree(thresholds_max);
+			thresholds_max = NULL;
 		} else
 			logError(0,
-				 "%s SS TOTAL IX SENSE MIN MAX TEST:.................OK\n\n",
+				 "%s SS Hover TOTAL IX SENSE MIN MAX TEST:.................SKIPPED\n",
 				 tag);
-
-		kfree(thresholds_min);
-		thresholds_min = NULL;
-		kfree(thresholds_max);
-		thresholds_max = NULL;
-	} else
-		logError(0,
-			 "%s SS Hover TOTAL IX SENSE MIN MAX TEST:.................SKIPPED\n",
-			 tag);
 ERROR:
 	logError(0, "%s\n", tag);
 	if (count_fail == 0) {
@@ -4416,30 +4162,27 @@ ERROR:
 			 tag);
 		return OK;
 	} else {
-		print_frame_u16("TOT SS hover Init Data Ix_fm = ",
-				array1dTo2d_u16(ssHoverCompData.ix_fm,
-						ssHoverCompData.header.
-						force_node, 1),
+		print_frame_u16("TOT SS hover Init Data Ix_fm = ", array1dTo2d_u16(
+					ssHoverCompData.ix_fm,
+					ssHoverCompData.header.force_node, 1),
 				ssHoverCompData.header.force_node, 1);
 		print_frame_short("TOT SS hover hover Init Data Cx_fm = ",
 				  array1dTo2d_short(ssHoverCompData.cx_fm,
-						    ssHoverCompData.
-						    header.force_node, 1),
+							ssHoverCompData.header.
+							force_node, 1),
 				  ssHoverCompData.header.force_node, 1);
-		print_frame_u16("TOT SS hover Init Data Ix_sn = ",
-				array1dTo2d_u16(ssHoverCompData.ix_sn,
-						ssHoverCompData.header.
-						sense_node,
-						ssHoverCompData.header.
-						sense_node), 1,
+		print_frame_u16("TOT SS hover Init Data Ix_sn = ", array1dTo2d_u16(
+					ssHoverCompData.ix_sn,
+					ssHoverCompData.header.sense_node,
+					ssHoverCompData.header.sense_node), 1,
 				ssHoverCompData.header.sense_node);
 		print_frame_short("TOT SS hover Init Data Cx_sn = ",
 				  array1dTo2d_short(ssHoverCompData.cx_sn,
-						    ssHoverCompData.
-						    header.sense_node,
-						    ssHoverCompData.
-						    header.sense_node), 1,
-				  ssHoverCompData.header.sense_node);
+							ssHoverCompData.header.
+							sense_node,
+							ssHoverCompData.header.
+							sense_node),
+				  1, ssHoverCompData.header.sense_node);
 		logError(0,
 			 "%s SS hover IX CX testes finished!.................FAILED  fails_count = %d\n\n",
 			 tag, count_fail);
@@ -4496,7 +4239,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 	short container;
 	u16 *total_adjhor = NULL;
 	u16 *total_adjvert = NULL;
-	logError(0, "%s %s begin\n", tag, __func__);
+	logError(0, "%s \n", tag);
 	ret = readSelfSenseCompensationData(LOAD_CX_SS_TOUCH, &ssCompData);
 
 	if (ret < 0) {
@@ -4507,8 +4250,8 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 	}
 
 	ret =
-	    readTotSelfSenseCompensationData(LOAD_PANEL_CX_TOT_SS_TOUCH,
-					     &totCompData);
+		readTotSelfSenseCompensationData(LOAD_PANEL_CX_TOT_SS_TOUCH,
+				&totCompData);
 
 	if (ret < 0) {
 		logError(1,
@@ -4526,9 +4269,9 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 	if (todo->SelfForceIx1 == 1) {
 		logError(1, "%s SS IX1 FORCE TEST:  \n", tag);
 		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_IX1_FORCE_MIN_MAX, &thresholds,
-					      &trows, &tcolumns);
+			parseProductionTestLimits(path_limits, &limit_file,
+						  SS_IX1_FORCE_MIN_MAX, &thresholds,
+						  &trows, &tcolumns);
 
 		if (ret < 0 || (trows != 1 || tcolumns != 2)) {
 			logError(1,
@@ -4540,8 +4283,8 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 
 		container = (short)ssCompData.f_ix1;
 		ret =
-		    checkLimitsMinMax(&container, 1, 1, thresholds[0],
-				      thresholds[1]);
+			checkLimitsMinMax(&container, 1, 1, thresholds[0],
+					  thresholds[1]);
 
 		if (ret != OK) {
 			logError(1,
@@ -4552,11 +4295,11 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			if (stop_on_fail)
 				goto ERROR;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS IX1 FORCE TEST:.................OK \n\n",
 				 tag);
 	} else
-		logError(1,
+		logError(0,
 			 "%s SS IX1 FORCE TEST:.................SKIPPED \n\n",
 			 tag);
 
@@ -4565,11 +4308,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 
 	if (todo->SelfForceIx2 == 1) {
 		logError(1, "%s SS IX2 FORCE MIN MAX TEST:  \n", tag);
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_IX2_FORCE_MAP_MIN,
-					      &thresholds_min, &trows,
-					      &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, SS_IX2_FORCE_MAP_MIN, &thresholds_min, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != ssCompData.header.force_node
@@ -4581,11 +4320,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_IX2_FORCE_MAP_MAX,
-					      &thresholds_max, &trows,
-					      &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, SS_IX2_FORCE_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != ssCompData.header.force_node
@@ -4597,10 +4332,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    checkLimitsMapFromU(ssCompData.ix2_fm,
-					ssCompData.header.force_node, 1,
-					thresholds_min, thresholds_max);
+		ret = checkLimitsMapFromU(ssCompData.ix2_fm, ssCompData.header.force_node, 1, thresholds_min, thresholds_max);
 
 		if (ret != OK) {
 			logError(1,
@@ -4614,7 +4346,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			if (stop_on_fail)
 				goto ERROR;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS IX2 FORCE MIN MAX TEST:.................OK \n\n",
 				 tag);
 
@@ -4623,16 +4355,17 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 		kfree(thresholds_max);
 		thresholds_max = NULL;
 	} else
-		logError(1,
+		logError(0,
 			 "%s SS IX2 FORCE MIN MAX TEST:.................SKIPPED \n\n",
 			 tag);
+
 
 	if (todo->SelfForceIx2Adj == 1) {
 		logError(1, "%s SS IX2 FORCE ADJ TEST:  \n", tag);
 		ret =
-		    computeAdjVertFromU(ssCompData.ix2_fm,
-					ssCompData.header.force_node, 1,
-					&adjvert);
+			computeAdjVertFromU(ssCompData.ix2_fm,
+					    ssCompData.header.force_node, 1,
+					    &adjvert);
 
 		if (ret < 0) {
 			logError(1,
@@ -4643,11 +4376,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 		}
 
 		logError(0, "%s SS IX2 FORCE ADJV computed! \n", tag);
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_IX2_FORCE_ADJV_MAP_MAX,
-					      &thresholds_max, &trows,
-					      &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, SS_IX2_FORCE_ADJV_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != ssCompData.header.force_node - 1
@@ -4659,9 +4388,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    checkLimitsMapAdj(adjvert, ssCompData.header.force_node - 1,
-				      1, thresholds_max);
+		ret = checkLimitsMapAdj(adjvert, ssCompData.header.force_node - 1, 1, thresholds_max);
 
 		if (ret != OK) {
 			logError(1,
@@ -4675,7 +4402,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			if (stop_on_fail)
 				goto ERROR;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS IX2 FORCE ADJV TEST:.................OK \n\n",
 				 tag);
 
@@ -4684,20 +4411,16 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 		kfree(adjvert);
 		adjvert = NULL;
 	} else
-		logError(1,
+		logError(0,
 			 "%s SS IX2 FORCE ADJ TEST:.................SKIPPED \n\n",
 			 tag);
+
 
 	if (todo->SelfForceIxTotal == 1 || todo->SelfForceIxTotalAdj == 1) {
 
 		if (todo->SelfForceIxTotal == 1) {
-			logError(1, "%s SS TOTAL IX FORCE MIN MAX TEST:  \n",
-				 tag);
-			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_TOTAL_IX_FORCE_MAP_MIN,
-						      &thresholds_min, &trows,
-						      &tcolumns);
+			logError(1, "%s SS TOTAL IX FORCE MIN MAX TEST:  \n", tag);
+			ret = parseProductionTestLimits(path_limits, &limit_file, SS_TOTAL_IX_FORCE_MAP_MIN, &thresholds_min, &trows, &tcolumns);
 
 			if (ret < 0
 			    || (trows != totCompData.header.force_node
@@ -4709,11 +4432,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				goto ERROR_LIMITS;
 			}
 
-			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_TOTAL_IX_FORCE_MAP_MAX,
-						      &thresholds_max, &trows,
-						      &tcolumns);
+			ret = parseProductionTestLimits(path_limits, &limit_file, SS_TOTAL_IX_FORCE_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 			if (ret < 0
 			    || (trows != totCompData.header.force_node
@@ -4725,12 +4444,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				goto ERROR_LIMITS;
 			}
 
-			ret =
-			    checkLimitsMapTotalFromU(totCompData.ix_fm,
-						     totCompData.header.
-						     force_node, 1,
-						     thresholds_min,
-						     thresholds_max);
+			ret = checkLimitsMapTotalFromU(totCompData.ix_fm, totCompData.header.force_node, 1, thresholds_min, thresholds_max);
 
 			if (ret != OK) {
 				logError(1,
@@ -4744,7 +4458,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				if (stop_on_fail)
 					goto ERROR;
 			} else
-				logError(1,
+				logError(0,
 					 "%s SS TOTAL IX FORCE MIN MAX TEST:.................OK \n\n",
 					 tag);
 
@@ -4753,18 +4467,19 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			kfree(thresholds_max);
 			thresholds_max = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS TOTAL IX FORCE MIN MAX TEST:.................SKIPPED \n",
 				 tag);
+
 
 		if (todo->SelfForceIxTotalAdj == 1) {
 			logError(1, "%s SS TOTAL IX FORCE ADJVERT TEST:  \n",
 				 tag);
 			ret =
-			    computeAdjVertTotalFromU(totCompData.ix_fm,
-						     totCompData.
-						     header.force_node, 1,
-						     &total_adjvert);
+				computeAdjVertTotalFromU(totCompData.ix_fm,
+							 totCompData.header.
+							 force_node, 1,
+							 &total_adjvert);
 
 			if (ret < 0) {
 				logError(1,
@@ -4776,11 +4491,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 
 			logError(0, "%s SS TOTAL IX FORCE ADJV computed! \n",
 				 tag);
-			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_TOTAL_IX_FORCE_ADJV_MAP_MAX,
-						      &thresholds_max, &trows,
-						      &tcolumns);
+			ret = parseProductionTestLimits(path_limits, &limit_file, SS_TOTAL_IX_FORCE_ADJV_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 			if (ret < 0
 			    || (trows != totCompData.header.force_node - 1
@@ -4792,11 +4503,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				goto ERROR_LIMITS;
 			}
 
-			ret =
-			    checkLimitsMapAdjTotal(total_adjvert,
-						   totCompData.header.
-						   force_node - 1, 1,
-						   thresholds_max);
+			ret = checkLimitsMapAdjTotal(total_adjvert, totCompData.header.force_node - 1, 1, thresholds_max);
 
 			if (ret != OK) {
 				logError(1,
@@ -4819,11 +4526,11 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			kfree(total_adjvert);
 			total_adjvert = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS TOTAL IX FORCE ADJ TEST:.................SKIPPED  \n",
 				 tag);
 	} else
-		logError(1,
+		logError(0,
 			 "%s SS TOTAL IX FORCE TEST:.................SKIPPED \n\n",
 			 tag);
 
@@ -4832,9 +4539,9 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 	if (todo->SelfSenseIx1 == 1) {
 		logError(1, "%s SS IX1 SENSE TEST:  \n", tag);
 		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_IX1_SENSE_MIN_MAX, &thresholds,
-					      &trows, &tcolumns);
+			parseProductionTestLimits(path_limits, &limit_file,
+						  SS_IX1_SENSE_MIN_MAX, &thresholds,
+						  &trows, &tcolumns);
 
 		if (ret < 0 || (trows != 1 || tcolumns != 2)) {
 			logError(1,
@@ -4845,9 +4552,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 		}
 
 		container = (short)ssCompData.s_ix1;
-		ret =
-		    checkLimitsMinMax(&container, 1, 1, thresholds[0],
-				      thresholds[1]);
+		ret = checkLimitsMinMax(&container, 1, 1, thresholds[0], thresholds[1]);
 
 		if (ret != OK) {
 			logError(1,
@@ -4858,11 +4563,11 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			if (stop_on_fail)
 				goto ERROR;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS IX1 SENSE TEST:.................OK \n\n",
 				 tag);
 	} else
-		logError(1,
+		logError(0,
 			 "%s SS IX1 SENSE TEST:.................SKIPPED \n\n",
 			 tag);
 
@@ -4871,11 +4576,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 
 	if (todo->SelfSenseIx2 == 1) {
 		logError(1, "%s SS IX2 SENSE MIN MAX TEST:  \n", tag);
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_IX2_SENSE_MAP_MIN,
-					      &thresholds_min, &trows,
-					      &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, SS_IX2_SENSE_MAP_MIN, &thresholds_min, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != 1
@@ -4887,11 +4588,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_IX2_SENSE_MAP_MAX,
-					      &thresholds_max, &trows,
-					      &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, SS_IX2_SENSE_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != 1
@@ -4903,10 +4600,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    checkLimitsMapFromU(ssCompData.ix2_sn, 1,
-					ssCompData.header.sense_node,
-					thresholds_min, thresholds_max);
+		ret = checkLimitsMapFromU(ssCompData.ix2_sn, 1, ssCompData.header.sense_node, thresholds_min, thresholds_max);
 
 		if (ret != OK) {
 			logError(1,
@@ -4920,7 +4614,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			if (stop_on_fail)
 				goto ERROR;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS IX2 SENSE MIN MAX TEST:.................OK \n\n",
 				 tag);
 
@@ -4929,15 +4623,16 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 		kfree(thresholds_max);
 		thresholds_max = NULL;
 	} else
-		logError(1,
+		logError(0,
 			 "%s SS IX2 SENSE MIN MAX TEST:.................SKIPPED \n\n",
 			 tag);
+
 
 	if (todo->SelfSenseIx2Adj == 1) {
 		logError(1, "%s SS IX2 SENSE ADJHORIZ TEST:  \n", tag);
 		ret =
-		    computeAdjHorizFromU(ssCompData.ix2_sn, 1,
-					 ssCompData.header.sense_node, &adjhor);
+			computeAdjHorizFromU(ssCompData.ix2_sn, 1,
+					     ssCompData.header.sense_node, &adjhor);
 
 		if (ret < 0) {
 			logError(1,
@@ -4948,11 +4643,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 		}
 
 		logError(0, "%s SS IX2 SENSE ADJ HORIZ computed! \n", tag);
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_IX2_SENSE_ADJH_MAP_MAX,
-					      &thresholds_max, &trows,
-					      &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, SS_IX2_SENSE_ADJH_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != 1
@@ -4964,10 +4655,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    checkLimitsMapAdj(adjhor, 1,
-				      ssCompData.header.sense_node - 1,
-				      thresholds_max);
+		ret = checkLimitsMapAdj(adjhor, 1, ssCompData.header.sense_node - 1, thresholds_max);
 
 		if (ret != OK) {
 			logError(1,
@@ -4981,7 +4669,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			if (stop_on_fail)
 				goto ERROR;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS IX2 SENSE ADJH TEST:.................OK \n\n",
 				 tag);
 
@@ -4990,20 +4678,16 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 		kfree(adjhor);
 		adjhor = NULL;
 	} else
-		logError(1,
+		logError(0,
 			 "%s SS IX2 SENSE ADJ TEST:.................SKIPPED  \n",
 			 tag);
+
 
 	if (todo->SelfSenseIxTotal == 1 || todo->SelfSenseIxTotalAdj == 1) {
 
 		if (todo->SelfSenseIxTotal == 1) {
-			logError(1, "%s SS TOTAL IX SENSE MIN MAX TEST:  \n",
-				 tag);
-			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_TOTAL_IX_SENSE_MAP_MIN,
-						      &thresholds_min, &trows,
-						      &tcolumns);
+			logError(1, "%s SS TOTAL IX SENSE MIN MAX TEST:  \n", tag);
+			ret = parseProductionTestLimits(path_limits, &limit_file, SS_TOTAL_IX_SENSE_MAP_MIN, &thresholds_min, &trows, &tcolumns);
 
 			if (ret < 0
 			    || (trows != 1
@@ -5015,11 +4699,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				goto ERROR_LIMITS;
 			}
 
-			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_TOTAL_IX_SENSE_MAP_MAX,
-						      &thresholds_max, &trows,
-						      &tcolumns);
+			ret = parseProductionTestLimits(path_limits, &limit_file, SS_TOTAL_IX_SENSE_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 			if (ret < 0
 			    || (trows != 1
@@ -5031,11 +4711,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				goto ERROR_LIMITS;
 			}
 
-			ret =
-			    checkLimitsMapTotalFromU(totCompData.ix_sn, 1,
-						     totCompData.header.
-						     sense_node, thresholds_min,
-						     thresholds_max);
+			ret = checkLimitsMapTotalFromU(totCompData.ix_sn, 1, totCompData.header.sense_node, thresholds_min, thresholds_max);
 
 			if (ret != OK) {
 				logError(1,
@@ -5049,7 +4725,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				if (stop_on_fail)
 					goto ERROR;
 			} else
-				logError(1,
+				logError(0,
 					 "%s SS TOTAL IX SENSE MIN MAX TEST:.................OK \n\n",
 					 tag);
 
@@ -5058,18 +4734,19 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			kfree(thresholds_max);
 			thresholds_max = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS TOTAL IX SENSE MIN MAX TEST:.................SKIPPED  \n",
 				 tag);
+
 
 		if (todo->SelfSenseIxTotalAdj == 1) {
 			logError(1, "%s SS TOTAL IX SENSE ADJHORIZ TEST:  \n",
 				 tag);
 			ret =
-			    computeAdjHorizTotalFromU(totCompData.ix_sn, 1,
-						      totCompData.
-						      header.sense_node,
-						      &total_adjhor);
+				computeAdjHorizTotalFromU(totCompData.ix_sn, 1,
+							  totCompData.header.
+							  sense_node,
+							  &total_adjhor);
 
 			if (ret < 0) {
 				logError(1,
@@ -5082,11 +4759,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			logError(0,
 				 "%s SS TOTAL IX SENSE ADJ HORIZ computed! \n",
 				 tag);
-			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_TOTAL_IX_SENSE_ADJH_MAP_MAX,
-						      &thresholds_max, &trows,
-						      &tcolumns);
+			ret = parseProductionTestLimits(path_limits, &limit_file, SS_TOTAL_IX_SENSE_ADJH_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 			if (ret < 0
 			    || (trows != 1
@@ -5099,11 +4772,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				goto ERROR_LIMITS;
 			}
 
-			ret =
-			    checkLimitsMapAdjTotal(total_adjhor, 1,
-						   totCompData.header.
-						   sense_node - 1,
-						   thresholds_max);
+			ret = checkLimitsMapAdjTotal(total_adjhor, 1, totCompData.header.sense_node - 1, thresholds_max);
 
 			if (ret != OK) {
 				logError(1,
@@ -5117,7 +4786,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				if (stop_on_fail)
 					goto ERROR;
 			} else
-				logError(1,
+				logError(0,
 					 "%s SS TOTAL IX SENSE ADJH TEST:.................OK \n\n",
 					 tag);
 
@@ -5126,11 +4795,11 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			kfree(total_adjhor);
 			total_adjhor = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS TOTAL IX SENSE ADJ TEST:.................SKIPPED  \n",
 				 tag);
 	} else
-		logError(1,
+		logError(0,
 			 "%s SS TOTAL IX SENSE TEST:.................SKIPPED  \n",
 			 tag);
 
@@ -5139,9 +4808,9 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 	if (todo->SelfForceCx1 == 1) {
 		logError(1, "%s SS CX1 FORCE TEST:  \n", tag);
 		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_CX1_FORCE_MIN_MAX, &thresholds,
-					      &trows, &tcolumns);
+			parseProductionTestLimits(path_limits, &limit_file,
+						  SS_CX1_FORCE_MIN_MAX, &thresholds,
+						  &trows, &tcolumns);
 
 		if (ret < 0 || (trows != 1 || tcolumns != 2)) {
 			logError(1,
@@ -5153,8 +4822,8 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 
 		container = (short)ssCompData.f_cx1;
 		ret =
-		    checkLimitsMinMax(&container, 1, 1, thresholds[0],
-				      thresholds[1]);
+			checkLimitsMinMax(&container, 1, 1, thresholds[0],
+					  thresholds[1]);
 
 		if (ret != OK) {
 			logError(1,
@@ -5176,13 +4845,10 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			 "%s SS CX1 FORCE TEST:.................SKIPPED \n\n",
 			 tag);
 
+
 	if (todo->SelfForceCx2 == 1) {
 		logError(1, "%s SS CX2 FORCE MIN MAX TEST:  \n", tag);
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_CX2_FORCE_MAP_MIN,
-					      &thresholds_min, &trows,
-					      &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, SS_CX2_FORCE_MAP_MIN, &thresholds_min, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != ssCompData.header.force_node
@@ -5194,11 +4860,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_CX2_FORCE_MAP_MAX,
-					      &thresholds_max, &trows,
-					      &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, SS_CX2_FORCE_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != ssCompData.header.force_node
@@ -5210,10 +4872,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    checkLimitsMap(ssCompData.cx2_fm,
-				   ssCompData.header.force_node, 1,
-				   thresholds_min, thresholds_max);
+		ret = checkLimitsMap(ssCompData.cx2_fm, ssCompData.header.force_node, 1, thresholds_min, thresholds_max);
 
 		if (ret != OK) {
 			logError(1,
@@ -5227,7 +4886,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			if (stop_on_fail)
 				goto ERROR;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS CX2 FORCE MIN MAX TEST:.................OK \n\n",
 				 tag);
 
@@ -5236,15 +4895,14 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 		kfree(thresholds_max);
 		thresholds_max = NULL;
 	} else
-		logError(1,
+		logError(0,
 			 "%s SS CX2 FORCE MIN MAX TEST:.................SKIPPED  \n",
 			 tag);
 
+
 	if (todo->SelfForceCx2Adj == 1) {
 		logError(1, "%s SS CX2 FORCE ADJVERT TEST:  \n", tag);
-		ret =
-		    computeAdjVert(ssCompData.cx2_fm,
-				   ssCompData.header.force_node, 1, &adjvert);
+		ret = computeAdjVert(ssCompData.cx2_fm, ssCompData.header.force_node, 1, &adjvert);
 
 		if (ret < 0) {
 			logError(1,
@@ -5255,11 +4913,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 		}
 
 		logError(0, "%s SS CX2 FORCE ADJV computed! \n", tag);
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_CX2_FORCE_ADJV_MAP_MAX,
-					      &thresholds_max, &trows,
-					      &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, SS_CX2_FORCE_ADJV_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != ssCompData.header.force_node - 1
@@ -5271,9 +4925,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    checkLimitsMapAdj(adjvert, ssCompData.header.force_node - 1,
-				      1, thresholds_max);
+		ret = checkLimitsMapAdj(adjvert, ssCompData.header.force_node - 1, 1, thresholds_max);
 
 		if (ret != OK) {
 			logError(1,
@@ -5287,7 +4939,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			if (stop_on_fail)
 				goto ERROR;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS CX2 FORCE ADJV TEST:.................OK \n\n",
 				 tag);
 
@@ -5296,20 +4948,16 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 		kfree(adjvert);
 		adjvert = NULL;
 	} else
-		logError(1,
+		logError(0,
 			 "%s SS CX2 FORCE ADJ TEST:.................SKIPPED \n\n",
 			 tag);
+
 
 	if (todo->SelfForceCxTotal == 1 || todo->SelfForceCxTotalAdj == 1) {
 
 		if (todo->SelfForceCxTotal == 1) {
-			logError(1, "%s SS TOTAL CX FORCE MIN MAX TEST:  \n",
-				 tag);
-			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_TOTAL_CX_FORCE_MAP_MIN,
-						      &thresholds_min, &trows,
-						      &tcolumns);
+			logError(1, "%s SS TOTAL CX FORCE MIN MAX TEST:  \n", tag);
+			ret = parseProductionTestLimits(path_limits, &limit_file, SS_TOTAL_CX_FORCE_MAP_MIN, &thresholds_min, &trows, &tcolumns);
 
 			if (ret < 0
 			    || (trows != totCompData.header.force_node
@@ -5321,11 +4969,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				goto ERROR_LIMITS;
 			}
 
-			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_TOTAL_CX_FORCE_MAP_MAX,
-						      &thresholds_max, &trows,
-						      &tcolumns);
+			ret = parseProductionTestLimits(path_limits, &limit_file, SS_TOTAL_CX_FORCE_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 			if (ret < 0
 			    || (trows != totCompData.header.force_node
@@ -5337,11 +4981,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				goto ERROR_LIMITS;
 			}
 
-			ret =
-			    checkLimitsMapTotal(totCompData.cx_fm,
-						totCompData.header.force_node,
-						1, thresholds_min,
-						thresholds_max);
+			ret = checkLimitsMapTotal(totCompData.cx_fm, totCompData.header.force_node, 1, thresholds_min, thresholds_max);
 
 			if (ret != OK) {
 				logError(1,
@@ -5355,7 +4995,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				if (stop_on_fail)
 					goto ERROR;
 			} else
-				logError(1,
+				logError(0,
 					 "%s SS TOTAL FORCE MIN MAX TEST:.................OK \n\n",
 					 tag);
 
@@ -5364,17 +5004,15 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			kfree(thresholds_max);
 			thresholds_max = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS TOTAL CX FORCE MIN MAX TEST:.................SKIPPED  \n",
 				 tag);
+
 
 		if (todo->SelfForceCxTotalAdj == 1) {
 			logError(1, "%s SS TOTAL CX FORCE ADJVERT TEST:  \n",
 				 tag);
-			ret =
-			    computeAdjVertTotal(totCompData.cx_fm,
-						totCompData.header.force_node,
-						1, &total_adjvert);
+			ret = computeAdjVertTotal(totCompData.cx_fm, totCompData.header.force_node, 1, &total_adjvert);
 
 			if (ret < 0) {
 				logError(1,
@@ -5387,10 +5025,10 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			logError(0, "%s SS TOTAL CX FORCE ADJV computed! \n",
 				 tag);
 			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_TOTAL_CX_FORCE_ADJV_MAP_MAX,
-						      &thresholds_max, &trows,
-						      &tcolumns);
+				parseProductionTestLimits(path_limits, &limit_file,
+							  SS_TOTAL_CX_FORCE_ADJV_MAP_MAX,
+							  &thresholds_max, &trows,
+							  &tcolumns);
 
 			if (ret < 0
 			    || (trows != totCompData.header.force_node - 1
@@ -5403,10 +5041,10 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			}
 
 			ret =
-			    checkLimitsMapAdjTotal(total_adjvert,
-						   totCompData.header.
-						   force_node - 1, 1,
-						   thresholds_max);
+				checkLimitsMapAdjTotal(total_adjvert,
+						       totCompData.
+						       header.force_node - 1, 1,
+						       thresholds_max);
 
 			if (ret != OK) {
 				logError(1,
@@ -5420,7 +5058,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				if (stop_on_fail)
 					goto ERROR;
 			} else
-				logError(1,
+				logError(0,
 					 "%s SS TOTAL CX FORCE ADJV TEST:.................OK \n\n",
 					 tag);
 
@@ -5429,11 +5067,11 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			kfree(total_adjvert);
 			total_adjvert = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS TOTAL CX FORCE ADJ TEST:.................SKIPPED  \n",
 				 tag);
 	} else
-		logError(1,
+		logError(0,
 			 "%s SS TOTAL CX FORCE TEST:.................SKIPPED \n\n",
 			 tag);
 
@@ -5442,9 +5080,9 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 	if (todo->SelfSenseCx1 == 1) {
 		logError(1, "%s SS CX1 SENSE TEST:  \n", tag);
 		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_CX1_SENSE_MIN_MAX, &thresholds,
-					      &trows, &tcolumns);
+			parseProductionTestLimits(path_limits, &limit_file,
+						  SS_CX1_SENSE_MIN_MAX, &thresholds,
+						  &trows, &tcolumns);
 
 		if (ret < 0 || (trows != 1 || tcolumns != 2)) {
 			logError(1,
@@ -5456,8 +5094,8 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 
 		container = (short)ssCompData.s_cx1;
 		ret =
-		    checkLimitsMinMax(&container, 1, 1, thresholds[0],
-				      thresholds[1]);
+			checkLimitsMinMax(&container, 1, 1, thresholds[0],
+					  thresholds[1]);
 
 		if (ret != OK) {
 			logError(1,
@@ -5468,24 +5106,21 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			if (stop_on_fail)
 				goto ERROR;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS CX1 SENSE TEST:.................OK \n\n",
 				 tag);
 
 		kfree(thresholds);
 		thresholds = NULL;
 	} else
-		logError(1,
+		logError(0,
 			 "%s SS CX1 SENSE TEST:.................SKIPPED \n\n",
 			 tag);
 
+
 	if (todo->SelfSenseCx2 == 1) {
 		logError(1, "%s SS CX2 SENSE MIN MAX TEST:  \n", tag);
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_CX2_SENSE_MAP_MIN,
-					      &thresholds_min, &trows,
-					      &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, SS_CX2_SENSE_MAP_MIN, &thresholds_min, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != 1
@@ -5497,11 +5132,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_CX2_SENSE_MAP_MAX,
-					      &thresholds_max, &trows,
-					      &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, SS_CX2_SENSE_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != 1
@@ -5513,10 +5144,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    checkLimitsMap(ssCompData.cx2_sn, 1,
-				   ssCompData.header.sense_node, thresholds_min,
-				   thresholds_max);
+		ret = checkLimitsMap(ssCompData.cx2_sn, 1, ssCompData.header.sense_node, thresholds_min, thresholds_max);
 
 		if (ret != OK) {
 			logError(1,
@@ -5530,7 +5158,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			if (stop_on_fail)
 				goto ERROR;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS CX2 SENSE MIN MAX TEST:.................OK \n\n",
 				 tag);
 
@@ -5539,15 +5167,16 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 		kfree(thresholds_max);
 		thresholds_max = NULL;
 	} else
-		logError(1,
+		logError(0,
 			 "%s SS CX2 SENSE MIN MAX TEST:.................SKIPPED  \n",
 			 tag);
+
 
 	if (todo->SelfSenseCx2Adj == 1) {
 		logError(1, "%s SS CX2 SENSE ADJHORIZ TEST:  \n", tag);
 		ret =
-		    computeAdjHoriz(ssCompData.cx2_sn, 1,
-				    ssCompData.header.sense_node, &adjhor);
+			computeAdjHoriz(ssCompData.cx2_sn, 1,
+					ssCompData.header.sense_node, &adjhor);
 
 		if (ret < 0) {
 			logError(1,
@@ -5558,11 +5187,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 		}
 
 		logError(0, "%s SS CX2 SENSE ADJH computed! \n", tag);
-		ret =
-		    parseProductionTestLimits(path_limits, &limit_file,
-					      SS_CX2_SENSE_ADJH_MAP_MAX,
-					      &thresholds_max, &trows,
-					      &tcolumns);
+		ret = parseProductionTestLimits(path_limits, &limit_file, SS_CX2_SENSE_ADJH_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 		if (ret < 0
 		    || (trows != 1
@@ -5574,10 +5199,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			goto ERROR_LIMITS;
 		}
 
-		ret =
-		    checkLimitsMapAdj(adjhor, 1,
-				      ssCompData.header.sense_node - 1,
-				      thresholds_max);
+		ret = checkLimitsMapAdj(adjhor, 1, ssCompData.header.sense_node - 1, thresholds_max);
 
 		if (ret != OK) {
 			logError(1,
@@ -5591,7 +5213,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			if (stop_on_fail)
 				goto ERROR;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS CX2 SENSE ADJH TEST:.................OK \n",
 				 tag);
 
@@ -5600,20 +5222,16 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 		kfree(adjhor);
 		adjhor = NULL;
 	} else
-		logError(1,
+		logError(0,
 			 "%s SS CX2 SENSE ADJ TEST:.................SKIPPED \n\n",
 			 tag);
+
 
 	if (todo->SelfSenseCxTotal == 1 || todo->SelfSenseCxTotalAdj == 1) {
 
 		if (todo->SelfSenseCxTotal == 1) {
-			logError(1, "%s SS TOTAL CX SENSE MIN MAX TEST:  \n",
-				 tag);
-			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_TOTAL_CX_SENSE_MAP_MIN,
-						      &thresholds_min, &trows,
-						      &tcolumns);
+			logError(1, "%s SS TOTAL CX SENSE MIN MAX TEST:  \n", tag);
+			ret = parseProductionTestLimits(path_limits, &limit_file, SS_TOTAL_CX_SENSE_MAP_MIN, &thresholds_min, &trows, &tcolumns);
 
 			if (ret < 0
 			    || (trows != 1
@@ -5625,11 +5243,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				goto ERROR_LIMITS;
 			}
 
-			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_TOTAL_CX_SENSE_MAP_MAX,
-						      &thresholds_max, &trows,
-						      &tcolumns);
+			ret = parseProductionTestLimits(path_limits, &limit_file, SS_TOTAL_CX_SENSE_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 			if (ret < 0
 			    || (trows != 1
@@ -5641,10 +5255,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				goto ERROR_LIMITS;
 			}
 
-			ret =
-			    checkLimitsMapTotal(totCompData.cx_sn, 1,
-						totCompData.header.sense_node,
-						thresholds_min, thresholds_max);
+			ret = checkLimitsMapTotal(totCompData.cx_sn, 1, totCompData.header.sense_node, thresholds_min, thresholds_max);
 
 			if (ret != OK) {
 				logError(1,
@@ -5658,7 +5269,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				if (stop_on_fail)
 					goto ERROR;
 			} else
-				logError(1,
+				logError(0,
 					 "%s SS TOTAL CX SENSE MIN MAX TEST:.................OK \n\n",
 					 tag);
 
@@ -5667,17 +5278,18 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			kfree(thresholds_max);
 			thresholds_max = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS TOTAL CX SENSE MIN MAX TEST:.................SKIPPED  \n",
 				 tag);
+
 
 		if (todo->SelfSenseCxTotalAdj == 1) {
 			logError(1, "%s SS TOTAL CX SENSE ADJHORIZ TEST:  \n",
 				 tag);
 			ret =
-			    computeAdjHorizTotal(totCompData.cx_sn, 1,
-						 totCompData.header.sense_node,
-						 &total_adjhor);
+				computeAdjHorizTotal(totCompData.cx_sn, 1,
+						     totCompData.header.sense_node,
+						     &total_adjhor);
 
 			if (ret < 0) {
 				logError(1,
@@ -5690,11 +5302,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			logError(0,
 				 "%s SS TOTAL CX SENSE ADJ HORIZ computed! \n",
 				 tag);
-			ret =
-			    parseProductionTestLimits(path_limits, &limit_file,
-						      SS_TOTAL_CX_SENSE_ADJH_MAP_MAX,
-						      &thresholds_max, &trows,
-						      &tcolumns);
+			ret = parseProductionTestLimits(path_limits, &limit_file, SS_TOTAL_CX_SENSE_ADJH_MAP_MAX, &thresholds_max, &trows, &tcolumns);
 
 			if (ret < 0
 			    || (trows != 1
@@ -5707,11 +5315,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				goto ERROR_LIMITS;
 			}
 
-			ret =
-			    checkLimitsMapAdjTotal(total_adjhor, 1,
-						   totCompData.header.
-						   sense_node - 1,
-						   thresholds_max);
+			ret = checkLimitsMapAdjTotal(total_adjhor, 1, totCompData.header.sense_node - 1, thresholds_max);
 
 			if (ret != OK) {
 				logError(1,
@@ -5725,7 +5329,7 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 				if (stop_on_fail)
 					goto ERROR;
 			} else
-				logError(1,
+				logError(0,
 					 "%s SS TOTAL CX SENSE ADJH TEST:.................OK \n\n",
 					 tag);
 
@@ -5734,18 +5338,15 @@ int production_test_ss_ix_cx(char *path_limits, int stop_on_fail,
 			kfree(total_adjhor);
 			total_adjhor = NULL;
 		} else
-			logError(1,
+			logError(0,
 				 "%s SS TOTAL CX SENSE ADJ TEST:.................SKIPPED  \n",
 				 tag);
 	} else
 		logError(0,
 			 "%s SS TOTAL CX SENSE TEST:.................SKIPPED  \n",
 			 tag);
-	if (todo->SelfHoverForceIxTotal == 1
-	    || todo->SelfHoverSenceIxTotal == 1) {
-		ret =
-		    production_test_ss_hover_ix(path_limits, stop_on_fail,
-						todo);
+	if (todo->SelfHoverForceIxTotal == 1 || todo->SelfHoverSenceIxTotal == 1) {
+		ret = production_test_ss_hover_ix(path_limits, stop_on_fail, todo);
 		if (ret < OK) {
 			logError(1,
 				 "%s production_test_data: production_test_ss_hover_ix_cx failed... ERROR = %08X\n",
@@ -5804,8 +5405,8 @@ ERROR:
 				totCompData.header.force_node, 1);
 		print_frame_short("TOT SS Init Data Cx_fm = ",
 				  array1dTo2d_short(totCompData.cx_fm,
-						    totCompData.
-						    header.force_node, 1),
+						    totCompData.header.
+						    force_node, 1),
 				  totCompData.header.force_node, 1);
 		print_frame_u16("TOT SS Init Data Ix_sn = ",
 				array1dTo2d_u16(totCompData.ix_sn,
@@ -5814,10 +5415,10 @@ ERROR:
 				1, totCompData.header.sense_node);
 		print_frame_short("TOT SS Init Data Cx_sn = ",
 				  array1dTo2d_short(totCompData.cx_sn,
-						    totCompData.
-						    header.sense_node,
-						    totCompData.
-						    header.sense_node), 1,
+						    totCompData.header.
+						    sense_node,
+						    totCompData.header.
+						    sense_node), 1,
 				  totCompData.header.sense_node);
 		logError(0,
 			 "%s SS IX CX testes finished!.................FAILED  fails_count = %d\n\n",
@@ -5992,9 +5593,9 @@ END:
 	freeLimitsFile(&limit_file);
 
 	if (res < OK)
-		logError(1, "%s DATA Production test failed!\n", tag);
+		logError(0, "%s DATA Production test failed!\n", tag);
 	else
-		logError(1, "%s DATA Production test finished!\n", tag);
+		logError(0, "%s DATA Production test finished!\n", tag);
 
 	return res;
 }
@@ -6028,7 +5629,7 @@ int getLimitsFile(char *path, LimitFile *file)
 		logError(0, "%s Loading Limits File from .h!\n", tag);
 		file->size = LIMITS_SIZE_NAME;
 		file->data =
-		    (char *)kmalloc((file->size) * sizeof(char), GFP_KERNEL);
+			(char *)kmalloc((file->size) * sizeof(char), GFP_KERNEL);
 
 		if (file->data != NULL) {
 			memcpy(file->data, (char *)(LIMITS_ARRAY_NAME),
@@ -6058,8 +5659,8 @@ int getLimitsFile(char *path, LimitFile *file)
 					 path);
 				file->size = fw->size;
 				file->data =
-				    (char *)kmalloc((file->size) * sizeof(char),
-						    GFP_KERNEL);
+					(char *)kmalloc((file->size) * sizeof(char),
+							GFP_KERNEL);
 
 				if (file->data != NULL) {
 					memcpy(file->data, (char *)fw->data,
@@ -6169,12 +5770,12 @@ int parseProductionTestLimits(char *path, LimitFile *file, char *label,
 		size = limit_file.size;
 		data_file = limit_file.data;
 	} else {
-		logError(1, "%s Limit File data passed as arguments!\n", tag);
+		logError(0, "%s Limit File data passed as arguments!\n", tag);
 		size = file->size;
 		data_file = file->data;
 	}
 
-	logError(1, "%s The size of the limits file is %d bytes...\n", tag,
+	logError(0, "%s The size of the limits file is %d bytes...\n", tag,
 		 size);
 
 	while (find == 0) {
@@ -6231,9 +5832,7 @@ int parseProductionTestLimits(char *path, LimitFile *file, char *label,
 
 				kfree(buf);
 				buf = NULL;
-				*data =
-				    (int *)kmalloc(((*row) * (*column)) *
-						   sizeof(int), GFP_KERNEL);
+				*data = (int *)kmalloc(((*row) * (*column)) * sizeof(int), GFP_KERNEL);
 				j = 0;
 
 				if (*data == NULL) {

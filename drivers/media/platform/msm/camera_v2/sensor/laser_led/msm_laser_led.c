@@ -1,4 +1,5 @@
-/* Copyright (c) 2017-2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2017-2018, 2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -242,7 +243,7 @@ static int32_t msm_laser_led_control32(
 			kfree(debug_reg);
 			return -EFAULT;
 		}
-	} else{
+	} else {
 		kfree(conf_array.reg_setting);
 		return -EFAULT;
 	}
@@ -380,7 +381,7 @@ static int32_t msm_laser_led_control(
 			kfree(conf_array.reg_setting);
 			return -EFAULT;
 		}
-	} else{
+	} else {
 		kfree(conf_array.reg_setting);
 		kfree(debug_reg);
 		return -ENOMEM;
@@ -531,7 +532,6 @@ static int32_t msm_laser_led_platform_probe(struct platform_device *pdev)
 		&pdev->id);
 	CDBG("cell-index %d, rc %d\n", pdev->id, rc);
 	if (rc < 0) {
-		kfree(laser_led_ctrl);
 		pr_err("reading cell index failed: rc %d\n", rc);
 		return rc;
 	}
@@ -540,7 +540,6 @@ static int32_t msm_laser_led_platform_probe(struct platform_device *pdev)
 		&laser_led_ctrl->cci_master);
 	CDBG("qcom,cci-master %d, rc %d\n", laser_led_ctrl->cci_master, rc);
 	if (rc < 0 || laser_led_ctrl->cci_master >= MASTER_MAX) {
-		kfree(laser_led_ctrl);
 		pr_err("invalid cci master info: rc %d\n", rc);
 		return rc;
 	}
@@ -596,7 +595,6 @@ static struct platform_driver msm_laser_led_platform_driver = {
 	.probe = msm_laser_led_platform_probe,
 	.driver = {
 		.name = "qcom,laser-led",
-		.owner = THIS_MODULE,
 		.of_match_table = msm_laser_led_dt_match,
 	},
 };

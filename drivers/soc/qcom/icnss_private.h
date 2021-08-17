@@ -1,13 +1,6 @@
-/* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef __ICNSS_PRIVATE_H__
@@ -15,8 +8,9 @@
 
 #include <linux/adc-tm-clients.h>
 #include <linux/iio/consumer.h>
+#include <asm/dma-iommu.h>
 #include <linux/kobject.h>
-#include <linux/esoc_client.h>
+#include <linux/power_supply.h>
 
 #define icnss_ipc_log_string(_x...) do {				\
 	if (icnss_ipc_log_context)					\
@@ -165,15 +159,12 @@ enum icnss_driver_state {
 	ICNSS_MODE_ON,
 	ICNSS_BLOCK_SHUTDOWN,
 	ICNSS_PDR,
-	ICNSS_CLK_UP,
-	ICNSS_ESOC_OFF,
-	ICNSS_MODEM_CRASHED,
-	ICNSS_MODEM_SHUTDOWN,
+	ICNSS_DEL_SERVER,
 };
 
 struct ce_irq_list {
 	int irq;
-	irqreturn_t (*handler)(int, void *);
+	irqreturn_t (*handler)(int irq, void *priv);
 };
 
 struct icnss_vreg_info {
@@ -184,6 +175,7 @@ struct icnss_vreg_info {
 	u32 load_ua;
 	unsigned long settle_delay;
 	bool required;
+	bool is_supported;
 };
 
 struct icnss_clk_info {
@@ -191,6 +183,11 @@ struct icnss_clk_info {
 	const char *name;
 	u32 freq;
 	bool required;
+};
+
+struct icnss_battery_level {
+	int lower_battery_threshold;
+	int ldo_voltage;
 };
 
 struct icnss_stats {
@@ -265,6 +262,7 @@ struct icnss_stats {
 #define WLFW_MAX_NUM_CE 12
 #define WLFW_MAX_NUM_SVC 24
 #define WLFW_MAX_NUM_SHADOW_REG 24
+#define WLFW_MAX_HANG_EVENT_DATA_SIZE 400
 
 struct service_notifier_context {
 	void *handle;
@@ -317,10 +315,9 @@ struct icnss_priv {
 	u32 ce_irqs[ICNSS_MAX_IRQ_REGISTRATIONS];
 	phys_addr_t mem_base_pa;
 	void __iomem *mem_base_va;
-	struct dma_iommu_mapping *smmu_mapping;
-	dma_addr_t smmu_iova_start;
-	size_t smmu_iova_len;
+	struct iommu_domain *iommu_domain;
 	dma_addr_t smmu_iova_ipa_start;
+	dma_addr_t smmu_iova_ipa_current;
 	size_t smmu_iova_ipa_len;
 	struct qmi_handle qmi;
 	struct list_head event_list;
@@ -359,7 +356,6 @@ struct icnss_priv {
 	uint8_t *diag_reg_read_buf;
 	atomic_t pm_count;
 	struct ramdump_device *msa0_dump_dev;
-	bool bypass_s1_smmu;
 	bool force_err_fatal;
 	bool allow_recursive_recovery;
 	bool early_crash_ind;
@@ -367,7 +363,6 @@ struct icnss_priv {
 	u8 requesting_sub_system;
 	u16 line_number;
 	struct mutex dev_lock;
-	bool is_hyp_disabled;
 	uint32_t fw_error_fatal_irq;
 	uint32_t fw_early_crash_irq;
 	struct completion unblock_shutdown;
@@ -377,16 +372,28 @@ struct icnss_priv {
 	uint64_t vph_pwr;
 	bool vbatt_supported;
 	char function_name[WLFW_FUNCTION_NAME_LEN + 1];
+	bool is_ssr;
 	struct kobject *icnss_kobject;
 	atomic_t is_shutdown;
-	bool is_ssr;
-	bool clk_monitor_enable;
-	void *ext_modem_notify_handler;
-	struct notifier_block ext_modem_ssr_nb;
-	struct completion clk_complete;
-	struct esoc_desc *esoc_client;
-	struct esoc_client_hook esoc_ops;
-	struct completion notif_complete;
+	phys_addr_t hang_event_data_pa;
+	void __iomem *hang_event_data_va;
+	uint16_t hang_event_data_len;
+	void *hang_event_data;
+	bool is_hyp_enabled;
+	bool psf_supported;
+	struct notifier_block psf_nb;
+	struct power_supply *batt_psy;
+	int last_updated_voltage;
+	struct work_struct soc_update_work;
+	struct workqueue_struct *soc_update_wq;
+	bool is_chain1_supported;
+	bool chain_reg_info_updated;
+};
+
+struct icnss_reg_info {
+	uint32_t mem_type;
+	uint32_t reg_offset;
+	uint32_t data_len;
 };
 
 int icnss_call_driver_uevent(struct icnss_priv *priv,

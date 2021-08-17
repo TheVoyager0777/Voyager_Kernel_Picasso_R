@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "%s:%s " fmt, KBUILD_MODNAME, __func__
@@ -75,7 +67,7 @@ enum bcl_dev_type {
 
 struct bcl_peripheral_data {
 	int                     irq_num;
-	long int		trip_temp;
+	long                    trip_temp;
 	int                     trip_val;
 	int                     last_val;
 	struct mutex            state_trans_lock;
@@ -110,7 +102,7 @@ static int bcl_read_multi_register(int16_t reg_offset, uint8_t *data, int len)
 			       (bcl_perph->fg_bcl_addr + reg_offset),
 			       data, len);
 	if (ret < 0) {
-		pr_err("Error reading register %d. err:%d", reg_offset, ret);
+		pr_err("Error reading register %d. err:%d\n", reg_offset, ret);
 		return ret;
 	}
 
@@ -129,7 +121,7 @@ static int bcl_write_general_register(int16_t reg_offset,
 	}
 	ret = regmap_write(bcl_perph->regmap, (base + reg_offset), *write_buf);
 	if (ret < 0) {
-		pr_err("Error reading register %d. err:%d", reg_offset, ret);
+		pr_err("Error reading register %d. err:%d\n", reg_offset, ret);
 		return ret;
 	}
 	pr_debug("wrote 0x%02x to 0x%04x\n", data, base + reg_offset);
@@ -310,7 +302,7 @@ static int bcl_clear_vbat_min(void)
 	ret = bcl_write_register(BCL_MAX_MIN_CLR,
 			BIT(BCL_VBAT_MIN_CLR));
 	if (ret)
-		pr_err("Error in clearing vbat min reg. err:%d", ret);
+		pr_err("Error in clearing vbat min reg. err:%d\n", ret);
 
 	return ret;
 }
@@ -322,7 +314,7 @@ static int bcl_clear_ibat_max(void)
 	ret = bcl_write_register(BCL_MAX_MIN_CLR,
 			BIT(BCL_IBAT_MAX_CLR));
 	if (ret)
-		pr_err("Error in clearing ibat max reg. err:%d", ret);
+		pr_err("Error in clearing ibat max reg. err:%d\n", ret);
 
 	return ret;
 }
@@ -337,7 +329,7 @@ static int bcl_read_ibat(void *data, int *adc_value)
 	*adc_value = (int)val[VAL_REG_BUF_OFFSET];
 	do {
 		ret = bcl_read_multi_register(BCL_IBAT_MAX, val,
-			VAL_CP_REG_BUF_LEN);
+					VAL_CP_REG_BUF_LEN);
 		if (ret) {
 			pr_err("BCL register read error. err:%d\n", ret);
 			goto bcl_read_exit;
@@ -603,7 +595,7 @@ static void bcl_fetch_trip(struct platform_device *pdev, const char *int_name,
 				int_name, data);
 		if (ret) {
 			dev_err(&pdev->dev,
-				"Error requesting trip irq. err:%d",
+				"Error requesting trip irq. err:%d\n",
 				ret);
 			mutex_unlock(&data->state_trans_lock);
 			return;

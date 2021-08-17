@@ -1,13 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2019, The Linux Foundation. All rights reserved.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
+ * RMNET_CTL client handlers
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <soc/qcom/rmnet_ctl.h>
@@ -93,8 +88,7 @@ void *rmnet_ctl_register_client(struct rmnet_ctl_client_hooks *hook)
 	if (!hook)
 		return NULL;
 
-	client = (struct rmnet_ctl_client *)
-			kzalloc(sizeof(*client), GFP_KERNEL);
+	client = kzalloc(sizeof(*client), GFP_KERNEL);
 	if (!client)
 		return NULL;
 	client->hooks = *hook;

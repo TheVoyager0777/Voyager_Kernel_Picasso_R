@@ -13,10 +13,10 @@ enum rtnl_link_flags {
 	RTNL_FLAG_DOIT_UNLOCKED = 1,
 };
 
-int __rtnl_register(int protocol, int msgtype,
-		    rtnl_doit_func, rtnl_dumpit_func, unsigned int flags);
 void rtnl_register(int protocol, int msgtype,
 		   rtnl_doit_func, rtnl_dumpit_func, unsigned int flags);
+int rtnl_register_module(struct module *owner, int protocol, int msgtype,
+			 rtnl_doit_func, rtnl_dumpit_func, unsigned int flags);
 int rtnl_unregister(int protocol, int msgtype);
 void rtnl_unregister_all(int protocol);
 
@@ -33,7 +33,6 @@ static inline int rtnl_msg_family(const struct nlmsghdr *nlh)
  *
  *	@list: Used internally
  *	@kind: Identifier
- *	@netns_refund: Physical device, move to init_net on netns exit
  *	@maxtype: Highest device specific netlink attribute number
  *	@policy: Netlink policy for device specific attribute validation
  *	@validate: Optional validation function for netlink/changelink parameters
@@ -93,12 +92,8 @@ struct rtnl_link_ops {
 	unsigned int		(*get_num_tx_queues)(void);
 	unsigned int		(*get_num_rx_queues)(void);
 
-	bool			netns_refund;
 	unsigned int		slave_maxtype;
 	const struct nla_policy	*slave_policy;
-	int			(*slave_validate)(struct nlattr *tb[],
-						  struct nlattr *data[],
-						  struct netlink_ext_ack *extack);
 	int			(*slave_changelink)(struct net_device *dev,
 						    struct net_device *slave_dev,
 						    struct nlattr *tb[],
@@ -156,8 +151,6 @@ struct rtnl_af_ops {
 						 const struct net_device *dev);
 	size_t			(*get_stats_af_size)(const struct net_device *dev);
 };
-
-void __rtnl_af_unregister(struct rtnl_af_ops *ops);
 
 void rtnl_af_register(struct rtnl_af_ops *ops);
 void rtnl_af_unregister(struct rtnl_af_ops *ops);

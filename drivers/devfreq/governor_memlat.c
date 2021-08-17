@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #define pr_fmt(fmt) "mem_lat: " fmt
@@ -37,6 +29,8 @@
 struct memlat_node {
 	unsigned int ratio_ceil;
 	unsigned int stall_floor;
+	unsigned int wb_pct_thres;
+	unsigned int wb_filter_ratio;
 	bool mon_started;
 	bool already_zero;
 	struct list_head list;
@@ -60,7 +54,7 @@ static ssize_t show_##name(struct device *dev,				\
 {									\
 	struct devfreq *df = to_devfreq(dev);				\
 	struct memlat_node *hw = df->data;				\
-	return snprintf(buf, PAGE_SIZE, "%u\n", hw->name);		\
+	return scnprintf(buf, PAGE_SIZE, "%u\n", hw->name);		\
 }
 
 #define store_attr(name, _min, _max) \
@@ -86,7 +80,7 @@ show_attr(__attr)			\
 store_attr(__attr, min, max)		\
 static DEVICE_ATTR(__attr, 0644, show_##__attr, store_##__attr)
 
-static ssize_t show_map(struct device *dev, struct device_attribute *attr,
+static ssize_t freq_map_show(struct device *dev, struct device_attribute *attr,
 			char *buf)
 {
 	struct devfreq *df = to_devfreq(dev);
@@ -94,20 +88,20 @@ static ssize_t show_map(struct device *dev, struct device_attribute *attr,
 	struct core_dev_map *map = n->hw->freq_map;
 	unsigned int cnt = 0;
 
-	cnt += snprintf(buf, PAGE_SIZE, "Core freq (MHz)\tDevice BW\n");
+	cnt += scnprintf(buf, PAGE_SIZE, "Core freq (MHz)\tDevice BW\n");
 
 	while (map->core_mhz && cnt < PAGE_SIZE) {
-		cnt += snprintf(buf + cnt, PAGE_SIZE - cnt, "%15u\t%9u\n",
+		cnt += scnprintf(buf + cnt, PAGE_SIZE - cnt, "%15u\t%9u\n",
 				map->core_mhz, map->target_freq);
 		map++;
 	}
 	if (cnt < PAGE_SIZE)
-		cnt += snprintf(buf + cnt, PAGE_SIZE - cnt, "\n");
+		cnt += scnprintf(buf + cnt, PAGE_SIZE - cnt, "\n");
 
 	return cnt;
 }
 
-static DEVICE_ATTR(freq_map, 0444, show_map, NULL);
+static DEVICE_ATTR_RO(freq_map);
 
 static unsigned long core_to_dev_freq(struct memlat_node *node,
 		unsigned long coref)
@@ -160,7 +154,8 @@ static int start_monitor(struct devfreq *df)
 		return ret;
 	}
 
-	devfreq_monitor_start(df);
+	if (!hw->should_ignore_df_monitor)
+		devfreq_monitor_start(df);
 
 	node->mon_started = true;
 
@@ -174,7 +169,9 @@ static void stop_monitor(struct devfreq *df)
 
 	node->mon_started = false;
 
-	devfreq_monitor_stop(df);
+	if (!hw->should_ignore_df_monitor)
+		devfreq_monitor_stop(df);
+
 	hw->stop_hwmon(hw);
 }
 
@@ -297,11 +294,14 @@ static int devfreq_memlat_get_freq(struct devfreq *df,
 					hw->core_stats[i].inst_count,
 					hw->core_stats[i].mem_count,
 					hw->core_stats[i].freq,
-					hw->core_stats[i].stall_pct, ratio);
+					hw->core_stats[i].stall_pct,
+					hw->core_stats[i].wb_pct, ratio);
 
-		if (ratio <= node->ratio_ceil
-		    && hw->core_stats[i].stall_pct >= node->stall_floor
-		    && hw->core_stats[i].freq > max_freq) {
+		if (((ratio <= node->ratio_ceil
+		      && hw->core_stats[i].stall_pct >= node->stall_floor) ||
+		      (hw->core_stats[i].wb_pct >= node->wb_pct_thres
+		      && ratio <= node->wb_filter_ratio))
+		      && (hw->core_stats[i].freq > max_freq)) {
 			lat_dev = i;
 			max_freq = hw->core_stats[i].freq;
 		}
@@ -327,10 +327,14 @@ static int devfreq_memlat_get_freq(struct devfreq *df,
 
 gov_attr(ratio_ceil, 1U, 20000U);
 gov_attr(stall_floor, 0U, 100U);
+gov_attr(wb_pct_thres, 0U, 100U);
+gov_attr(wb_filter_ratio, 0U, 50000U);
 
 static struct attribute *memlat_dev_attr[] = {
 	&dev_attr_ratio_ceil.attr,
 	&dev_attr_stall_floor.attr,
+	&dev_attr_wb_pct_thres.attr,
+	&dev_attr_wb_filter_ratio.attr,
 	&dev_attr_freq_map.attr,
 	NULL,
 };
@@ -350,13 +354,15 @@ static struct attribute_group compute_dev_attr_group = {
 	.attrs = compute_dev_attr,
 };
 
-#define MIN_MS	10U
+#define MIN_MS	0U
 #define MAX_MS	500U
 static int devfreq_memlat_ev_handler(struct devfreq *df,
 					unsigned int event, void *data)
 {
 	int ret;
 	unsigned int sample_ms;
+	struct memlat_node *node;
+	struct memlat_hwmon *hw;
 
 	switch (event) {
 	case DEVFREQ_GOV_START:
@@ -404,10 +410,15 @@ static int devfreq_memlat_ev_handler(struct devfreq *df,
 		break;
 
 	case DEVFREQ_GOV_INTERVAL:
+		node = df->data;
+		hw = node->hw;
 		sample_ms = *(unsigned int *)data;
 		sample_ms = max(MIN_MS, sample_ms);
 		sample_ms = min(MAX_MS, sample_ms);
-		devfreq_interval_update(df, &sample_ms);
+		if (hw->request_update_ms)
+			hw->request_update_ms(hw, sample_ms);
+		if (!hw->should_ignore_df_monitor)
+			devfreq_interval_update(df, &sample_ms);
 		break;
 	}
 
@@ -486,6 +497,8 @@ static struct memlat_node *register_common(struct device *dev,
 		return ERR_PTR(-ENOMEM);
 
 	node->ratio_ceil = 10;
+	node->wb_pct_thres = 100;
+	node->wb_filter_ratio = 25000;
 	node->hw = hw;
 
 	if (hw->get_child_of_node) {

@@ -1,13 +1,6 @@
-/* Copyright (c) 2012-2017, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _IPA_ODO_BRIDGE_H_
@@ -49,7 +42,7 @@ struct odu_bridge_params {
  */
 struct ipa_bridge_init_params {
 	struct odu_bridge_params info;
-	void (*wakeup_request)(void *);
+	void (*wakeup_request)(void *cl_priv);
 };
 
 #ifdef CONFIG_IPA3

@@ -1,3 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
+/*
+ * Copyright (c) 2017, 2019, The Linux Foundation. All rights reserved.
+ */
+
 #ifndef _UAPI_QSEECOM_H_
 #define _UAPI_QSEECOM_H_
 

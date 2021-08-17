@@ -1,4 +1,5 @@
-/* Copyright (c) 2011-2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2011-2018, 2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -542,7 +543,7 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 			goto DONE;
 
 		read_config_ptr =
-			(__force struct msm_camera_i2c_read_config *)
+			(struct msm_camera_i2c_read_config *)
 			compat_ptr(cdata->cfg.setting);
 
 		if (copy_from_user(&read_config,
@@ -570,7 +571,8 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 			s_ctrl->sensor_i2c_client->client->addr =
 				read_slave_addr >> 1;
 		} else {
-			pr_err("%s: error: no i2c/cci client found.", __func__);
+			pr_err("%s: error: no i2c/cci client found.\n",
+				__func__);
 			rc = -EFAULT;
 			break;
 		}
@@ -685,7 +687,7 @@ static int msm_sensor_config32(struct msm_sensor_ctrl_t *s_ctrl,
 			s_ctrl->sensor_i2c_client->client->addr =
 				write_slave_addr >> 1;
 		} else {
-			pr_err("%s: error: no i2c/cci client found.",
+			pr_err("%s: error: no i2c/cci client found.\n",
 				__func__);
 			kfree(reg_setting);
 			rc = -EFAULT;
@@ -1099,7 +1101,8 @@ int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void *argp)
 			s_ctrl->sensor_i2c_client->client->addr =
 				read_slave_addr >> 1;
 		} else {
-			pr_err("%s: error: no i2c/cci client found.", __func__);
+			pr_err("%s: error: no i2c/cci client found.\n",
+				__func__);
 			rc = -EFAULT;
 			break;
 		}
@@ -1193,7 +1196,8 @@ int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void *argp)
 			s_ctrl->sensor_i2c_client->client->addr =
 				write_slave_addr >> 1;
 		} else {
-			pr_err("%s: error: no i2c/cci client found.", __func__);
+			pr_err("%s: error: no i2c/cci client found.\n",
+				__func__);
 			kfree(reg_setting);
 			rc = -EFAULT;
 			break;
@@ -1213,7 +1217,8 @@ int msm_sensor_config(struct msm_sensor_ctrl_t *s_ctrl, void *argp)
 			s_ctrl->sensor_i2c_client->client->addr =
 				orig_slave_addr;
 		} else {
-			pr_err("%s: error: no i2c/cci client found.", __func__);
+			pr_err("%s: error: no i2c/cci client found.\n",
+				__func__);
 			kfree(reg_setting);
 			rc = -EFAULT;
 			break;

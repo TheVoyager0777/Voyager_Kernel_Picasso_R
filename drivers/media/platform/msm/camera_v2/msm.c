@@ -1,4 +1,5 @@
-/* Copyright (c) 2012-2018,2020 The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2018, 2020 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -123,8 +124,7 @@ static uint32_t gpu_limit;
 		node = list_first_entry(&__q->list,		\
 			type, member);		\
 		if (node) {					\
-			if (&node->member) \
-				list_del_init(&node->member);		\
+			list_del_init(&node->member);		\
 			kzfree(node);	\
 		}	\
 	}	\
@@ -136,15 +136,18 @@ typedef int (*msm_queue_func)(void *d1, void *d2);
 	unsigned long flags;					\
 	struct msm_queue_head *__q = (queue);			\
 	type *node = NULL; \
+	typeof(node) __ret = NULL; \
 	msm_queue_func __f = (func); \
 	spin_lock_irqsave(&__q->lock, flags);			\
 	if (!list_empty(&__q->list)) { \
 		list_for_each_entry(node, &__q->list, member) \
-			if (node && __f)  { \
-				__f(node, data); \
+			if ((__f) && __f(node, data)) { \
+				__ret = node; \
+				break; \
 			} \
 	} \
 	spin_unlock_irqrestore(&__q->lock, flags);			\
+	__ret; \
 } while (0)
 
 typedef int (*msm_queue_find_func)(void *d1, void *d2);
@@ -226,7 +229,7 @@ static inline int __msm_queue_find_command_ack_q(void *d1, void *d2)
 
 static inline void msm_pm_qos_add_request(void)
 {
-	pr_info("%s: add request", __func__);
+	pr_info("%s: add request\n", __func__);
 	if (atomic_cmpxchg(&qos_add_request_done, 0, 1))
 		return;
 	pm_qos_add_request(&msm_v4l2_pm_qos_request, PM_QOS_CPU_DMA_LATENCY,
@@ -235,13 +238,13 @@ static inline void msm_pm_qos_add_request(void)
 
 static void msm_pm_qos_remove_request(void)
 {
-	pr_info("%s: remove request", __func__);
+	pr_info("%s: remove request\n", __func__);
 	pm_qos_remove_request(&msm_v4l2_pm_qos_request);
 }
 
 void msm_pm_qos_update_request(int val)
 {
-	pr_info("%s: update request %d", __func__, val);
+	pr_info("%s: update request %d\n", __func__, val);
 	msm_pm_qos_add_request();
 	pm_qos_update_request(&msm_v4l2_pm_qos_request, val);
 }
@@ -355,7 +358,8 @@ static inline int __msm_sd_register_subdev(struct v4l2_subdev *sd)
 
 	rc = v4l2_device_register_subdev(msm_v4l2_dev, sd);
 	if (rc < 0) {
-		pr_err("v4l2_device_register_subdev: failed for %s", sd->name);
+		pr_err("v4l2_device_register_subdev: failed for %s\n",
+			sd->name);
 		WARN_ON(1);
 		return rc;
 	}
@@ -580,7 +584,7 @@ static inline int __msm_sd_close_subdevs(struct msm_sd_subdev *msm_sd,
 	struct v4l2_subdev *sd;
 
 	sd = &msm_sd->sd;
-	pr_debug("%s: Shutting down subdev %s", __func__, sd->name);
+	pr_debug("%s: Shutting down subdev %s\n", __func__, sd->name);
 
 	v4l2_subdev_call(sd, core, ioctl, MSM_SD_SHUTDOWN, sd_close);
 	v4l2_subdev_call(sd, core, s_power, 0);
@@ -993,7 +997,7 @@ int msm_post_event(struct v4l2_event *event, int timeout)
 			mutex_unlock(&session->lock);
 			return -ETIMEDOUT;
 		}
-		pr_err("%s: Error: No timeout but list empty!",
+		pr_err("%s: Error: No timeout but list empty!\n",
 				__func__);
 		msm_print_event_error(event);
 		mutex_unlock(&session->lock);
@@ -1465,7 +1469,6 @@ static struct platform_driver msm_driver = {
 	.probe = msm_probe,
 	.driver = {
 		.name = "msm",
-		.owner = THIS_MODULE,
 		.of_match_table = msm_dt_match,
 	},
 };

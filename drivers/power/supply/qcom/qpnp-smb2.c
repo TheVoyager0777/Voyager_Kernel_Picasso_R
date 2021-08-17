@@ -1,13 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2016-2017,2019-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/debugfs.h>
@@ -181,23 +173,78 @@ struct smb2 {
 };
 
 static int __debug_mask;
-module_param_named(
-	debug_mask, __debug_mask, int, 0600
-);
 
 static int __weak_chg_icl_ua = 500000;
-module_param_named(
-	weak_chg_icl_ua, __weak_chg_icl_ua, int, 0600);
+static ssize_t weak_chg_icl_ua_show(struct device *dev, struct device_attribute
+				     *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", __weak_chg_icl_ua);
+}
+
+static ssize_t weak_chg_icl_ua_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (kstrtos32(buf, 0, &val))
+		return -EINVAL;
+
+	__weak_chg_icl_ua = val;
+
+	return count;
+}
+static DEVICE_ATTR_RW(weak_chg_icl_ua);
 
 static int __try_sink_enabled = 1;
-module_param_named(
-	try_sink_enabled, __try_sink_enabled, int, 0600
-);
+static ssize_t try_sink_enabled_show(struct device *dev, struct device_attribute
+				     *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", __try_sink_enabled);
+}
+
+static ssize_t try_sink_enabled_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (kstrtos32(buf, 0, &val))
+		return -EINVAL;
+
+	__try_sink_enabled = val;
+
+	return count;
+}
+static DEVICE_ATTR_RW(try_sink_enabled);
 
 static int __audio_headset_drp_wait_ms = 100;
-module_param_named(
-	audio_headset_drp_wait_ms, __audio_headset_drp_wait_ms, int, 0600
-);
+static ssize_t audio_headset_drp_wait_ms_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	return scnprintf(buf, PAGE_SIZE, "%d\n", __audio_headset_drp_wait_ms);
+}
+
+static ssize_t audio_headset_drp_wait_ms_store(struct device *dev,
+		struct device_attribute *attr, const char *buf, size_t count)
+{
+	int val;
+
+	if (kstrtos32(buf, 0, &val))
+		return -EINVAL;
+
+	__audio_headset_drp_wait_ms = val;
+
+	return count;
+}
+static DEVICE_ATTR_RW(audio_headset_drp_wait_ms);
+
+static struct attribute *smb2_attrs[] = {
+	&dev_attr_weak_chg_icl_ua.attr,
+	&dev_attr_try_sink_enabled.attr,
+	&dev_attr_audio_headset_drp_wait_ms.attr,
+	NULL,
+};
+ATTRIBUTE_GROUPS(smb2);
+
 
 #define MICRO_1P5A		1500000
 #define MICRO_P1A		100000
@@ -2306,9 +2353,6 @@ static void smb2_free_interrupts(struct smb_charger *chg)
 		if (smb2_irqs[i].irq > 0) {
 			if (smb2_irqs[i].wake)
 				disable_irq_wake(smb2_irqs[i].irq);
-
-			devm_free_irq(chg->dev, smb2_irqs[i].irq,
-					smb2_irqs[i].irq_data);
 		}
 	}
 }
@@ -2332,7 +2376,7 @@ static int force_batt_psy_update_write(void *data, u64 val)
 	power_supply_changed(chg->batt_psy);
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(force_batt_psy_update_ops, NULL,
+DEFINE_DEBUGFS_ATTRIBUTE(force_batt_psy_update_ops, NULL,
 			force_batt_psy_update_write, "0x%02llx\n");
 
 static int force_usb_psy_update_write(void *data, u64 val)
@@ -2342,7 +2386,7 @@ static int force_usb_psy_update_write(void *data, u64 val)
 	power_supply_changed(chg->usb_psy);
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(force_usb_psy_update_ops, NULL,
+DEFINE_DEBUGFS_ATTRIBUTE(force_usb_psy_update_ops, NULL,
 			force_usb_psy_update_write, "0x%02llx\n");
 
 static int force_dc_psy_update_write(void *data, u64 val)
@@ -2352,7 +2396,7 @@ static int force_dc_psy_update_write(void *data, u64 val)
 	power_supply_changed(chg->dc_psy);
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(force_dc_psy_update_ops, NULL,
+DEFINE_DEBUGFS_ATTRIBUTE(force_dc_psy_update_ops, NULL,
 			force_dc_psy_update_write, "0x%02llx\n");
 
 static void smb2_create_debugfs(struct smb2 *chip)
@@ -2383,6 +2427,11 @@ static void smb2_create_debugfs(struct smb2 *chip)
 	if (IS_ERR_OR_NULL(file))
 		pr_err("Couldn't create force_dc_psy_update file rc=%ld\n",
 			(long)file);
+
+	file = debugfs_create_u32("debug_mask", 0600, chip->dfs_root,
+			       &__debug_mask);
+	if (IS_ERR_OR_NULL(file))
+		pr_err("Failed to create debug_mask rc=%ld\n", (long)file);
 }
 
 #else
@@ -2538,6 +2587,12 @@ static int smb2_probe(struct platform_device *pdev)
 	}
 	usb_present = val.intval;
 
+	rc = sysfs_create_groups(&chg->dev->kobj, smb2_groups);
+	if (rc < 0) {
+		pr_err("Failed to create sysfs files rc=%d\n", rc);
+		goto cleanup;
+	}
+
 	rc = smblib_get_prop_batt_present(chg, &val);
 	if (rc < 0) {
 		pr_err("Couldn't get batt present rc=%d\n", rc);
@@ -2599,7 +2654,8 @@ static int smb2_remove(struct platform_device *pdev)
 	power_supply_unregister(chg->usb_port_psy);
 	regulator_unregister(chg->vconn_vreg->rdev);
 	regulator_unregister(chg->vbus_vreg->rdev);
-
+	sysfs_remove_groups(&chg->dev->kobj, smb2_groups);
+	debugfs_remove_recursive(chip->dfs_root);
 	platform_set_drvdata(pdev, NULL);
 	return 0;
 }
@@ -2635,7 +2691,6 @@ static const struct of_device_id match_table[] = {
 static struct platform_driver smb2_driver = {
 	.driver		= {
 		.name		= "qcom,qpnp-smb2",
-		.owner		= THIS_MODULE,
 		.of_match_table	= match_table,
 	},
 	.probe		= smb2_probe,

@@ -1,4 +1,5 @@
-/* Copyright (c) 2016, 2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2016, 2018, 2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -11,7 +12,7 @@
  *
  */
 
-#define pr_fmt(fmt) "%s:%d " fmt, __func__, __LINE__
+#define pr_fmt(fmt) "%s:%d\n" fmt, __func__, __LINE__
 
 #include <linux/module.h>
 #include <linux/of_gpio.h>
@@ -78,14 +79,14 @@ static int32_t msm_ir_cut_release(
 	int32_t rc = 0;
 
 	if (ir_cut_ctrl->ir_cut_state == MSM_CAMERA_IR_CUT_RELEASE) {
-		pr_err("%s:%d Invalid ir_cut state = %d",
+		pr_err("%s:%d Invalid ir_cut state = %d\n",
 			__func__, __LINE__, ir_cut_ctrl->ir_cut_state);
 		return 0;
 	}
 
 	rc = ir_cut_ctrl->func_tbl->camera_ir_cut_on(ir_cut_ctrl, NULL);
 	if (rc < 0) {
-		pr_err("%s:%d camera_ir_cut_on failed rc = %d",
+		pr_err("%s:%d camera_ir_cut_on failed rc = %d\n",
 			__func__, __LINE__, rc);
 		return rc;
 	}
@@ -122,7 +123,7 @@ static int32_t msm_ir_cut_off(struct msm_ir_cut_ctrl_t *ir_cut_ctrl,
 			ir_cut_ctrl->pinctrl_info.gpio_state_active);
 
 		if (rc < 0)
-			pr_err("ERR:%s:%d cannot set pin to active state: %d",
+			pr_err("ERR:%s:%d cannot set pin to active state: %d\n",
 				__func__, __LINE__, rc);
 	}
 
@@ -194,7 +195,7 @@ static int32_t msm_ir_cut_on(
 			ir_cut_ctrl->pinctrl_info.gpio_state_active);
 
 		if (rc < 0)
-			pr_err("ERR:%s:%d cannot set pin to active state: %d",
+			pr_err("ERR:%s:%d cannot set pin to active state: %d\n",
 				__func__, __LINE__, rc);
 	}
 
@@ -247,7 +248,7 @@ static int32_t msm_ir_cut_handle_init(
 	CDBG("Enter");
 
 	if (ir_cut_ctrl->ir_cut_state == MSM_CAMERA_IR_CUT_INIT) {
-		pr_err("%s:%d Invalid ir_cut state = %d",
+		pr_err("%s:%d Invalid ir_cut state = %d\n",
 			__func__, __LINE__, ir_cut_ctrl->ir_cut_state);
 		return 0;
 	}
@@ -269,7 +270,7 @@ static int32_t msm_ir_cut_handle_init(
 	rc = ir_cut_ctrl->func_tbl->camera_ir_cut_init(
 			ir_cut_ctrl, ir_cut_data);
 	if (rc < 0) {
-		pr_err("%s:%d camera_ir_cut_init failed rc = %d",
+		pr_err("%s:%d camera_ir_cut_init failed rc = %d\n",
 			__func__, __LINE__, rc);
 		return rc;
 	}
@@ -620,7 +621,6 @@ static struct platform_driver msm_ir_cut_platform_driver = {
 	.probe = msm_ir_cut_platform_probe,
 	.driver = {
 		.name = "qcom,ir-cut",
-		.owner = THIS_MODULE,
 		.of_match_table = msm_ir_cut_dt_match,
 	},
 };
@@ -634,7 +634,7 @@ static int __init msm_ir_cut_init_module(void)
 	if (!rc)
 		return rc;
 
-	pr_err("platform probe for ir_cut failed");
+	pr_err("platform probe for ir_cut failed\n");
 
 	return rc;
 }

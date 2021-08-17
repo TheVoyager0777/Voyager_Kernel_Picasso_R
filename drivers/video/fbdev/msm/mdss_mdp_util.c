@@ -1,15 +1,5 @@
-/* Copyright (c) 2012-2018, 2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2018, 2020, The Linux Foundation. All rights reserved. */
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
 #include <linux/dma-mapping.h>
@@ -244,6 +234,7 @@ void mdss_mdp_crop_rect(struct mdss_rect *src_rect,
 	const struct mdss_rect *sci_rect, bool normalize)
 {
 	struct mdss_rect res;
+
 	mdss_mdp_intersect_rect(&res, dst_rect, sci_rect);
 
 	if (res.w && res.h) {
@@ -521,6 +512,7 @@ int mdss_mdp_get_plane_sizes(struct mdss_mdp_format_params *fmt, u32 w, u32 h,
 {
 	int i, rc = 0;
 	u32 bpp;
+
 	if (ps == NULL)
 		return -EINVAL;
 
@@ -754,6 +746,7 @@ int mdss_mdp_data_check(struct mdss_mdp_data *data,
 		curr = &data->p[i];
 		if (i >= data->num_planes) {
 			u32 psize = ps->plane_size[i-1];
+
 			prev = &data->p[i-1];
 			if (prev->len > psize) {
 				curr->len = prev->len - psize;
@@ -912,6 +905,7 @@ void mdss_mdp_data_calc_offset(struct mdss_mdp_data *data, u16 x, u16 y,
 	} else {
 		u16 xoff, yoff;
 		u8 v_subsample, h_subsample;
+
 		mdss_mdp_get_v_h_subsample_rate(fmt->chroma_sample,
 			&v_subsample, &h_subsample);
 

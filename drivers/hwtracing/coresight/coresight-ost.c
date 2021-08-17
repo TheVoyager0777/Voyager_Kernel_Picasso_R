@@ -1,13 +1,6 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2012-2018, 2020 The Linux Foundation. All rights reserved.
  */
 
 #include <linux/device.h>
@@ -179,9 +172,6 @@ static inline int __stm_trace(uint32_t flags, uint8_t entity_id,
 	uint32_t ch;
 	void __iomem *ch_addr;
 
-	if (!(drvdata && drvdata->master_enable))
-		return 0;
-
 	/* allocate channel and get the channel address */
 	ch = stm_channel_alloc();
 	if (unlikely(ch >= drvdata->numsp)) {
@@ -233,8 +223,8 @@ int stm_trace(uint32_t flags, uint8_t entity_id, uint8_t proto_id,
 
 	/* we don't support sizes more than 24bits (0 to 23) */
 	if (!(drvdata && drvdata->enable &&
-	    test_bit(entity_id, drvdata->entities) &&
-	    size && (size < 0x1000000)))
+	      test_bit(entity_id, drvdata->entities) && size &&
+	      (size < 0x1000000)))
 		return 0;
 
 	return __stm_trace(flags, entity_id, proto_id, data, size);

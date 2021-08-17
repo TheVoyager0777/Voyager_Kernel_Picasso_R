@@ -1,14 +1,6 @@
-/* Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
  */
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
@@ -24,23 +16,15 @@
 #include "sde_rotator_dev.h"
 #include "sde_rotator_trace.h"
 
-#ifdef CONFIG_MSM_SDE_ROTATOR_EVTLOG_DEBUG
+#ifdef CONFIG_SDE_ROTATOR_EVTLOG_DEBUG
 #define SDE_EVTLOG_DEFAULT_ENABLE 1
 #else
 #define SDE_EVTLOG_DEFAULT_ENABLE 0
 #endif
-
-#ifdef CONFIG_MSM_SDE_ROTATOR_XLOG_DEBUG
 #define SDE_EVTLOG_DEFAULT_PANIC 1
 #define SDE_EVTLOG_DEFAULT_REGDUMP SDE_ROT_DBG_DUMP_IN_MEM
 #define SDE_EVTLOG_DEFAULT_VBIF_DBGBUSDUMP SDE_ROT_DBG_DUMP_IN_MEM
 #define SDE_EVTLOG_DEFAULT_ROT_DBGBUSDUMP SDE_ROT_DBG_DUMP_IN_MEM
-#else
-#define SDE_EVTLOG_DEFAULT_PANIC 0
-#define SDE_EVTLOG_DEFAULT_REGDUMP SDE_ROT_DBG_DUMP_IN_LOG
-#define SDE_EVTLOG_DEFAULT_VBIF_DBGBUSDUMP SDE_ROT_DBG_DUMP_IN_LOG
-#define SDE_EVTLOG_DEFAULT_ROT_DBGBUSDUMP SDE_ROT_DBG_DUMP_IN_LOG
-#endif
 
 /*
  * evtlog will print this number of entries when it is called through
@@ -511,7 +495,7 @@ static ssize_t sde_rot_evtlog_dump_entry(char *evtlog_buf,
 	prev_log = &sde_rot_dbg_evtlog.logs[(sde_rot_dbg_evtlog.first - 1) %
 		SDE_ROT_EVTLOG_ENTRY];
 
-	off = snprintf((evtlog_buf + off), (evtlog_buf_size - off), "%s:%-4d",
+	off = scnprintf((evtlog_buf + off), (evtlog_buf_size - off), "%s:%-4d",
 		log->name, log->line);
 
 	if (off < SDE_ROT_EVTLOG_BUF_ALIGN) {
@@ -520,15 +504,15 @@ static ssize_t sde_rot_evtlog_dump_entry(char *evtlog_buf,
 		off = SDE_ROT_EVTLOG_BUF_ALIGN;
 	}
 
-	off += snprintf((evtlog_buf + off), (evtlog_buf_size - off),
+	off += scnprintf((evtlog_buf + off), (evtlog_buf_size - off),
 		"=>[%-8d:%-11llu:%9llu][%-4d]:", sde_rot_dbg_evtlog.first,
 		log->time, (log->time - prev_log->time), log->pid);
 
 	for (i = 0; i < log->data_cnt; i++)
-		off += snprintf((evtlog_buf + off), (evtlog_buf_size - off),
+		off += scnprintf((evtlog_buf + off), (evtlog_buf_size - off),
 			"%x ", log->data[i]);
 
-	off += snprintf((evtlog_buf + off), (evtlog_buf_size - off), "\n");
+	off += scnprintf((evtlog_buf + off), (evtlog_buf_size - off), "\n");
 
 	spin_unlock_irqrestore(&sde_rot_xlock, flags);
 
@@ -544,7 +528,7 @@ static void sde_rot_evtlog_dump_all(void)
 
 	while (__sde_rot_evtlog_dump_calc_range()) {
 		sde_rot_evtlog_dump_entry(evtlog_buf, SDE_ROT_EVTLOG_BUF_MAX);
-		pr_info("%s", evtlog_buf);
+		pr_info("%s\n", evtlog_buf);
 	}
 }
 
@@ -1159,7 +1143,7 @@ static ssize_t sde_rotator_debug_base_offset_read(struct file *file,
 		return 0;	/* the end */
 
 	mutex_lock(&dbg->buflock);
-	len = snprintf(buf, sizeof(buf), "0x%08zx %zx\n", dbg->off, dbg->cnt);
+	len = scnprintf(buf, sizeof(buf), "0x%08zx %zx\n", dbg->off, dbg->cnt);
 	mutex_unlock(&dbg->buflock);
 
 	if (len < 0 || len >= sizeof(buf))
@@ -1363,7 +1347,7 @@ int sde_rotator_debug_register_base(struct sde_rotator_device *rot_dev,
 
 	if (name) {
 		if (strcmp(name, "sde"))
-			prefix_len = snprintf(dbgname, sizeof(dbgname), "%s_",
+			prefix_len = scnprintf(dbgname, sizeof(dbgname), "%s_",
 					name);
 		else
 			/*

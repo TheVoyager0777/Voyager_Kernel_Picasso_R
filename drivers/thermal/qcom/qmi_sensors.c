@@ -1,14 +1,6 @@
-/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "%s:%s " fmt, KBUILD_MODNAME, __func__
@@ -64,11 +56,9 @@ enum qmi_ts_sensor {
 	QMI_SYS_THERM1,
 	QMI_SYS_THERM2,
 	QMI_TS_TSENS_1,
-	QMI_TS_RET_PA_0_FR1,
-	QMI_TS_WTR_PA_0_FR1,
-	QMI_TS_WTR_PA_1_FR1,
-	QMI_TS_WTR_PA_2_FR1,
-	QMI_TS_WTR_PA_3_FR1,
+	QMI_TS_BEAMER_W_THERM,
+	QMI_TS_BEAMER_N_THERM,
+	QMI_TS_BEAMER_E_THERM,
 	QMI_TS_MAX_NR
 };
 
@@ -126,11 +116,9 @@ static char sensor_clients[QMI_TS_MAX_NR][QMI_CLIENT_NAME_LENGTH] = {
 	{"sys_therm1"},
 	{"sys_therm2"},
 	{"modem_tsens1"},
-	{"qfe_ret_pa0_fr1"},
-	{"qfe_wtr_pa0_fr1"},
-	{"qfe_wtr_pa1_fr1"},
-	{"qfe_wtr_pa2_fr1"},
-	{"qfe_wtr_pa3_fr1"},
+	{"BEAMER_W_THERM"},
+	{"BEAMER_N_THERM"},
+	{"BEAMER_E_THERM"},
 };
 
 static int32_t encode_qmi(int32_t val)
@@ -260,7 +248,7 @@ void qmi_ts_ind_cb(struct qmi_handle *qmi, struct sockaddr_qrtr *sq,
 	if (ind_msg->temp_valid)
 		qmi_ts_update_temperature(ts, ind_msg, notify);
 	else
-		pr_err("Error invalid temperature field.");
+		pr_err("Error invalid temperature field.\n");
 }
 
 static int qmi_ts_request(struct qmi_sensor *qmi_sens,
@@ -394,7 +382,7 @@ static int qmi_register_sensor_device(struct qmi_sensor *qmi_sens)
 	if (IS_ERR(qmi_sens->tz_dev)) {
 		ret = PTR_ERR(qmi_sens->tz_dev);
 		if (ret != -ENODEV)
-			pr_err("sensor register failed for %s, ret:%ld\n",
+			pr_err("sensor register failed for %s, ret:%d\n",
 				qmi_sens->qmi_name, ret);
 		qmi_sens->tz_dev = NULL;
 		return ret;

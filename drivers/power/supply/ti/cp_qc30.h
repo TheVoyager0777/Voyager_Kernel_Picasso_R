@@ -70,41 +70,16 @@ enum hvdcp3_type {
 	HVDCP3_NONE = 0,
 	HVDCP3_CLASSA_18W,
 	HVDCP3_CLASSB_27W,
-	HVDCP3P5_CLASSA_18W,
-	HVDCP3P5_CLASSB_27W,
 };
 
-
-/* QC3.0 */
-#define HVDCP3_CLASS_B_BAT_CURRENT_MA			5400
+#define HVDCP3_CLASS_B_BAT_CURRENT_MA			5600
 #define HVDCP3_CLASS_B_BUS_CURRENT_MA			2700
-#define HVDCP3_CLASS_A_BAT_CURRENT_MA			3600
-#define HVDCP3_CLASS_A_BUS_CURRENT_MA			2100
-#define MAX_PLUSE_COUNT_ALLOWED				23
-#define HVDCP3_IBUS_MINUS_DEV_VAL			550
-#define HVDCP3_IBUS_PLUS_DEV_VAL			200
-#define HVDCP3_IBAT_MINUS_DEV_VAL			600
-#define HVDCP3_IBAT_PLUS_DEV_VAL			500
-#define FAKE_HVDCP3_VBUS				5500
-#define FAKE_HVDCP3_DP_COUNT				8
-
-/* QC3.5 */
-#define HVDCP3P5_CLASS_B_BAT_CURRENT_MA		5400
-#define HVDCP3P5_CLASS_B_BUS_CURRENT_MA		2700
-#define HVDCP3P5_CLASS_A_BAT_CURRENT_MA		4200
-#define HVDCP3P5_CLASS_A_BUS_CURRENT_MA		2100
-#define MAX_HVDCP3P5_PLUSE_COUNT_ALLOWED		230
-#define HVDCP3P5_IBUS_MINUS_DEV_VAL			200
-#define HVDCP3P5_IBUS_PLUS_DEV_VAL			150
-#define HVDCP3P5_IBAT_MINUS_DEV_VAL			300
-#define HVDCP3P5_IBAT_PLUS_DEV_VAL			200
-
-#define MAX_THERMAL_LEVEL			13
+#define HVDCP3_CLASS_A_BAT_CURRENT_MA			3800
+#define HVDCP3_CLASS_A_BUS_CURRENT_MA			2200
+#define MAX_THERMAL_LEVEL				13
 /* jeita related */
-#define JEITA_WARM_THR			480
+#define JEITA_WARM_THR					450
 #define JEITA_COOL_NOT_ALLOW_CP_THR			100
-
-
 /*
  * add hysteresis for warm threshold to avoid flash
  * charge and normal charge switch frequently at
@@ -113,7 +88,6 @@ enum hvdcp3_type {
 #define JEITA_HYSTERESIS			20
 
 #define HIGH_CAPACITY_TRH			90
-
 
 struct flash2_policy {
 	int down_steps;
@@ -192,8 +166,6 @@ struct bq2597x {
 	int  bat_temp;
 	int  bus_temp;
 	int  die_temp;
-	int  bus_error_status;
-	int  sc8551_charge_mode;
 };
 
 struct sw_charger {
@@ -205,6 +177,7 @@ struct sw_charger {
 typedef struct {
 	bool        sw_is_charging;
 	bool        flash2_is_charging;
+	bool        sw_from_flash2;
 	bool        sw_near_cv;
 	bool		sw_fc2_init_fail;
 	bool		bms_fastcharge_mode;
@@ -229,31 +202,23 @@ typedef struct {
 	struct power_supply *bms_psy;
 	/* jeita or thermal related */
 	bool			jeita_triggered;
-	bool			batt_cell_volt_triggered;
 	bool			is_temp_out_fc2_range;
-	bool			slowly_charging;
 
     struct delayed_work	qc3_pm_work;
 } pm_t;
 
 
 struct sys_config {
-	int bat_volt_lp_lmt; /*bat volt loop limit*/
-	int ffc_bat_volt_lmt;
+	uint16_t bat_volt_lp_lmt; /*bat volt loop limit*/
 	uint16_t bat_curr_lp_lmt;
 	uint16_t bus_volt_lp_lmt;
 	uint16_t bus_curr_lp_lmt;
-	uint16_t ibus_plus_deviation_val;
-	uint16_t ibus_minus_deviation_val;
-	uint16_t ibat_plus_deviation_val;
-	uint16_t ibat_minus_deviation_val;
 	int32_t fc2_taper_current;
 
 	struct flash2_policy flash2_policy;
 
 	uint16_t min_vbat_start_flash2;
 	bool	cp_sec_enable;
-	bool	qc3p5_supported;
 };
 
 #endif /* SRC_PDLIB_USB_PD_POLICY_MANAGER_H_ */

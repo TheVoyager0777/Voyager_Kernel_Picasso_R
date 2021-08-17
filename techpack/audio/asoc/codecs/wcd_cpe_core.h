@@ -1,13 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #ifndef WCD_CPE_CORE_H
@@ -58,18 +50,20 @@ enum cpe_err_irq_cntl_type {
 
 struct wcd_cpe_cdc_cb {
 	/* codec provided callback to enable RCO */
-	int (*cdc_clk_en)(struct snd_soc_codec *, bool);
+	int (*cdc_clk_en)(struct snd_soc_component *cpmponent, bool enable);
 
 	/* callback for FLL setup for codec */
-	int (*cpe_clk_en)(struct snd_soc_codec *, bool);
-	int (*cdc_ext_clk)(struct snd_soc_codec *codec, int enable, bool dapm);
-	int (*lab_cdc_ch_ctl)(struct snd_soc_codec *codec, u8 event);
-	int (*get_afe_out_port_id)(struct snd_soc_codec *codec, u16 *port_id);
-	int (*bus_vote_bw)(struct snd_soc_codec *codec,
+	int (*cpe_clk_en)(struct snd_soc_component *component, bool enable);
+	int (*cdc_ext_clk)(struct snd_soc_component *component, int enable,
+			   bool dapm);
+	int (*lab_cdc_ch_ctl)(struct snd_soc_component *component, u8 event);
+	int (*get_afe_out_port_id)(struct snd_soc_component *component,
+				   u16 *port_id);
+	int (*bus_vote_bw)(struct snd_soc_component *component,
 			   bool vote);
 
 	/* Callback to control the cpe error interrupt mask/status/clear */
-	int (*cpe_err_irq_control)(struct snd_soc_codec *codec,
+	int (*cpe_err_irq_control)(struct snd_soc_component *component,
 				    enum cpe_err_irq_cntl_type cntl_type,
 				    u8 *status);
 };
@@ -122,7 +116,7 @@ struct wcd_cpe_core {
 	void *cmi_afe_handle;
 
 	/* handle to codec */
-	struct snd_soc_codec *codec;
+	struct snd_soc_component *component;
 
 	/* codec device */
 	struct device *dev;
@@ -208,9 +202,9 @@ struct wcd_cpe_core {
 };
 
 struct wcd_cpe_params {
-	struct snd_soc_codec *codec;
+	struct snd_soc_component *component;
 	struct wcd_cpe_core * (*get_cpe_core)(
-				struct snd_soc_codec *);
+				struct snd_soc_component *component);
 	const struct wcd_cpe_cdc_cb *cdc_cb;
 	int dbg_mode;
 	u16 cdc_major_ver;
@@ -226,7 +220,7 @@ struct wcd_cpe_params {
 int wcd_cpe_ssr_event(void *core_handle,
 		      enum wcd_cpe_ssr_state_event event);
 struct wcd_cpe_core *wcd_cpe_init(const char *img_fname,
-struct snd_soc_codec *codec, struct wcd_cpe_params *params);
+struct snd_soc_component *component, struct wcd_cpe_params *params);
 #else /* CONFIG_SND_SOC_WCD_CPE */
 static inline int wcd_cpe_ssr_event(void *core_handle,
 		      enum wcd_cpe_ssr_state_event event)
@@ -234,8 +228,8 @@ static inline int wcd_cpe_ssr_event(void *core_handle,
 	return 0;
 }
 static inline struct wcd_cpe_core *wcd_cpe_init(const char *img_fname,
-						struct snd_soc_codec *codec,
-						struct wcd_cpe_params *params)
+					struct snd_soc_component *component,
+					struct wcd_cpe_params *params)
 {
 	return NULL;
 }

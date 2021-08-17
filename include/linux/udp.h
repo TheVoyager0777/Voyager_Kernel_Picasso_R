@@ -50,12 +50,12 @@ struct udp_sock {
 	__u8		 encap_type;	/* Is this an Encapsulation socket? */
 	unsigned char	 no_check6_tx:1,/* Send zero UDP6 checksums on TX? */
 			 no_check6_rx:1,/* Allow zero UDP6 checksums on RX? */
-			 encap_enabled:1,/* This socket enabled encap
-					  * processing; UDP tunnels and
-					  * different encapsulation layers set
-					  * this
-					  */
-			 gro_enabled:1; /* Can accept GRO packets */
+			 encap_enabled:1, /* This socket enabled encap
+					   * processing; UDP tunnels and
+					   * different encapsulation layer set
+					   * this
+					   */
+			 gro_enabled:1;	/* Can accept GRO packets */
 	/*
 	 * Following member retains the information to create a UDP header
 	 * when the socket is uncorked.
@@ -80,8 +80,8 @@ struct udp_sock {
 	void (*encap_destroy)(struct sock *sk);
 
 	/* GRO functions for UDP socket */
-	struct sk_buff **	(*gro_receive)(struct sock *sk,
-					       struct sk_buff **head,
+	struct sk_buff *	(*gro_receive)(struct sock *sk,
+					       struct list_head *head,
 					       struct sk_buff *skb);
 	int			(*gro_complete)(struct sock *sk,
 						struct sk_buff *skb,

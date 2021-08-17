@@ -70,14 +70,16 @@ int elliptic_data_io_cleanup(void)
 {
 	return 0;
 }
-int elliptic_io_open_port(int portid){
+int elliptic_io_open_port(int portid)
+{
 	if (portid == ULTRASOUND_RX_PORT_ID)
 		return afe_start_pseudo_port(AFE_MSM_RX_PSEUDOPORT_ID);
 	else
 		return afe_start_pseudo_port(AFE_MSM_TX_PSEUDOPORT_ID);
 }
 
-int elliptic_io_close_port(int portid){
+int elliptic_io_close_port(int portid)
+{
 	if (portid == ULTRASOUND_RX_PORT_ID)
 		return afe_stop_pseudo_port(AFE_MSM_RX_PSEUDOPORT_ID);
 	else

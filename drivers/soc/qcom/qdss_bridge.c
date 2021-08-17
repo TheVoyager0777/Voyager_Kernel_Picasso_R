@@ -1,13 +1,6 @@
-/* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2017-2021, The Linux Foundation. All rights reserved.
  */
 
 #define KMSG_COMPONENT "QDSS diag bridge"
@@ -20,7 +13,6 @@
 #include <linux/ratelimit.h>
 #include <linux/workqueue.h>
 #include <linux/platform_device.h>
-#include <linux/moduleparam.h>
 #include <linux/dma-mapping.h>
 #include <linux/dma-direction.h>
 #include <linux/mhi.h>
@@ -30,8 +22,18 @@
 #include "qdss_bridge.h"
 
 #define MODULE_NAME "qdss_bridge"
+#define INIT_STATUS -1
 
 static struct class *mhi_class;
+static enum mhi_dev_state dev_state = INIT_STATUS;
+static enum mhi_ch curr_chan;
+static struct qdss_bridge_drvdata *bridge_drvdata;
+
+static const char * const str_mhi_curr_chan[] = {
+		[QDSS]			= "QDSS",
+		[QDSS_HW]		= "IP_HW_QDSS",
+		[EMPTY]			= "EMPTY",
+};
 
 static const char * const str_mhi_transfer_mode[] = {
 		[MHI_TRANSFER_TYPE_USB]			= "usb",
@@ -173,7 +175,6 @@ static void qdss_del_buf_tbl_entry(struct qdss_bridge_drvdata *drvdata,
 			return;
 		}
 	}
-
 	spin_unlock_bh(&drvdata->lock);
 }
 
@@ -208,7 +209,6 @@ static void qdss_buf_tbl_remove(struct qdss_bridge_drvdata *drvdata,
 static void mhi_ch_close(struct qdss_bridge_drvdata *drvdata)
 {
 	if (drvdata->mode == MHI_TRANSFER_TYPE_USB) {
-		flush_workqueue(drvdata->mhi_wq);
 		qdss_destroy_buf_tbl(drvdata);
 		qdss_destroy_read_done_list(drvdata);
 	} else if (drvdata->mode == MHI_TRANSFER_TYPE_UCI) {
@@ -218,7 +218,7 @@ static void mhi_ch_close(struct qdss_bridge_drvdata *drvdata)
 	}
 }
 
-static ssize_t mhi_show_transfer_mode(struct device *dev,
+static ssize_t mode_show(struct device *dev,
 				struct device_attribute *attr, char *buf)
 {
 	struct qdss_bridge_drvdata *drvdata = dev_get_drvdata(dev);
@@ -227,7 +227,15 @@ static ssize_t mhi_show_transfer_mode(struct device *dev,
 			str_mhi_transfer_mode[drvdata->mode]);
 }
 
-static ssize_t mhi_store_transfer_mode(struct device *dev,
+static ssize_t curr_chan_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	if (curr_chan < QDSS || curr_chan > EMPTY)
+		return -EINVAL;
+	return scnprintf(buf, PAGE_SIZE, "%s\n", str_mhi_curr_chan[curr_chan]);
+}
+
+static ssize_t mode_store(struct device *dev,
 					struct device_attribute *attr,
 					const char *buf, size_t size)
 {
@@ -248,6 +256,7 @@ static ssize_t mhi_store_transfer_mode(struct device *dev,
 				spin_unlock_bh(&drvdata->lock);
 				usb_qdss_close(drvdata->usb_ch);
 				mhi_unprepare_from_transfer(drvdata->mhi_dev);
+				flush_workqueue(drvdata->mhi_wq);
 				mhi_ch_close(drvdata);
 				drvdata->mode = MHI_TRANSFER_TYPE_UCI;
 			} else if (drvdata->opened == DISABLE) {
@@ -267,6 +276,7 @@ static ssize_t mhi_store_transfer_mode(struct device *dev,
 				spin_unlock_bh(&drvdata->lock);
 				wake_up(&drvdata->uci_wq);
 				mhi_unprepare_from_transfer(drvdata->mhi_dev);
+				flush_workqueue(drvdata->mhi_wq);
 				mhi_ch_close(drvdata);
 				drvdata->mode = MHI_TRANSFER_TYPE_USB;
 				queue_work(drvdata->mhi_wq,
@@ -295,9 +305,23 @@ out:
 	return ret;
 }
 
-static DEVICE_ATTR(mode, 0644,
-		mhi_show_transfer_mode, mhi_store_transfer_mode);
+static DEVICE_ATTR_RW(mode);
+static DEVICE_ATTR_RO(curr_chan);
 
+static struct attribute *qdss_bridge_attrs[] = {
+	&dev_attr_mode.attr,
+	&dev_attr_curr_chan.attr,
+	NULL,
+};
+
+static const struct attribute_group qdss_bridge_group = {
+	.attrs = qdss_bridge_attrs,
+};
+
+static const struct attribute_group *qdss_bridge_groups[] = {
+	&qdss_bridge_group,
+	NULL,
+};
 
 static void mhi_read_work_fn(struct work_struct *work)
 {
@@ -441,17 +465,22 @@ static void usb_notifier(void *priv, unsigned int event,
 {
 	struct qdss_bridge_drvdata *drvdata = priv;
 
-	if (!drvdata)
+	if (!drvdata || drvdata->mode != MHI_TRANSFER_TYPE_USB
+			|| drvdata->opened != ENABLE) {
+		pr_err_ratelimited("%s can't be called in invalid status.\n",
+				__func__);
 		return;
+	}
 
 	switch (event) {
 	case USB_QDSS_CONNECT:
-		usb_qdss_alloc_req(ch, drvdata->nr_trbs, 0);
+		usb_qdss_alloc_req(ch, drvdata->nr_trbs);
 		mhi_queue_read(drvdata);
 		break;
 
 	case USB_QDSS_DISCONNECT:
-		/* Leave MHI/USB open.Only close on MHI disconnect */
+		if (drvdata->opened == ENABLE)
+			usb_qdss_free_req(drvdata->usb_ch);
 		break;
 
 	case USB_QDSS_DATA_WRITE_DONE:
@@ -476,21 +505,15 @@ static int mhi_ch_open(struct qdss_bridge_drvdata *drvdata)
 		spin_unlock_bh(&drvdata->lock);
 		return -ERESTARTSYS;
 	}
-	drvdata->opened = ENABLE;
 	spin_unlock_bh(&drvdata->lock);
 
 	ret = mhi_prepare_for_transfer(drvdata->mhi_dev);
 	if (ret) {
 		pr_err("Unable to open MHI channel\n");
-		goto err;
+		return ret;
 	}
 
 	return 0;
-err:
-	spin_lock_bh(&drvdata->lock);
-	drvdata->opened = DISABLE;
-	spin_unlock_bh(&drvdata->lock);
-	return ret;
 }
 
 static void qdss_bridge_open_work_fn(struct work_struct *work)
@@ -515,6 +538,7 @@ static void qdss_bridge_open_work_fn(struct work_struct *work)
 		goto err;
 	}
 
+	drvdata->opened = ENABLE;
 	return;
 err:
 	mhi_unprepare_from_transfer(drvdata->mhi_dev);
@@ -579,6 +603,7 @@ static int mhi_uci_release(struct inode *inode, struct file *file)
 			spin_unlock_bh(&drvdata->lock);
 			wake_up(&drvdata->uci_wq);
 			mhi_unprepare_from_transfer(drvdata->mhi_dev);
+			flush_workqueue(drvdata->mhi_wq);
 			mhi_ch_close(drvdata);
 		} else if (drvdata->opened == SSR) {
 			spin_unlock_bh(&drvdata->lock);
@@ -684,9 +709,10 @@ static ssize_t mhi_uci_read(struct file *file,
 			pr_err("Failed to recycle element, ret: %d\n", ret);
 			qdss_del_buf_tbl_entry(drvdata, uci_buf->buf);
 			uci_buf->buf = NULL;
-			uci_buf = NULL;
+			kfree(uci_buf);
 			return ret;
 		}
+		kfree(uci_buf);
 	}
 
 	pr_debug("Returning %lu bytes\n", to_copy);
@@ -739,9 +765,7 @@ static int mhi_uci_open(struct inode *inode, struct file *filp)
 {
 	int ret = -EIO;
 	struct qdss_mhi_buf_tbl_t *buf_itr, *tmp;
-	struct qdss_bridge_drvdata *drvdata = container_of(inode->i_cdev,
-					struct qdss_bridge_drvdata,
-					cdev);
+	struct qdss_bridge_drvdata *drvdata = bridge_drvdata;
 
 	spin_lock_bh(&drvdata->lock);
 	if (drvdata->opened) {
@@ -770,6 +794,7 @@ error_rx_queue:
 	list_for_each_entry_safe(buf_itr, tmp, &drvdata->read_done_list, link) {
 		list_del(&buf_itr->link);
 		kfree(buf_itr->buf);
+		kfree(buf_itr);
 	}
 
 error_open_chan:
@@ -796,6 +821,13 @@ static void qdss_mhi_remove(struct mhi_device *mhi_dev)
 	drvdata = mhi_dev->priv_data;
 	if (!drvdata)
 		return;
+
+	pr_debug("remove dev state: %d\n", mhi_dev->mhi_cntrl->dev_state);
+
+	dev_state = mhi_dev->mhi_cntrl->dev_state;
+	if (mhi_dev->mhi_cntrl->dev_state != MHI_STATE_RESET)
+		curr_chan = EMPTY;
+
 	spin_lock_bh(&drvdata->lock);
 	if (drvdata->opened == ENABLE) {
 		drvdata->opened = SSR;
@@ -811,14 +843,14 @@ static void qdss_mhi_remove(struct mhi_device *mhi_dev)
 				msleep(20);
 			} while (qdss_check_entry(drvdata));
 		}
+		flush_workqueue(drvdata->mhi_wq);
 		mhi_ch_close(drvdata);
 	} else
 		spin_unlock_bh(&drvdata->lock);
 
-	device_remove_file(drvdata->dev, &dev_attr_mode);
-	device_destroy(mhi_class, drvdata->cdev.dev);
-	cdev_del(&drvdata->cdev);
-	unregister_chrdev_region(drvdata->cdev.dev, 1);
+	device_destroy(mhi_class, drvdata->cdev->dev);
+	unregister_chrdev_region(drvdata->cdev->dev, 1);
+	cdev_del(drvdata->cdev);
 }
 
 int qdss_mhi_init(struct qdss_bridge_drvdata *drvdata)
@@ -845,13 +877,47 @@ static int qdss_mhi_probe(struct mhi_device *mhi_dev,
 				const struct mhi_device_id *id)
 {
 	int ret;
+	bool def = false;
 	unsigned int baseminor = 0;
 	unsigned int count = 1;
 	struct qdss_bridge_drvdata *drvdata;
+	struct device_node *of_node = mhi_dev->dev.of_node;
 	dev_t dev;
+
+	pr_debug("probe dev state: %d chan: %s curr_chan: %d\n",
+		  mhi_dev->mhi_cntrl->dev_state,
+		  id->chan,
+		  curr_chan);
+
+	def = of_property_read_bool(of_node, "mhi,default-channel");
+	if (dev_state == INIT_STATUS) {
+		if (!def)
+			return -EINVAL;
+		if (!strcmp(id->chan, "QDSS"))
+			curr_chan = QDSS;
+		if (!strcmp(id->chan, "IP_HW_QDSS"))
+			curr_chan = QDSS_HW;
+	} else if (dev_state == MHI_STATE_RESET) {
+		if (strcmp(id->chan, str_mhi_curr_chan[curr_chan]))
+			return -EINVAL;
+	} else {
+		if (curr_chan != EMPTY) {
+			pr_err("Need unbind another channel before bind.\n");
+			return -EINVAL;
+		}
+		if (!strcmp(id->chan, "QDSS"))
+			curr_chan = QDSS;
+		if (!strcmp(id->chan, "IP_HW_QDSS"))
+			curr_chan = QDSS_HW;
+	}
 
 	drvdata = devm_kzalloc(&mhi_dev->dev, sizeof(*drvdata), GFP_KERNEL);
 	if (!drvdata) {
+		ret = -ENOMEM;
+		return ret;
+	}
+	drvdata->cdev = cdev_alloc();
+	if (!drvdata->cdev) {
 		ret = -ENOMEM;
 		return ret;
 	}
@@ -861,17 +927,16 @@ static int qdss_mhi_probe(struct mhi_device *mhi_dev,
 		pr_err("alloc_chrdev_region failed %d\n", ret);
 		return ret;
 	}
-	cdev_init(&drvdata->cdev, &mhidev_fops);
 
-	drvdata->cdev.owner = THIS_MODULE;
-	drvdata->cdev.ops = &mhidev_fops;
+	drvdata->cdev->owner = THIS_MODULE;
+	drvdata->cdev->ops = &mhidev_fops;
 
-	ret = cdev_add(&drvdata->cdev, dev, 1);
+	ret = cdev_add(drvdata->cdev, dev, 1);
 	if (ret)
 		goto exit_unreg_chrdev_region;
 
 	drvdata->dev = device_create(mhi_class, NULL,
-			       drvdata->cdev.dev, drvdata,
+			       drvdata->cdev->dev, drvdata,
 			       "mhi_qdss");
 	if (IS_ERR(drvdata->dev)) {
 		pr_err("class_device_create failed %d\n", ret);
@@ -885,34 +950,28 @@ static int qdss_mhi_probe(struct mhi_device *mhi_dev,
 	mhi_device_set_devdata(mhi_dev, drvdata);
 	dev_set_drvdata(drvdata->dev, drvdata);
 
-	ret = device_create_file(drvdata->dev, &dev_attr_mode);
-	if (ret) {
-		pr_err("sysfs node create failed error:%d\n", ret);
-		goto exit_destroy_device;
-	}
-
 	ret = qdss_mhi_init(drvdata);
 	if (ret) {
 		pr_err("Device probe failed err:%d\n", ret);
-		goto remove_sysfs_exit;
+		goto exit_destroy_device;
 	}
 	queue_work(drvdata->mhi_wq, &drvdata->open_work);
+	bridge_drvdata = drvdata;
 	return 0;
 
-remove_sysfs_exit:
-	device_remove_file(drvdata->dev, &dev_attr_mode);
 exit_destroy_device:
-	device_destroy(mhi_class, drvdata->cdev.dev);
+	device_destroy(mhi_class, drvdata->cdev->dev);
 exit_cdev_add:
-	cdev_del(&drvdata->cdev);
+	cdev_del(drvdata->cdev);
 exit_unreg_chrdev_region:
-	unregister_chrdev_region(drvdata->cdev.dev, 1);
+	unregister_chrdev_region(drvdata->cdev->dev, 1);
 	return ret;
 
 }
 
 static const struct mhi_device_id qdss_mhi_match_table[] = {
 	{ .chan = "QDSS", .driver_data = 0x8000 },
+	{ .chan = "IP_HW_QDSS", .driver_data = 0x8000 },
 	{},
 };
 
@@ -935,6 +994,8 @@ static int __init qdss_bridge_init(void)
 	mhi_class = class_create(THIS_MODULE, MODULE_NAME);
 	if (IS_ERR(mhi_class))
 		return -ENODEV;
+
+	mhi_class->dev_groups = qdss_bridge_groups;
 
 	ret = mhi_driver_register(&qdss_mhi_driver);
 	if (ret)

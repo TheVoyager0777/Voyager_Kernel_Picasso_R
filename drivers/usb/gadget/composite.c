@@ -1,12 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0+
 /*
  * composite.c - infrastructure for Composite USB Gadgets
  *
  * Copyright (C) 2006-2008 David Brownell
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License as published by
- * the Free Software Foundation; either version 2 of the License, or
- * (at your option) any later version.
  */
 
 /* #define VERBOSE_DEBUG */
@@ -17,7 +13,6 @@
 #include <linux/module.h>
 #include <linux/device.h>
 #include <linux/utsname.h>
-#include <soc/qcom/boot_stats.h>
 
 #include <linux/usb/composite.h>
 #include <linux/usb/otg.h>
@@ -178,20 +173,20 @@ int config_ep_by_speed_and_alt(struct usb_gadget *g,
 			want_comp_desc = 1;
 			break;
 		}
-		/* else: Fall trough */
+		/* fall through */
 	case USB_SPEED_SUPER:
 		if (gadget_is_superspeed(g)) {
 			speed_desc = f->ss_descriptors;
 			want_comp_desc = 1;
 			break;
 		}
-		/* else: Fall trough */
+		/* fall through */
 	case USB_SPEED_HIGH:
 		if (gadget_is_dualspeed(g)) {
 			speed_desc = f->hs_descriptors;
 			break;
 		}
-		/* else: fall through */
+		/* fall through */
 	default:
 		speed_desc = f->fs_descriptors;
 	}
@@ -251,6 +246,7 @@ ep_found:
 		case USB_ENDPOINT_XFER_ISOC:
 			/* mult: bits 1:0 of bmAttributes */
 			_ep->mult = (comp_desc->bmAttributes & 0x3) + 1;
+			/* fall through */
 		case USB_ENDPOINT_XFER_BULK:
 		case USB_ENDPOINT_XFER_INT:
 			_ep->maxburst = comp_desc->bMaxBurst + 1;
@@ -502,7 +498,7 @@ static int usb_func_wakeup_int(struct usb_function *func)
 		return -EINVAL;
 
 	gadget = func->config->cdev->gadget;
-	if ((gadget->speed < USB_SPEED_SUPER) || !func->func_wakeup_allowed) {
+	if ((gadget->speed != USB_SPEED_SUPER) || !func->func_wakeup_allowed) {
 		DBG(func->config->cdev,
 			"Function Wakeup is not possible. speed=%u, func_wakeup_allowed=%u\n",
 			gadget->speed,
@@ -526,15 +522,9 @@ int usb_func_wakeup(struct usb_function *func)
 
 	spin_lock_irqsave(&func->config->cdev->lock, flags);
 	ret = usb_func_wakeup_int(func);
-	if (ret == -EACCES) {
+	if (ret == -EAGAIN) {
 		DBG(func->config->cdev,
 			"Function wakeup for %s could not complete due to suspend state. Delayed until after bus resume.\n",
-			func->name ? func->name : "");
-		ret = 0;
-		func->func_wakeup_pending = 1;
-	} else if (ret == -EAGAIN) {
-		DBG(func->config->cdev,
-			"Function wakeup for %s sent.\n",
 			func->name ? func->name : "");
 		ret = 0;
 	} else if (ret < 0 && ret != -ENOTSUPP) {
@@ -566,25 +556,14 @@ int usb_func_ep_queue(struct usb_function *func, struct usb_ep *ep,
 	gadget = func->config->cdev->gadget;
 	if (func->func_is_suspended && func->func_wakeup_allowed) {
 		ret = usb_gadget_func_wakeup(gadget, func->intf_id);
-		if (ret == -EACCES) {
-			pr_debug("bus suspended func wakeup for %s delayed until bus resume.\n",
-				func->name ? func->name : "");
-			func->func_wakeup_pending = 1;
-			ret = -EAGAIN;
-		} else if (ret == -EAGAIN) {
+		if (ret == -EAGAIN) {
 			pr_debug("bus suspended func wakeup for %s delayed until bus resume.\n",
 				func->name ? func->name : "");
 		} else if (ret < 0 && ret != -ENOTSUPP) {
 			pr_err("Failed to wake function %s from suspend state. ret=%d.\n",
 				func->name ? func->name : "", ret);
-		} else {
-			/*
-			 * Return -EAGAIN to queue the request from
-			 * function driver wakeup function.
-			 */
-			ret = -EAGAIN;
-			goto done;
 		}
+		goto done;
 	}
 
 	if (!func->func_is_suspended)
@@ -702,10 +681,18 @@ static int config_desc(struct usb_composite_dev *cdev, unsigned w_value)
 	w_value &= 0xff;
 
 	pos = &cdev->configs;
+	c = cdev->os_desc_config;
+	if (c)
+		goto check_config;
 
 	while ((pos = pos->next) !=  &cdev->configs) {
 		c = list_entry(pos, typeof(*c), list);
 
+		/* skip OS Descriptors config which is handled separately */
+		if (c == cdev->os_desc_config)
+			continue;
+
+check_config:
 		/* ignore configs that won't work at this speed */
 		switch (speed) {
 		case USB_SPEED_SUPER_PLUS:
@@ -965,7 +952,6 @@ static int set_config(struct usb_composite_dev *cdev,
 	if (!c)
 		goto done;
 
-	update_marker("M - USB Device is enumerated");
 	usb_gadget_set_state(gadget, USB_STATE_CONFIGURED);
 	cdev->config = c;
 
@@ -1204,7 +1190,7 @@ static void collect_langs(struct usb_gadget_strings **sp, __le16 *buf)
 	while (*sp) {
 		s = *sp;
 		language = cpu_to_le16(s->language);
-		for (tmp = buf; *tmp && tmp < &buf[USB_MAX_STRING_LEN]; tmp++) {
+		for (tmp = buf; *tmp && tmp < &buf[126]; tmp++) {
 			if (*tmp == language)
 				goto repeat;
 		}
@@ -1279,7 +1265,7 @@ static int get_string(struct usb_composite_dev *cdev,
 			collect_langs(sp, s->wData);
 		}
 
-		for (len = 0; len <= USB_MAX_STRING_LEN && s->wData[len]; len++)
+		for (len = 0; len <= 126 && s->wData[len]; len++)
 			continue;
 		if (!len)
 			return -EINVAL;
@@ -1829,8 +1815,10 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 				value = min(w_length, (u16) value);
 			break;
 		case USB_DT_STRING:
+			spin_lock(&cdev->lock);
 			value = get_string(cdev, req->buf,
 					w_index, w_value & 0xff);
+			spin_unlock(&cdev->lock);
 			if (value >= 0)
 				value = min(w_length, (u16) value);
 			break;
@@ -1970,7 +1958,11 @@ composite_setup(struct usb_gadget *gadget, const struct usb_ctrlrequest *ctrl)
 		f = cdev->config->interface[intf];
 		if (!f)
 			break;
-		status = f->get_status ? f->get_status(f) : 0;
+
+		if (USB_CONFIG_ATT_WAKEUP & cdev->config->bmAttributes)
+			status = f->get_status ? f->get_status(f) : 0;
+		else
+			status = 0;
 		if (status < 0)
 			break;
 		put_unaligned_le16(status & 0x0000ffff, req->buf);
@@ -2015,19 +2007,13 @@ unknown:
 		/*
 		 * OS descriptors handling
 		 */
-		if ((ctrl->bRequestType & USB_TYPE_VENDOR)) {
+		if (cdev->use_os_string && cdev->os_desc_config &&
+		    (ctrl->bRequestType & USB_TYPE_VENDOR) &&
+		    ctrl->bRequest == cdev->b_vendor_code) {
 			struct usb_configuration	*os_desc_cfg;
 			u8				*buf;
 			int				interface;
 			int				count = 0;
-
-			/* If os descriptor config is not enable, stall ep0 */
-			if (!cdev->use_os_string || !cdev->os_desc_config)
-				return -EINVAL;
-
-			/* Stall ep0 if bRequest is not same as b_vendor_code */
-			if (ctrl->bRequest != cdev->b_vendor_code)
-				return -EINVAL;
 
 			req = cdev->os_desc_req;
 			req->context = cdev;
@@ -2078,11 +2064,11 @@ unknown:
 					value = fill_ext_prop(os_desc_cfg,
 							      interface, buf);
 					if (value >= 0)
-						value = min_t(u16, w_length,
-								value);
+						value = min_t(u16, w_length, value);
 				}
 				break;
 			}
+
 			goto check_value;
 		}
 
@@ -2365,6 +2351,7 @@ end:
 void composite_dev_cleanup(struct usb_composite_dev *cdev)
 {
 	struct usb_gadget_string_container *uc, *tmp;
+	struct usb_ep			   *ep, *tmp_ep;
 
 	list_for_each_entry_safe(uc, tmp, &cdev->gstrings, list) {
 		list_del(&uc->list);
@@ -2390,6 +2377,21 @@ void composite_dev_cleanup(struct usb_composite_dev *cdev)
 	}
 	cdev->next_string_id = 0;
 	device_remove_file(&cdev->gadget->dev, &dev_attr_suspended);
+
+	/*
+	 * Some UDC backends have a dynamic EP allocation scheme.
+	 *
+	 * In that case, the dispose() callback is used to notify the
+	 * backend that the EPs are no longer in use.
+	 *
+	 * Note: The UDC backend can remove the EP from the ep_list as
+	 *	 a result, so we need to use the _safe list iterator.
+	 */
+	list_for_each_entry_safe(ep, tmp_ep,
+				 &cdev->gadget->ep_list, ep_list) {
+		if (ep->ops->dispose)
+			ep->ops->dispose(ep);
+	}
 }
 
 static int composite_bind(struct usb_gadget *gadget,
@@ -2481,37 +2483,28 @@ void composite_resume(struct usb_gadget *gadget)
 	/* REVISIT:  should we have config level
 	 * suspend/resume callbacks?
 	 */
-	INFO(cdev, "USB Resume end\n");
-	update_marker("M - USB device is resumed");
+	DBG(cdev, "resume\n");
 	if (cdev->driver->resume)
 		cdev->driver->resume(cdev);
 
 	spin_lock_irqsave(&cdev->lock, flags);
 	if (cdev->config) {
 		list_for_each_entry(f, &cdev->config->functions, list) {
-			if (f->func_wakeup_pending) {
-				ret = usb_func_wakeup_int(f);
-				if (ret) {
-					if (ret == -EAGAIN) {
-						ERROR(f->config->cdev,
-							"Function wakeup for %s could not complete due to suspend state.\n",
-							f->name ? f->name : "");
-					} else if (ret != -ENOTSUPP) {
-						ERROR(f->config->cdev,
-							"Failed to wake function %s from suspend state. ret=%d. Canceling USB request.\n",
-							f->name ? f->name : "",
-							ret);
-					}
+			ret = usb_func_wakeup_int(f);
+			if (ret) {
+				if (ret == -EAGAIN) {
+					ERROR(f->config->cdev,
+						"Function wakeup for %s could not complete due to suspend state.\n",
+						f->name ? f->name : "");
+					break;
+				} else if (ret != -ENOTSUPP) {
+					ERROR(f->config->cdev,
+						"Failed to wake function %s from suspend state. ret=%d. Canceling USB request.\n",
+						f->name ? f->name : "",
+						ret);
 				}
-				f->func_wakeup_pending = 0;
 			}
 
-			/*
-			 * Call function resume irrespective of the speed.
-			 * Individual function needs to retain the USB3 Function
-			 * suspend state through out the Device suspend entry
-			 * and exit process.
-			 */
 			if (f->resume)
 				f->resume(f);
 		}

@@ -88,6 +88,16 @@ config HVC_DCC
 	 driver. This console is used through a JTAG only on ARM. If you don't have
 	 a JTAG then you probably don't want this option.
 
+config HVC_RISCV_SBI
+	bool "RISC-V SBI console support"
+	depends on RISCV
+	select HVC_DRIVER
+	help
+	  This enables support for console output via RISC-V SBI calls, which
+	  is normally used only during boot to output printk.
+
+	  If you don't know what do to here, say Y.
+
 config HVC_DCC_SERIALIZE_SMP
 	bool "Use DCC only on core 0"
 	depends on SMP && HVC_DCC
@@ -108,15 +118,6 @@ config HVC_DCC_SERIALIZE_SMP
 	  input and output to core 0.  The DCC driver will create input and
 	  output FIFOs that all cores will use.  Reads and writes from/to DCC
 	  are handled by a workqueue that runs only core 0.
-
-config HVC_BFIN_JTAG
-	bool "Blackfin JTAG console"
-	depends on BLACKFIN
-	select HVC_DRIVER
-	help
-	 This console uses the Blackfin JTAG to create a console under the
-	 the HVC driver.  If you don't have JTAG, then you probably don't
-	 want this option.
 
 config HVCS
 	tristate "IBM Hypervisor Virtual Console Server support"

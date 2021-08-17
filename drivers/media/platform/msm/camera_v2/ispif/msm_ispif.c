@@ -1,4 +1,5 @@
-/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -46,7 +47,7 @@
 #define ISPIF_INTF_CMD_DISABLE_IMMEDIATELY    0x02
 
 #define ISPIF_TIMEOUT_SLEEP_US                1000
-#define ISPIF_TIMEOUT_ALL_US              10000000
+#define ISPIF_TIMEOUT_ALL_US               1000000
 #define ISPIF_SOF_DEBUG_COUNT                    5
 
 /* 3D Threshold value according guidelines for line width 1280 */
@@ -340,7 +341,7 @@ static int msm_ispif_get_regulator_info(struct ispif_device *ispif_dev,
 	}
 
 	if (WARN_ON(count > (ISPIF_VDD_INFO_MAX + ISPIF_VFE_VDD_INFO_MAX)))
-		pr_err("%s: count is greater is 4", __func__);
+		pr_err("%s: count is greater is 4\n", __func__);
 	ispif_dev->vfe_vdd_count = 0;
 	ispif_dev->ispif_vdd_count = 0;
 
@@ -356,9 +357,9 @@ static int msm_ispif_get_regulator_info(struct ispif_device *ispif_dev,
 		if (strnstr(vdd_name, "vfe", strlen(vdd_name))) {
 			if (WARN_ON((ispif_dev->vfe_vdd_count >=
 				ISPIF_VFE_VDD_INFO_MAX))) {
-				pr_err("%s: count is greater is 4", __func__);
+				pr_err("%s: count is greater is 4\n", __func__);
 				return -EINVAL;
-			};
+			}
 			rc = __get_vdd(pdev,
 				&ispif_dev->vfe_vdd[ispif_dev->vfe_vdd_count],
 				vdd_name);
@@ -367,9 +368,9 @@ static int msm_ispif_get_regulator_info(struct ispif_device *ispif_dev,
 		} else {
 			if (WARN_ON((ispif_dev->vfe_vdd_count >=
 				ISPIF_VFE_VDD_INFO_MAX))) {
-				pr_err("%s: count is greater is 4", __func__);
+				pr_err("%s: count is greater is 4\n", __func__);
 				return -EINVAL;
-			};
+			}
 			rc = __get_vdd(pdev,
 				&ispif_dev->ispif_vdd
 					[ispif_dev->ispif_vdd_count],
@@ -436,7 +437,7 @@ static int msm_ispif_reset_hw(struct ispif_device *ispif)
 		ispif->clk_info, ispif->clks,
 		ispif->num_clk, 1);
 	if (rc < 0) {
-		pr_err("%s: cannot enable clock, error = %d",
+		pr_err("%s: cannot enable clock, error = %d\n",
 			__func__, rc);
 		goto reg_disable;
 	} else {
@@ -569,7 +570,7 @@ static int msm_ispif_clk_ahb_enable(struct ispif_device *ispif, int enable)
 		ispif->ahb_clk_info, ispif->ahb_clk,
 		ispif->num_ahb_clk, enable);
 	if (rc < 0) {
-		pr_err("%s: cannot enable clock, error = %d",
+		pr_err("%s: cannot enable clock, error = %d\n",
 			__func__, rc);
 	}
 
@@ -605,7 +606,7 @@ static int msm_ispif_reset(struct ispif_device *ispif)
 			ispif->base + ISPIF_VFE_m_INTF_CMD_0(i));
 		msm_camera_io_w(ISPIF_STOP_INTF_IMMEDIATELY,
 			ispif->base + ISPIF_VFE_m_INTF_CMD_1(i));
-		pr_debug("%s: base %pK", __func__, ispif->base);
+		pr_debug("%s: base %pK\n", __func__, ispif->base);
 		msm_camera_io_w(0, ispif->base +
 			ISPIF_VFE_m_PIX_INTF_n_CID_MASK(i, 0));
 		msm_camera_io_w(0, ispif->base +
@@ -847,7 +848,7 @@ static uint16_t msm_ispif_get_cids_mask_from_cfg(
 	uint16_t cids_mask = 0;
 
 	if (WARN_ON(!entry)) {
-		pr_err("%s: invalid entry", __func__);
+		pr_err("%s: invalid entry\n", __func__);
 		return cids_mask;
 	}
 
@@ -1258,7 +1259,7 @@ static int msm_ispif_restart_frame_boundary(struct ispif_device *ispif,
 		}
 	}
 
-	pr_info("%s: ISPIF reset hw done, Restarting", __func__);
+	pr_info("%s: ISPIF reset hw done, Restarting\n", __func__);
 	rc = msm_camera_clk_enable(&ispif->pdev->dev,
 		ispif->clk_info, ispif->clks,
 		ispif->num_clk, 0);
@@ -1436,7 +1437,7 @@ static void ispif_process_irq(struct ispif_device *ispif,
 	struct ispif_irq_status *out, enum msm_ispif_vfe_intf vfe_id)
 {
 	if (WARN_ON(!ispif) || WARN_ON(!out)) {
-		pr_err("%s: invalid params", __func__);
+		pr_err("%s: invalid params\n", __func__);
 		return;
 	}
 
@@ -1491,11 +1492,11 @@ static int msm_ispif_reconfig_3d_output(struct ispif_device *ispif,
 		return -EINVAL;
 
 	if (!((vfe_id == VFE0) ||  (vfe_id == VFE1))) {
-		pr_err("%s;%d Cannot reconfigure 3D mode for VFE%d", __func__,
+		pr_err("%s;%d Cannot reconfigure 3D mode for VFE%d\n", __func__,
 				__LINE__, vfe_id);
 		return -EINVAL;
 	}
-	pr_info("%s;%d Reconfiguring 3D mode for VFE%d", __func__, __LINE__,
+	pr_info("%s;%d Reconfiguring 3D mode for VFE%d\n", __func__, __LINE__,
 			vfe_id);
 	reg_data =  0xFFFCFFFC;
 	msm_camera_io_w_mb(reg_data, ispif->base +
@@ -1533,7 +1534,7 @@ static inline void msm_ispif_read_irq_status(struct ispif_irq_status *out,
 	uint32_t reg_data;
 
 	if (WARN_ON(!ispif) || WARN_ON(!out)) {
-		pr_err("%s: invalid params", __func__);
+		pr_err("%s: invalid params\n", __func__);
 		return;
 	}
 
@@ -1685,7 +1686,7 @@ static inline void msm_ispif_read_irq_status(struct ispif_irq_status *out,
 		}
 	}
 
-	if (fatal_err == true) {
+	if (fatal_err) {
 		pr_err_ratelimited("%s: fatal error, stop ispif immediately\n",
 				__func__);
 		for (i = 0; i < ispif->vfe_info.num_vfe; i++) {
@@ -1732,7 +1733,7 @@ static int msm_ispif_init(struct ispif_device *ispif,
 	int rc = 0;
 
 	if (WARN_ON(!ispif)) {
-		pr_err("%s: invalid ispif params", __func__);
+		pr_err("%s: invalid ispif params\n", __func__);
 		return -EINVAL;
 	}
 
@@ -1791,7 +1792,7 @@ error_ahb:
 static void msm_ispif_release(struct ispif_device *ispif)
 {
 	if (WARN_ON(!ispif)) {
-		pr_err("%s: invalid ispif params", __func__);
+		pr_err("%s: invalid ispif params\n", __func__);
 		return;
 	}
 
@@ -2040,7 +2041,7 @@ static int ispif_probe(struct platform_device *pdev)
 
 	rc = msm_ispif_get_clk_info(ispif, pdev);
 	if (rc < 0) {
-		pr_err("%s: msm_isp_get_clk_info() failed", __func__);
+		pr_err("%s: msm_isp_get_clk_info() failed\n", __func__);
 		rc = -EFAULT;
 		goto get_clk_fail;
 	}
@@ -2129,7 +2130,6 @@ static struct platform_driver ispif_driver = {
 	.probe = ispif_probe,
 	.driver = {
 		.name = MSM_ISPIF_DRV_NAME,
-		.owner = THIS_MODULE,
 		.of_match_table = msm_ispif_dt_match,
 	},
 };

@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
@@ -33,7 +34,7 @@ enum smem_prop {
 	SMEM_ADSP = 0x8,
 };
 
-/* NOTE: if you change this enum you MUST update the
+/* NOTE:  if you change this enum you MUST update the
  * "buffer-type-tz-usage-table" for any affected target
  * in arch/arm/boot/dts/<arch>.dtsi
  */
@@ -56,7 +57,7 @@ enum hal_buffer {
 
 struct dma_mapping_info {
 	struct device *dev;
-	struct dma_iommu_mapping *mapping;
+	struct iommu_domain *domain;
 	struct sg_table *table;
 	struct dma_buf_attachment *attach;
 	struct dma_buf *buf;
@@ -93,7 +94,6 @@ enum core_id {
 enum session_type {
 	MSM_VIDC_ENCODER = 0,
 	MSM_VIDC_DECODER,
-	MSM_VIDC_ENCODER_CMA,
 	MSM_VIDC_UNKNOWN,
 	MSM_VIDC_MAX_DEVICES = MSM_VIDC_UNKNOWN,
 };

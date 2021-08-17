@@ -1,4 +1,5 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -295,7 +296,6 @@ static struct platform_driver msm_jpeg_driver = {
 	.remove = __msm_jpeg_remove,
 	.driver = {
 		.name = "msm_jpeg",
-		.owner = THIS_MODULE,
 		.of_match_table = msm_jpeg_dt_match,
 		.suppress_bind_attrs = true,
 	},

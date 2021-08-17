@@ -1,22 +1,16 @@
-/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  */
 
-#include "kgsl_device.h"
-#include "kgsl_hfi.h"
-#include "kgsl_gmu.h"
+#include <linux/delay.h>
+
 #include "adreno.h"
+#include "adreno_a6xx.h"
+#include "kgsl_device.h"
+#include "kgsl_gmu.h"
+#include "kgsl_hfi.h"
 #include "kgsl_trace.h"
-#include "kgsl_pwrctrl.h"
 
 #define HFI_QUEUE_OFFSET(i)		\
 		(ALIGN(sizeof(struct hfi_queue_table), SZ_16) + \
@@ -39,14 +33,6 @@
 #define CMD_MSG_HDR(id, size) CREATE_MSG_HDR(id, size, HFI_MSG_CMD)
 #define ACK_MSG_HDR(id, size) CREATE_MSG_HDR(id, size, HFI_MSG_ACK)
 
-#define HFI_VER_MAJOR(hfi) (((hfi)->version >> 28) & 0xF)
-#define HFI_VER_MINOR(hfi) (((hfi)->version >> 5) & 0x7FFFFF)
-#define HFI_VER_BRANCH(hfi) ((hfi)->version & 0x1F)
-#define HFI_VERSION(major, minor, branch) \
-	((((major) & 0xF) << 28) | \
-	 (((minor) & 0x7FFFFF) << 5) | \
-	 ((branch) & 0x1F))
-
 static void hfi_process_queue(struct gmu_device *gmu, uint32_t queue_idx,
 	struct pending_cmd *ret_cmd);
 
@@ -66,11 +52,8 @@ static int hfi_queue_read(struct gmu_device *gmu, uint32_t queue_idx,
 	if (hdr->status == HFI_QUEUE_STATUS_DISABLED)
 		return -EINVAL;
 
-	if (hdr->read_index == hdr->write_index) {
-		hdr->rx_req = 1;
-		result = -ENODATA;
-		goto done;
-	}
+	if (hdr->read_index == hdr->write_index)
+		return -ENODATA;
 
 	/* Clear the output data before populating */
 	memset(output, 0, max_size);
@@ -103,7 +86,7 @@ static int hfi_queue_read(struct gmu_device *gmu, uint32_t queue_idx,
 		result = -ENODATA;
 	}
 
-	if (HFI_VER_MAJOR(&gmu->hfi) >= 2)
+	if (GMU_VER_MAJOR(gmu->ver.hfi) >= 2)
 		read = ALIGN(read, SZ_4) % hdr->queue_size;
 
 	hdr->read_index = read;
@@ -149,7 +132,6 @@ static int hfi_queue_write(struct gmu_device *gmu, uint32_t queue_idx,
 			"Insufficient bufsize %d for msg id=%d of size %d\n",
 			empty_space, id, size);
 
-		hdr->drop_cnt++;
 		mutex_unlock(&hfi->cmdq_mutex);
 		return -ENOSPC;
 	}
@@ -162,7 +144,7 @@ static int hfi_queue_write(struct gmu_device *gmu, uint32_t queue_idx,
 	}
 
 	/* Cookify any non used data at the end of the write buffer */
-	if (HFI_VER_MAJOR(&gmu->hfi) >= 2) {
+	if (GMU_VER_MAJOR(gmu->ver.hfi) >= 2) {
 		for (; write % 4; write = (write + 1) % hdr->queue_size)
 			queue[write] = 0xFAFAFAFA;
 	}
@@ -190,10 +172,11 @@ static int hfi_queue_write(struct gmu_device *gmu, uint32_t queue_idx,
 
 
 /* Sizes of the queue and message are in unit of dwords */
-void hfi_init(struct kgsl_hfi *hfi, struct gmu_memdesc *mem_addr,
-		uint32_t queue_sz_bytes)
+void hfi_init(struct gmu_device *gmu)
 {
+	struct kgsl_hfi *hfi = &gmu->hfi;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(hfi->kgsldev);
+	struct gmu_memdesc *mem_addr = gmu->hfi_mem;
 	int i;
 	struct hfi_queue_table *tbl;
 	struct hfi_queue_header *hdr;
@@ -228,21 +211,15 @@ void hfi_init(struct kgsl_hfi *hfi, struct gmu_memdesc *mem_addr,
 	tbl->qtbl_hdr.num_q = HFI_QUEUE_MAX;
 	tbl->qtbl_hdr.num_active_q = HFI_QUEUE_MAX;
 
-	/* Fill I dividual Queue Headers */
+	memset(&tbl->qhdr[0], 0, sizeof(tbl->qhdr));
+
+	/* Fill Individual Queue Headers */
 	for (i = 0; i < HFI_QUEUE_MAX; i++) {
 		hdr = &tbl->qhdr[i];
 		hdr->start_addr = GMU_QUEUE_START_ADDR(mem_addr, i);
 		hdr->type = QUEUE_HDR_TYPE(queue[i].idx, queue[i].pri, 0,  0);
 		hdr->status = queue[i].status;
-		hdr->queue_size = queue_sz_bytes >> 2; /* convert to dwords */
-		hdr->msg_size = 0;
-		hdr->drop_cnt = 0;
-		hdr->rx_wm = 0x1;
-		hdr->tx_wm = 0x1;
-		hdr->rx_req = 0x1;
-		hdr->tx_req = 0x0;
-		hdr->read_index = 0x0;
-		hdr->write_index = 0x0;
+		hdr->queue_size = HFI_QUEUE_SIZE >> 2; /* convert to dwords */
 	}
 
 	mutex_init(&hfi->cmdq_mutex);
@@ -288,7 +265,12 @@ static int poll_adreno_gmu_reg(struct adreno_device *adreno_dev,
 	unsigned int mask, unsigned int timeout_ms)
 {
 	unsigned int val;
+	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct gmu_device *gmu = KGSL_GMU_DEVICE(device);
 	unsigned long timeout = jiffies + msecs_to_jiffies(timeout_ms);
+	u64 ts1, ts2;
+
+	ts1 = gmu_core_dev_read_ao_counter(device);
 
 	while (time_is_after_jiffies(timeout)) {
 		adreno_read_gmureg(adreno_dev, offset_name, &val);
@@ -297,10 +279,16 @@ static int poll_adreno_gmu_reg(struct adreno_device *adreno_dev,
 		usleep_range(10, 100);
 	}
 
+	ts2 = gmu_core_dev_read_ao_counter(device);
+
 	/* Check one last time */
 	adreno_read_gmureg(adreno_dev, offset_name, &val);
 	if ((val & mask) == expected_val)
 		return 0;
+
+	dev_err(&gmu->pdev->dev,
+			"Timed out waiting for HFI response. Wait start=%llx end=%llx\n",
+			ts1, ts2);
 
 	return -ETIMEDOUT;
 }
@@ -343,6 +331,8 @@ static int hfi_send_cmd(struct gmu_device *gmu, uint32_t queue_idx,
 	return rc;
 }
 
+#define HFI_ACK_ERROR 0xffffffff
+
 static int hfi_send_generic_req(struct gmu_device *gmu, uint32_t queue,
 		void *cmd)
 {
@@ -352,16 +342,14 @@ static int hfi_send_generic_req(struct gmu_device *gmu, uint32_t queue,
 	memset(&ret_cmd, 0, sizeof(ret_cmd));
 
 	rc = hfi_send_cmd(gmu, queue, cmd, &ret_cmd);
-	if (rc)
-		return rc;
 
-	if (ret_cmd.results[2])
-		dev_err(&gmu->pdev->dev,
-				"HFI ACK failure: Req 0x%8.8X Error 0x%X\n",
-				ret_cmd.results[1],
-				ret_cmd.results[2]);
+	if (!rc && ret_cmd.results[2] == HFI_ACK_ERROR) {
+		dev_err(&gmu->pdev->dev, "HFI ACK failure: Req 0x%8.8X\n",
+						ret_cmd.results[1]);
+		return -EINVAL;
+	}
 
-	return ret_cmd.results[2] ? -EINVAL : 0;
+	return rc;
 }
 
 static int hfi_send_gmu_init(struct gmu_device *gmu, uint32_t boot_state)
@@ -453,7 +441,7 @@ static int hfi_send_dcvstbl_v1(struct gmu_device *gmu)
 	struct hfi_dcvstable_v1_cmd cmd = {
 		.hdr = CMD_MSG_HDR(H2F_MSG_PERF_TBL, sizeof(cmd)),
 		.gpu_level_num = gmu->num_gpupwrlevels,
-		.gmu_level_num = gmu->num_gmupwrlevels,
+		.gmu_level_num = GMU_PWR_LEVELS,
 	};
 	int i;
 
@@ -463,10 +451,10 @@ static int hfi_send_dcvstbl_v1(struct gmu_device *gmu)
 		cmd.gx_votes[i].freq = gmu->gpu_freqs[i] / 1000;
 	}
 
-	for (i = 0; i < gmu->num_gmupwrlevels; i++) {
-		cmd.cx_votes[i].vote = gmu->rpmh_votes.cx_votes[i];
-		cmd.cx_votes[i].freq = gmu->gmu_freqs[i] / 1000;
-	}
+	cmd.cx_votes[0].vote = gmu->rpmh_votes.cx_votes[0];
+	cmd.cx_votes[0].freq = 0;
+	cmd.cx_votes[1].vote = gmu->rpmh_votes.cx_votes[1];
+	cmd.cx_votes[1].freq = GMU_FREQUENCY / 1000;
 
 	return hfi_send_generic_req(gmu, HFI_CMD_ID, &cmd);
 }
@@ -497,7 +485,7 @@ static int hfi_send_dcvstbl(struct gmu_device *gmu)
 	struct hfi_dcvstable_cmd cmd = {
 		.hdr = CMD_MSG_HDR(H2F_MSG_PERF_TBL, sizeof(cmd)),
 		.gpu_level_num = gmu->num_gpupwrlevels,
-		.gmu_level_num = gmu->num_gmupwrlevels,
+		.gmu_level_num = GMU_PWR_LEVELS,
 	};
 	int i;
 
@@ -509,10 +497,10 @@ static int hfi_send_dcvstbl(struct gmu_device *gmu)
 		cmd.gx_votes[i].freq = gmu->gpu_freqs[i] / 1000;
 	}
 
-	for (i = 0; i < gmu->num_gmupwrlevels; i++) {
-		cmd.cx_votes[i].vote = gmu->rpmh_votes.cx_votes[i];
-		cmd.cx_votes[i].freq = gmu->gmu_freqs[i] / 1000;
-	}
+	cmd.cx_votes[0].vote = gmu->rpmh_votes.cx_votes[0];
+	cmd.cx_votes[0].freq = 0;
+	cmd.cx_votes[1].vote = gmu->rpmh_votes.cx_votes[1];
+	cmd.cx_votes[1].freq = GMU_FREQUENCY / 1000;
 
 	return hfi_send_generic_req(gmu, HFI_CMD_ID, &cmd);
 }
@@ -594,7 +582,7 @@ static void hfi_process_queue(struct gmu_device *gmu, uint32_t queue_idx,
 
 	while (hfi_queue_read(gmu, queue_idx, rcvd, sizeof(rcvd)) > 0) {
 		/* Special case if we're v1 */
-		if (HFI_VER_MAJOR(&gmu->hfi) < 2) {
+		if (GMU_VER_MAJOR(gmu->ver.hfi) < 2) {
 			hfi_v1_receiver(gmu, rcvd, ret_cmd);
 			continue;
 		}
@@ -632,19 +620,16 @@ static int hfi_verify_fw_version(struct kgsl_device *device,
 		struct gmu_device *gmu)
 {
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+	const struct adreno_a6xx_core *a6xx_core = to_a6xx_core(adreno_dev);
 	int result;
 	unsigned int ver, major, minor;
 
 	/* GMU version is already known, so don't waste time finding again */
-	if (gmu->ver != ~0U)
+	if (gmu->ver.core != 0)
 		return 0;
 
-	/* Read the HFI version from the register */
-	adreno_read_gmureg(adreno_dev,
-		ADRENO_REG_GMU_HFI_VERSION_INFO, &gmu->hfi.version);
-
-	major = adreno_dev->gpucore->gpmu_major;
-	minor = adreno_dev->gpucore->gpmu_minor;
+	major = a6xx_core->gmu_major;
+	minor = a6xx_core->gmu_minor;
 
 	result = hfi_get_fw_version(gmu, GMU_VERSION(major, minor), &ver);
 	if (result) {
@@ -665,9 +650,32 @@ static int hfi_verify_fw_version(struct kgsl_device *device,
 				GMU_VER_MINOR(ver), minor);
 
 	/* Save the gmu version information */
-	gmu->ver = ver;
+	gmu->ver.core = ver;
 
 	return 0;
+}
+
+static int hfi_send_lm_feature_ctrl(struct gmu_device *gmu,
+		struct adreno_device *adreno_dev)
+{
+	struct hfi_set_value_cmd req = {
+		.type = HFI_VALUE_LM_CS0,
+		.subtype = 0,
+		.data = adreno_dev->lm_slope,
+	};
+	struct kgsl_device *device = &adreno_dev->dev;
+	int ret;
+
+	if (!test_bit(ADRENO_LM_CTRL, &adreno_dev->pwrctrl_flag))
+		return 0;
+
+	ret = hfi_send_feature_ctrl(gmu, HFI_FEATURE_LM, 1,
+			device->pwrctrl.throttle_mask);
+
+	if (!ret)
+		ret = hfi_send_req(gmu, H2F_MSG_SET_VALUE, &req);
+
+	return ret;
 }
 
 static int hfi_send_acd_feature_ctrl(struct gmu_device *gmu,
@@ -710,7 +718,8 @@ int hfi_start(struct kgsl_device *device,
 		}
 	}
 
-	if (!adreno_is_a640(adreno_dev) && !adreno_is_a680(adreno_dev)) {
+	/* This is legacy HFI message for A630 and A615 family firmware */
+	if (adreno_is_a630(adreno_dev) || adreno_is_a615_family(adreno_dev)) {
 		result = hfi_send_gmu_init(gmu, boot_state);
 		if (result)
 			return result;
@@ -720,7 +729,7 @@ int hfi_start(struct kgsl_device *device,
 	if (result)
 		return result;
 
-	if (HFI_VER_MAJOR(&gmu->hfi) < 2)
+	if (GMU_VER_MAJOR(gmu->ver.hfi) < 2)
 		result = hfi_send_dcvstbl_v1(gmu);
 	else
 		result = hfi_send_dcvstbl(gmu);
@@ -736,21 +745,21 @@ int hfi_start(struct kgsl_device *device,
 	 * we are sending no more HFIs until the next boot otherwise
 	 * send H2F_MSG_CORE_FW_START and features for A640 devices
 	 */
-	if (HFI_VER_MAJOR(&gmu->hfi) >= 2) {
-		result = hfi_send_feature_ctrl(gmu, HFI_FEATURE_ECP, 0, 0);
-		if (result)
-			return result;
+	if (GMU_VER_MAJOR(gmu->ver.hfi) >= 2) {
+		if (ADRENO_FEATURE(adreno_dev, ADRENO_ECP)) {
+			result = hfi_send_feature_ctrl(gmu,
+					HFI_FEATURE_ECP, 1, 0);
+			if (result)
+				return result;
+		}
 
 		result = hfi_send_acd_feature_ctrl(gmu, adreno_dev);
 		if (result)
 			return result;
 
-		if (test_bit(ADRENO_LM_CTRL, &adreno_dev->pwrctrl_flag)) {
-			result = hfi_send_feature_ctrl(gmu, HFI_FEATURE_LM, 1,
-					device->pwrctrl.throttle_mask);
-			if (result)
-				return result;
-		}
+		result = hfi_send_lm_feature_ctrl(gmu, adreno_dev);
+		if (result)
+			return result;
 
 		result = hfi_send_core_fw_start(gmu);
 		if (result)
@@ -787,7 +796,7 @@ void hfi_stop(struct gmu_device *gmu)
 
 		if (hdr->read_index != hdr->write_index)
 			dev_err(&gmu->pdev->dev,
-			"HFI queue[%d] is not empty before close: rd=%d,wt=%d",
+			"HFI queue[%d] is not empty before close: rd=%d,wt=%d\n",
 				i, hdr->read_index, hdr->write_index);
 	}
 
@@ -798,13 +807,6 @@ void hfi_stop(struct gmu_device *gmu)
 int hfi_send_req(struct gmu_device *gmu, unsigned int id, void *data)
 {
 	switch (id) {
-	case H2F_MSG_LM_CFG: {
-		struct hfi_lmconfig_cmd *cmd = data;
-
-		cmd->hdr = CMD_MSG_HDR(H2F_MSG_LM_CFG, sizeof(*cmd));
-
-		return hfi_send_generic_req(gmu, HFI_CMD_ID, &cmd);
-	}
 	case H2F_MSG_GX_BW_PERF_VOTE: {
 		struct hfi_gx_bw_perf_vote_cmd *cmd = data;
 
@@ -852,7 +854,6 @@ irqreturn_t hfi_irq_handler(int irq, void *data)
 	struct kgsl_device *device = data;
 	struct gmu_device *gmu = KGSL_GMU_DEVICE(device);
 	struct kgsl_hfi *hfi = &gmu->hfi;
-	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
 	unsigned int status = 0;
 
 	adreno_read_gmureg(ADRENO_DEVICE(device),
@@ -862,12 +863,10 @@ irqreturn_t hfi_irq_handler(int irq, void *data)
 
 	if (status & HFI_IRQ_DBGQ_MASK)
 		tasklet_hi_schedule(&hfi->tasklet);
-	if (status & HFI_IRQ_CM3_FAULT_MASK) {
+	if (status & HFI_IRQ_CM3_FAULT_MASK)
 		dev_err_ratelimited(&gmu->pdev->dev,
 				"GMU CM3 fault interrupt received\n");
-		adreno_set_gpu_fault(adreno_dev, ADRENO_GMU_FAULT);
-		adreno_dispatcher_schedule(device);
-	}
+
 	if (status & ~HFI_IRQ_MASK)
 		dev_err_ratelimited(&gmu->pdev->dev,
 				"Unhandled HFI interrupts 0x%lx\n",

@@ -1,25 +1,13 @@
-/* Copyright (c) 2002,2008-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2002,2008-2020, The Linux Foundation. All rights reserved.
  */
 
-#include <linux/export.h>
-#include <linux/delay.h>
 #include <linux/debugfs.h>
-#include <linux/uaccess.h>
-#include <linux/io.h>
+#include <linux/msm_kgsl.h>
 
-#include "kgsl.h"
 #include "adreno.h"
-#include "kgsl_sync.h"
+extern struct dentry *kgsl_debugfs_dir;
 
 static int _isdb_set(void *data, u64 val)
 {
@@ -30,8 +18,19 @@ static int _isdb_set(void *data, u64 val)
 	if (test_bit(ADRENO_DEVICE_ISDB_ENABLED, &adreno_dev->priv))
 		return 0;
 
-	return kgsl_change_flag(device, ADRENO_DEVICE_ISDB_ENABLED,
-			&adreno_dev->priv);
+	mutex_lock(&device->mutex);
+
+	/*
+	 * Bring down the GPU so we can bring it back up with the correct power
+	 * and clock settings
+	 */
+	kgsl_pwrctrl_change_state(device, KGSL_STATE_SUSPEND);
+	set_bit(ADRENO_DEVICE_ISDB_ENABLED, &adreno_dev->priv);
+	kgsl_pwrctrl_change_state(device, KGSL_STATE_SLUMBER);
+
+	mutex_unlock(&device->mutex);
+
+	return 0;
 }
 
 static int _isdb_get(void *data, u64 *val)
@@ -43,13 +42,12 @@ static int _isdb_get(void *data, u64 *val)
 	return 0;
 }
 
-DEFINE_SIMPLE_ATTRIBUTE(_isdb_fops, _isdb_get, _isdb_set, "%llu\n");
+DEFINE_DEBUGFS_ATTRIBUTE(_isdb_fops, _isdb_get, _isdb_set, "%llu\n");
 
 static int _lm_limit_set(void *data, u64 val)
 {
 	struct kgsl_device *device = data;
 	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
-	int ret;
 
 	if (!ADRENO_FEATURE(adreno_dev, ADRENO_LM))
 		return 0;
@@ -64,11 +62,7 @@ static int _lm_limit_set(void *data, u64 val)
 
 	if (test_bit(ADRENO_LM_CTRL, &adreno_dev->pwrctrl_flag)) {
 		mutex_lock(&device->mutex);
-		ret = kgsl_pwrctrl_change_state(device, KGSL_STATE_SUSPEND);
-		if (ret) {
-			mutex_unlock(&device->mutex);
-			return ret;
-		}
+		kgsl_pwrctrl_change_state(device, KGSL_STATE_SUSPEND);
 		kgsl_pwrctrl_change_state(device, KGSL_STATE_SLUMBER);
 		mutex_unlock(&device->mutex);
 	}
@@ -88,7 +82,8 @@ static int _lm_limit_get(void *data, u64 *val)
 	return 0;
 }
 
-DEFINE_SIMPLE_ATTRIBUTE(_lm_limit_fops, _lm_limit_get, _lm_limit_set, "%llu\n");
+DEFINE_DEBUGFS_ATTRIBUTE(_lm_limit_fops, _lm_limit_get,
+		_lm_limit_set, "%llu\n");
 
 static int _lm_threshold_count_get(void *data, u64 *val)
 {
@@ -102,7 +97,7 @@ static int _lm_threshold_count_get(void *data, u64 *val)
 	return 0;
 }
 
-DEFINE_SIMPLE_ATTRIBUTE(_lm_threshold_fops, _lm_threshold_count_get,
+DEFINE_DEBUGFS_ATTRIBUTE(_lm_threshold_fops, _lm_threshold_count_get,
 	NULL, "%llu\n");
 
 static int _active_count_get(void *data, u64 *val)
@@ -114,7 +109,28 @@ static int _active_count_get(void *data, u64 *val)
 	return 0;
 }
 
-DEFINE_SIMPLE_ATTRIBUTE(_active_count_fops, _active_count_get, NULL, "%llu\n");
+DEFINE_DEBUGFS_ATTRIBUTE(_active_count_fops, _active_count_get, NULL, "%llu\n");
+
+static int _coop_reset_set(void *data, u64 val)
+{
+	struct kgsl_device *device = data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+
+	if (ADRENO_FEATURE(adreno_dev, ADRENO_COOP_RESET))
+		adreno_dev->cooperative_reset = val ? true : false;
+	return 0;
+}
+
+static int _coop_reset_get(void *data, u64 *val)
+{
+	struct kgsl_device *device = data;
+	struct adreno_device *adreno_dev = ADRENO_DEVICE(device);
+
+	*val = (u64) adreno_dev->cooperative_reset;
+	return 0;
+}
+DEFINE_DEBUGFS_ATTRIBUTE(_coop_reset_fops, _coop_reset_get,
+				_coop_reset_set, "%llu\n");
 
 typedef void (*reg_read_init_t)(struct kgsl_device *device);
 typedef void (*reg_read_fill_t)(struct kgsl_device *device, int i,
@@ -147,9 +163,9 @@ struct flag_entry {
 static const struct flag_entry drawobj_flags[] = {KGSL_DRAWOBJ_FLAGS};
 
 static const struct flag_entry cmdobj_priv[] = {
-	{ CMDOBJ_SKIP, "skip"},
-	{ CMDOBJ_FORCE_PREAMBLE, "force_preamble"},
-	{ CMDOBJ_WFI, "wait_for_idle" },
+	{ BIT(CMDOBJ_SKIP), "skip"},
+	{ BIT(CMDOBJ_FORCE_PREAMBLE), "force_preamble"},
+	{ BIT(CMDOBJ_WFI), "wait_for_idle" },
 };
 
 static const struct flag_entry context_flags[] = {KGSL_CONTEXT_FLAGS};
@@ -159,15 +175,15 @@ static const struct flag_entry context_flags[] = {KGSL_CONTEXT_FLAGS};
  * KGSL_CONTEXT_PRIV_DEVICE_SPECIFIC so it is ok to cross the streams here.
  */
 static const struct flag_entry context_priv[] = {
-	{ KGSL_CONTEXT_PRIV_SUBMITTED, "submitted"},
-	{ KGSL_CONTEXT_PRIV_DETACHED, "detached"},
-	{ KGSL_CONTEXT_PRIV_INVALID, "invalid"},
-	{ KGSL_CONTEXT_PRIV_PAGEFAULT, "pagefault"},
-	{ ADRENO_CONTEXT_FAULT, "fault"},
-	{ ADRENO_CONTEXT_GPU_HANG, "gpu_hang"},
-	{ ADRENO_CONTEXT_GPU_HANG_FT, "gpu_hang_ft"},
-	{ ADRENO_CONTEXT_SKIP_EOF, "skip_end_of_frame" },
-	{ ADRENO_CONTEXT_FORCE_PREAMBLE, "force_preamble"},
+	{ BIT(KGSL_CONTEXT_PRIV_SUBMITTED), "submitted"},
+	{ BIT(KGSL_CONTEXT_PRIV_DETACHED), "detached"},
+	{ BIT(KGSL_CONTEXT_PRIV_INVALID), "invalid"},
+	{ BIT(KGSL_CONTEXT_PRIV_PAGEFAULT), "pagefault"},
+	{ BIT(ADRENO_CONTEXT_FAULT), "fault"},
+	{ BIT(ADRENO_CONTEXT_GPU_HANG), "gpu_hang"},
+	{ BIT(ADRENO_CONTEXT_GPU_HANG_FT), "gpu_hang_ft"},
+	{ BIT(ADRENO_CONTEXT_SKIP_EOF), "skip_end_of_frame" },
+	{ BIT(ADRENO_CONTEXT_FORCE_PREAMBLE), "force_preamble"},
 };
 
 static void print_flags(struct seq_file *s, const struct flag_entry *table,
@@ -305,7 +321,7 @@ static int ctx_print(struct seq_file *s, void *unused)
 	seq_puts(s, "events:\n");
 	spin_lock(&drawctxt->base.events.lock);
 	list_for_each_entry(event, &drawctxt->base.events.events, node)
-		seq_printf(s, "\t%d: %pF created: %u\n", event->timestamp,
+		seq_printf(s, "\t%d: %pS created: %u\n", event->timestamp,
 				event->func, event->created);
 	spin_unlock(&drawctxt->base.events.lock);
 
@@ -363,14 +379,20 @@ adreno_context_debugfs_init(struct adreno_device *adreno_dev,
 void adreno_debugfs_init(struct adreno_device *adreno_dev)
 {
 	struct kgsl_device *device = KGSL_DEVICE(adreno_dev);
+	struct dentry *snapshot_dir;
 
-	if (!device->d_debugfs || IS_ERR(device->d_debugfs))
+	if (IS_ERR_OR_NULL(device->d_debugfs))
 		return;
 
 	debugfs_create_file("active_cnt", 0444, device->d_debugfs, device,
 			    &_active_count_fops);
 	adreno_dev->ctx_d_debugfs = debugfs_create_dir("ctx",
 							device->d_debugfs);
+	snapshot_dir = debugfs_lookup("snapshot", kgsl_debugfs_dir);
+
+	if (!IS_ERR_OR_NULL(snapshot_dir))
+		debugfs_create_file("coop_reset", 0644, snapshot_dir, device,
+					&_coop_reset_fops);
 
 	if (ADRENO_FEATURE(adreno_dev, ADRENO_LM)) {
 		debugfs_create_file("lm_limit", 0644, device->d_debugfs, device,

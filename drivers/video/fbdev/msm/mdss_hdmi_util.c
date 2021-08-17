@@ -1,15 +1,5 @@
-/* Copyright (c) 2010-2016, 2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2010-2016, 2018, 2020, The Linux Foundation. All rights reserved. */
 
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
@@ -89,7 +79,7 @@ int hdmi_panel_get_vic(struct mdss_panel_info *pinfo,
 			timing.active_v, timing.back_porch_v,
 			timing.front_porch_v, timing.pulse_width_v, v_total);
 
-		timing.pixel_freq = ((unsigned long int)pinfo->clk_rate / 1000);
+		timing.pixel_freq = ((unsigned long)pinfo->clk_rate / 1000);
 		if (h_total && v_total) {
 			timing.refresh_rate = ((timing.pixel_freq * 1000) /
 				(h_total * v_total)) * 1000;
@@ -637,7 +627,7 @@ const char *msm_hdmi_mode_2string(u32 mode)
 		break;
 	default:
 		aspect_ratio = "???";
-	};
+	}
 
 	snprintf(res_buf, RESOLUTION_NAME_STR_LEN, "%dx%d %s%dHz %s",
 		ri.active_h, ri.active_v, ri.interlaced ? "i" : "p",
@@ -906,7 +896,7 @@ static int hdmi_ddc_read_retry(struct hdmi_tx_ddc_ctrl *ddc_ctrl)
 				!atomic_read(&ddc_ctrl->read_busy_wait_done)) {
 				udelay(HDMI_BUSY_WAIT_DELAY_US);
 				busy_wait_us -= HDMI_BUSY_WAIT_DELAY_US;
-			};
+			}
 
 			if (busy_wait_us < 0)
 				busy_wait_us = 0;
@@ -1384,7 +1374,7 @@ int hdmi_ddc_write(struct hdmi_tx_ddc_ctrl *ddc_ctrl)
 				!atomic_read(&ddc_ctrl->write_busy_wait_done)) {
 				udelay(HDMI_BUSY_WAIT_DELAY_US);
 				busy_wait_us -= HDMI_BUSY_WAIT_DELAY_US;
-			};
+			}
 
 			if (busy_wait_us < 0)
 				busy_wait_us = 0;
@@ -1799,7 +1789,7 @@ int hdmi_hdcp2p2_ddc_read_rxstatus(struct hdmi_tx_ddc_ctrl *ctrl)
 			!atomic_read(&ctrl->rxstatus_busy_wait_done)) {
 			udelay(HDMI_BUSY_WAIT_DELAY_US);
 			busy_wait_us -= HDMI_BUSY_WAIT_DELAY_US;
-		};
+		}
 
 		if (busy_wait_us < 0)
 			busy_wait_us = 0;

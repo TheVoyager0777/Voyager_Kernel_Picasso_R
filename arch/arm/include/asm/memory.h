@@ -22,12 +22,6 @@
 #include <mach/memory.h>
 #endif
 
-/*
- * Allow for constants defined here to be used from assembly code
- * by prepending the UL suffix only with actual C code compilation.
- */
-#define UL(x) _AC(x, UL)
-
 /* PAGE_OFFSET - the virtual address of the start of the kernel image */
 #define PAGE_OFFSET		UL(CONFIG_PAGE_OFFSET)
 
@@ -44,15 +38,6 @@
  * The maximum size of a 26-bit user space task.
  */
 #define TASK_SIZE_26		(UL(1) << 26)
-
-#ifdef CONFIG_MODULES_USE_VMALLOC
-/*
- * Modules might be anywhere in the vmalloc area.
- */
-#define MODULES_VADDR		VMALLOC_START
-#define MODULES_END		VMALLOC_END
-
-#else /* CONFIG_MODULES_USE_VMALLOC */
 
 /*
  * The module space lives between the addresses given by TASK_SIZE
@@ -78,8 +63,6 @@
 #define MODULES_END		(PAGE_OFFSET)
 #endif
 
-#endif /* CONFIG_MODULES_USE_VMALLOC */
-
 /*
  * The XIP kernel gets mapped at the bottom of the module vm area.
  * Since we use sections to map it, this macro replaces the physical address
@@ -99,6 +82,7 @@
 #else /* CONFIG_MMU */
 
 #ifndef __ASSEMBLY__
+extern unsigned long setup_vectors_base(void);
 extern unsigned long vectors_base;
 #define VECTORS_BASE		vectors_base
 #endif

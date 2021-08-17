@@ -1,13 +1,6 @@
-/* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -458,7 +451,7 @@ int pd_phy_signal(enum pd_sig_type sig)
 		pdphy->tx_status != -EINPROGRESS,
 		ms_to_ktime(HARD_RESET_COMPLETE_TIME));
 	if (ret) {
-		dev_err(pdphy->dev, "%s: failed ret %d", __func__, ret);
+		dev_err(pdphy->dev, "%s: failed ret %d\n", __func__, ret);
 		return ret;
 	}
 
@@ -483,13 +476,6 @@ int pd_phy_write(u16 hdr, const u8 *data, size_t data_len, enum pd_sop_type sop)
 	struct usb_pdphy *pdphy = __pdphy;
 	unsigned int msg_rx_cnt;
 
-	dev_dbg(pdphy->dev, "%s: hdr %x frame sop_type %d\n",
-			__func__, hdr, sop);
-
-	if (data && data_len)
-		print_hex_dump_debug("tx data obj:", DUMP_PREFIX_NONE, 32, 4,
-				data, data_len, false);
-
 	if (!pdphy) {
 		pr_err("%s: pdphy not found\n", __func__);
 		return -ENODEV;
@@ -501,6 +487,9 @@ int pd_phy_write(u16 hdr, const u8 *data, size_t data_len, enum pd_sop_type sop)
 		dev_dbg(pdphy->dev, "%s: pdphy disabled\n", __func__);
 		return -ENODEV;
 	}
+
+	dev_dbg(pdphy->dev, "%s: hdr %x frame sop_type %d\n",
+			__func__, hdr, sop);
 
 	if (data_len > USB_PDPHY_MAX_DATA_OBJ_LEN) {
 		dev_err(pdphy->dev, "%s: invalid data object len %zu\n",
@@ -523,6 +512,9 @@ int pd_phy_write(u16 hdr, const u8 *data, size_t data_len, enum pd_sop_type sop)
 		return ret;
 
 	if (data && data_len) {
+		print_hex_dump_debug("tx data obj:", DUMP_PREFIX_NONE, 32, 4,
+				data, data_len, false);
+
 		/* write data objects of SOP message */
 		ret = pdphy_bulk_reg_write(pdphy, USB_PDPHY_TX_BUFFER_DATA,
 				data, data_len);
@@ -561,11 +553,11 @@ int pd_phy_write(u16 hdr, const u8 *data, size_t data_len, enum pd_sop_type sop)
 		pdphy->tx_status != -EINPROGRESS,
 		ms_to_ktime(RECEIVER_RESPONSE_TIME));
 	if (ret) {
-		dev_err(pdphy->dev, "%s: failed ret %d", __func__, ret);
+		dev_err(pdphy->dev, "%s: failed ret %d\n", __func__, ret);
 		return ret;
 	}
 
-	if (hdr && !pdphy->tx_status)
+	if (!pdphy->tx_status)
 		pdphy->tx_bytes += data_len + USB_PDPHY_MSG_HDR_LEN;
 
 	return pdphy->tx_status ? pdphy->tx_status : 0;
@@ -776,7 +768,7 @@ static int pdphy_request_irq(struct usb_pdphy *pdphy,
 
 	*irq_num = of_irq_get_byname(node, irq_name);
 	if (*irq_num < 0) {
-		dev_err(pdphy->dev, "Unable to get %s irqn", irq_name);
+		dev_err(pdphy->dev, "Unable to get %s irq\n", irq_name);
 		ret = -ENXIO;
 	}
 
@@ -784,7 +776,7 @@ static int pdphy_request_irq(struct usb_pdphy *pdphy,
 	ret = devm_request_threaded_irq(pdphy->dev, *irq_num, irq_handler,
 			thread_fn, flags, irq_name, pdphy);
 	if (ret < 0) {
-		dev_err(pdphy->dev, "Unable to request %s irq: %dn",
+		dev_err(pdphy->dev, "Unable to request %s irq: %d\n",
 				irq_name, ret);
 		ret = -ENXIO;
 	}

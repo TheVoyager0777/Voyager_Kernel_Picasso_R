@@ -1,14 +1,8 @@
-/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  */
+
 #include "ipahal.h"
 #include "ipahal_hw_stats.h"
 #include "ipahal_hw_stats_i.h"
@@ -231,21 +225,19 @@ static struct ipahal_stats_init_pyld *ipahal_generate_init_pyld_flt_rt_v4_5(
 	void *params, bool is_atomic_ctx)
 {
 	struct ipahal_stats_init_pyld *pyld;
-	long int num = (long int)(params);
+	int num = (int)(params);
 
 	if (num > IPA_MAX_FLT_RT_CNT_INDEX ||
 		num <= 0) {
-		IPAHAL_ERR("num %ld not valid\n", num);
+		IPAHAL_ERR("num %d not valid\n", num);
 		return NULL;
 	}
 	pyld = IPAHAL_MEM_ALLOC(sizeof(*pyld) +
 		num *
 		sizeof(struct ipahal_stats_flt_rt_v4_5_hw),
 		is_atomic_ctx);
-	if (!pyld) {
-		IPAHAL_ERR("no mem\n");
+	if (!pyld)
 		return NULL;
-	}
 	pyld->len = num *
 		sizeof(struct ipahal_stats_flt_rt_v4_5_hw);
 	return pyld;
@@ -627,4 +619,16 @@ int ipahal_parse_stats(enum ipahal_hw_stats_type type, void *init_params,
 
 	return ipahal_hw_stats_objs[ipahal_ctx->hw_type][type].parse_stats(
 		init_params, raw_stats, parsed_stats);
+}
+
+void ipahal_set_flt_rt_sw_stats(void *raw_stats,
+	struct ipa_flt_rt_stats sw_stats)
+{
+	struct ipahal_stats_flt_rt_v4_5_hw *raw_hw =
+		(struct ipahal_stats_flt_rt_v4_5_hw *)raw_stats;
+
+	IPAHAL_DBG_LOW("\n");
+	raw_hw->num_bytes = sw_stats.num_bytes;
+	raw_hw->num_packets_hash = sw_stats.num_pkts_hash;
+	raw_hw->num_packets = sw_stats.num_pkts;
 }

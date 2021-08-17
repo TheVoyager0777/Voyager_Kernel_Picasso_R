@@ -1,14 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2014-2018, 2020, The Linux Foundation. All rights reserved.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/debugfs.h>
@@ -1992,6 +1985,7 @@ static void __dump_timings(struct seq_file *s, struct mdss_mdp_ctl *ctl)
 static void __dump_ctl(struct seq_file *s, struct mdss_mdp_ctl *ctl)
 {
 	struct mdss_mdp_perf_params *perf;
+
 	if (!mdss_mdp_ctl_is_power_on(ctl))
 		return;
 
@@ -2007,6 +2001,7 @@ static void __dump_ctl(struct seq_file *s, struct mdss_mdp_ctl *ctl)
 		__dump_timings(s, sctl);
 	} else {
 		struct mdss_mdp_mixer *mixer;
+
 		mixer = ctl->mixer_left;
 		if (mixer) {
 			seq_printf(s, "%s%d",
@@ -2065,12 +2060,13 @@ void mdss_mdp_dump(struct mdss_data_type *mdata)
 	for (i = 0; i < s.count; i += DUMP_CHUNK) {
 		if ((s.count - i) > DUMP_CHUNK) {
 			char c = s.buf[i + DUMP_CHUNK];
+
 			s.buf[i + DUMP_CHUNK] = 0;
-			pr_info("%s", s.buf + i);
+			pr_info("%s\n", s.buf + i);
 			s.buf[i + DUMP_CHUNK] = c;
 		} else {
 			s.buf[s.count] = 0;
-			pr_info("%s", s.buf + i);
+			pr_info("%s\n", s.buf + i);
 		}
 	}
 

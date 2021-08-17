@@ -1,4 +1,5 @@
-/* Copyright (c) 2012-2019 The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2020 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -118,7 +119,7 @@ static int32_t msm_cci_set_clk_param(struct cci_device *cci_dev,
 	enum i2c_freq_mode_t i2c_freq_mode = c_ctrl->cci_info->i2c_freq_mode;
 
 	if ((i2c_freq_mode >= I2C_MAX_MODES) || (i2c_freq_mode < 0)) {
-		pr_err("%s:%d invalid i2c_freq_mode = %d",
+		pr_err("%s:%d invalid i2c_freq_mode = %d\n",
 			__func__, __LINE__, i2c_freq_mode);
 		return -EINVAL;
 	}
@@ -264,14 +265,14 @@ static int32_t msm_cci_write_i2c_queue(struct cci_device *cci_dev,
 	uint32_t reg_offset = master * 0x200 + queue * 0x100;
 
 	if (!cci_dev) {
-		pr_err("%s: failed %d", __func__, __LINE__);
+		pr_err("%s: failed %d\n", __func__, __LINE__);
 		return -EINVAL;
 	}
 
 	CDBG("%s:%d called\n", __func__, __LINE__);
 	rc = msm_cci_validate_queue(cci_dev, 1, master, queue);
 	if (rc < 0) {
-		pr_err("%s: failed %d", __func__, __LINE__);
+		pr_err("%s: failed %d\n", __func__, __LINE__);
 		return rc;
 	}
 	CDBG("%s CCI_I2C_M0_Q0_LOAD_DATA_ADDR:val 0x%x:0x%x\n",
@@ -289,7 +290,7 @@ static uint32_t msm_cci_wait(struct cci_device *cci_dev,
 	int32_t rc = 0;
 
 	if (!cci_dev) {
-		pr_err("%s: failed %d", __func__, __LINE__);
+		pr_err("%s: failed %d\n", __func__, __LINE__);
 		return -EINVAL;
 	}
 
@@ -384,7 +385,7 @@ static int32_t msm_cci_calc_cmd_len(struct cci_device *cci_dev,
 	uint32_t size = cmd_size;
 
 	if (!cci_dev || !c_ctrl) {
-		pr_err("%s: failed %d", __func__, __LINE__);
+		pr_err("%s: failed %d\n", __func__, __LINE__);
 		return -EINVAL;
 	}
 
@@ -420,7 +421,7 @@ static int32_t msm_cci_calc_cmd_len(struct cci_device *cci_dev,
 	}
 
 	if (len > cci_dev->payload_size) {
-		pr_err("Len error: %d", len);
+		pr_err("Len error: %d\n", len);
 		return -EINVAL;
 	}
 
@@ -1235,7 +1236,7 @@ static uint32_t msm_cci_cycles_per_ms(unsigned long clk)
 	if (clk)
 		cycles_per_us = ((clk/1000)*256)/1000;
 	else {
-		pr_err("%s:%d, failed: Can use default: %d",
+		pr_err("%s:%d, failed: Can use default: %d\n",
 			__func__, __LINE__, CYCLES_PER_MICRO_SEC_DEFAULT);
 		cycles_per_us = CYCLES_PER_MICRO_SEC_DEFAULT;
 	}
@@ -1825,7 +1826,7 @@ static int msm_cci_irq_routine(struct v4l2_subdev *sd, u32 status,
 	CDBG("%s line %d\n", __func__, __LINE__);
 	ret = msm_cci_irq(cci_dev->irq->start, cci_dev);
 	CDBG("%s: msm_cci_irq return %d\n", __func__, ret);
-	*handled = TRUE;
+	*handled = true;
 	return 0;
 }
 
@@ -2108,7 +2109,7 @@ static int msm_cci_probe(struct platform_device *pdev)
 		&new_cci_dev->cci_clk_rates, &new_cci_dev->num_clk_cases,
 		&new_cci_dev->num_clk);
 	if (rc < 0) {
-		pr_err("%s: msm_cci_get_clk_info() failed", __func__);
+		pr_err("%s: msm_cci_get_clk_info() failed\n", __func__);
 		kfree(new_cci_dev);
 		return -EFAULT;
 	}
@@ -2221,7 +2222,6 @@ static struct platform_driver cci_driver = {
 	.remove = msm_cci_exit,
 	.driver = {
 		.name = MSM_CCI_DRV_NAME,
-		.owner = THIS_MODULE,
 		.of_match_table = msm_cci_dt_match,
 	},
 };

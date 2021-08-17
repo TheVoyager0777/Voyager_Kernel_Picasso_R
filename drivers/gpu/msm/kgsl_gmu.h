@@ -1,26 +1,24 @@
-/* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  */
 #ifndef __KGSL_GMU_H
 #define __KGSL_GMU_H
 
-#include <linux/mailbox_client.h>
 #include "kgsl_gmu_core.h"
-#include <linux/firmware.h>
 #include "kgsl_hfi.h"
 
+#define GMU_PWR_LEVELS  2
+#define GMU_FREQUENCY   200000000
 #define MAX_GMUFW_SIZE	0x8000	/* in bytes */
 
 #define BWMEM_SIZE	(12 + (4 * NUM_BW_LEVELS))	/*in bytes*/
+
+#define GMU_VER_MAJOR(ver) (((ver) >> 28) & 0xF)
+#define GMU_VER_MINOR(ver) (((ver) >> 16) & 0xFFF)
+#define GMU_VER_STEP(ver) ((ver) & 0xFFFF)
+#define GMU_VERSION(major, minor) \
+	((((major) & 0xF) << 28) | (((minor) & 0xFFF) << 16))
 
 #define GMU_INT_WDOG_BITE		BIT(0)
 #define GMU_INT_RSCC_COMP		BIT(1)
@@ -65,8 +63,21 @@ struct gmu_block_header {
 	uint32_t value;
 };
 
+/* GMU Block types */
+#define GMU_BLK_TYPE_DATA 0
+#define GMU_BLK_TYPE_PREALLOC_REQ 1
+#define GMU_BLK_TYPE_CORE_VER 2
+#define GMU_BLK_TYPE_CORE_DEV_VER 3
+#define GMU_BLK_TYPE_PWR_VER 4
+#define GMU_BLK_TYPE_PWR_DEV_VER 5
+#define GMU_BLK_TYPE_HFI_VER 6
+#define GMU_BLK_TYPE_PREALLOC_PERSIST_REQ 7
+
 /* For GMU Logs*/
 #define LOGMEM_SIZE  SZ_4K
+
+/* GMU memdesc entries */
+#define GMU_KERNEL_ENTRIES		16
 
 extern struct gmu_dev_ops adreno_a6xx_gmudev;
 #define KGSL_GMU_DEVICE(_a)  ((struct gmu_device *)((_a)->gmu_core.ptr))
@@ -74,11 +85,17 @@ extern struct gmu_dev_ops adreno_a6xx_gmudev;
 enum gmu_mem_type {
 	GMU_ITCM = 0,
 	GMU_ICACHE,
+	GMU_CACHE = GMU_ICACHE,
 	GMU_DTCM,
 	GMU_DCACHE,
 	GMU_NONCACHED_KERNEL,
 	GMU_NONCACHED_USER,
 	GMU_MEM_TYPE_MAX,
+};
+
+enum gmu_context_index {
+	GMU_CONTEXT_USER = 0,
+	GMU_CONTEXT_KERNEL,
 };
 
 /**
@@ -88,6 +105,7 @@ enum gmu_mem_type {
  * @physaddr: Physical address of the memory object
  * @size: Size of the memory object
  * @mem_type: memory type for this memory
+ * @ctx_idx: GMU IOMMU context idx
  */
 struct gmu_memdesc {
 	void *hostptr;
@@ -95,6 +113,7 @@ struct gmu_memdesc {
 	phys_addr_t physaddr;
 	uint64_t size;
 	enum gmu_mem_type mem_type;
+	enum gmu_context_index ctx_idx;
 };
 
 struct gmu_bw_votes {
@@ -120,32 +139,22 @@ enum gmu_load_mode {
 };
 
 struct kgsl_mailbox {
-	bool enabled;
 	struct mbox_client *client;
 	struct mbox_chan *channel;
 };
 
 /**
  * struct gmu_device - GMU device structure
- * @ver: GMU FW version, read from GMU
+ * @ver: GMU Version information
  * @reg_phys: GMU CSR physical address
  * @reg_len: GMU CSR range
  * @gmu_interrupt_num: GMU interrupt number
  * @fw_image: GMU FW image
  * @hfi_mem: pointer to HFI shared memory
- * @icache_mem: pointer to GMU icache memory
- * @dcache_mem: pointer to GMU dcache memory
- * @persist_mem: pointer to GMU persistent memory
  * @dump_mem: pointer to GMU debug dump memory
  * @gmu_log: gmu event log memory
  * @hfi: HFI controller
- * @lm_config: GPU LM configuration data
- * @lm_dcvs_level: Minimal DCVS level that enable LM. LM disable in
- *		lower levels
- * @bcl_config: Battery Current Limit configuration data
- * @gmu_freqs: GMU frequency table with lowest freq at index 0
  * @gpu_freqs: GPU frequency table with lowest freq at index 0
- * @num_gmupwrlevels: number GMU frequencies in GMU freq table
  * @num_gpupwrlevels: number GPU frequencies in GPU freq table
  * @num_bwlevel: number of GPU BW levels
  * @num_cnocbwlevel: number CNOC BW levels
@@ -162,29 +171,26 @@ struct kgsl_mailbox {
  * @idle_level: Minimal GPU idle power level
  * @fault_count: GMU fault count
  * @mailbox: Messages to AOP for ACD enable/disable go through this
- * @pdc_cfg_base: Base address of PDC cfg registers
- * @pdc_seq_base: Base address of PDC seq registers
+ * @log_wptr_retention: Store the log wptr offset on slumber
  */
 struct gmu_device {
-	unsigned int ver;
+	struct {
+		u32 core;
+		u32 core_dev;
+		u32 pwr;
+		u32 pwr_dev;
+		u32 hfi;
+	} ver;
 	struct platform_device *pdev;
 	unsigned long reg_phys;
 	unsigned int reg_len;
-	unsigned int gmu_interrupt_num;
+	int gmu_interrupt_num;
 	const struct firmware *fw_image;
 	struct gmu_memdesc *hfi_mem;
-	struct gmu_memdesc *icache_mem;
-	struct gmu_memdesc *dcache_mem;
-	struct gmu_memdesc *persist_mem;
 	struct gmu_memdesc *dump_mem;
 	struct gmu_memdesc *gmu_log;
 	struct kgsl_hfi hfi;
-	unsigned int lm_config;
-	unsigned int lm_dcvs_level;
-	unsigned int bcl_config;
-	unsigned int gmu_freqs[MAX_CX_LEVELS];
 	unsigned int gpu_freqs[MAX_GX_LEVELS];
-	unsigned int num_gmupwrlevels;
 	unsigned int num_gpupwrlevels;
 	unsigned int num_bwlevels;
 	unsigned int num_cnocbwlevels;
@@ -199,12 +205,19 @@ struct gmu_device {
 	unsigned int idle_level;
 	unsigned int fault_count;
 	struct kgsl_mailbox mailbox;
-	void __iomem *pdc_cfg_base;
-	void __iomem *pdc_seq_base;
+	bool preallocations;
+	struct gmu_memdesc kmem_entries[GMU_KERNEL_ENTRIES];
+	unsigned long kmem_bitmap;
+	const struct gmu_vma_entry *vma;
+	unsigned int log_wptr_retention;
 };
 
-struct gmu_memdesc *gmu_get_memdesc(unsigned int addr, unsigned int size);
+struct gmu_memdesc *gmu_get_memdesc(struct gmu_device *gmu,
+		unsigned int addr, unsigned int size);
 unsigned int gmu_get_memtype_base(struct gmu_device *gmu,
 		enum gmu_mem_type type);
+
+int gmu_prealloc_req(struct kgsl_device *device, struct gmu_block_header *blk);
+int gmu_cache_finalize(struct kgsl_device *device);
 
 #endif /* __KGSL_GMU_H */

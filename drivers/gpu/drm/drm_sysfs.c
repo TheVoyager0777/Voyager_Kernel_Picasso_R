@@ -5,6 +5,7 @@
  *               does not allow adding attributes.
  *
  * Copyright (c) 2004 Jon Smirl <jonsmirl@gmail.com>
+ * Copyright (C) 2021 XiaoMi, Inc.
  * Copyright (c) 2003-2004 Greg Kroah-Hartman <greg@kroah.com>
  * Copyright (c) 2003-2004 IBM Corp.
  *
@@ -18,10 +19,10 @@
 #include <linux/err.h>
 #include <linux/export.h>
 
-#include <drm/drm_encoder.h>
 #include <drm/drm_sysfs.h>
 #include <drm/drmP.h>
 #include "drm_internal.h"
+#include "drm_internal_mi.h"
 
 #define to_drm_minor(d) dev_get_drvdata(d)
 #define to_drm_connector(d) dev_get_drvdata(d)
@@ -230,48 +231,119 @@ static ssize_t modes_show(struct device *device,
 	return written;
 }
 
-extern int drm_get_panel_info(struct drm_bridge *bridge, char *name);
+static ssize_t disp_param_show(struct device *device,
+			   struct device_attribute *attr,
+			   char *buf)
+{
+	struct drm_connector *connector = to_drm_connector(device);
+	int ret;
+
+	ret = dsi_display_disp_param_get(connector, buf);
+
+	return (ssize_t)ret;
+}
+
+static ssize_t disp_param_store(struct device *device,
+			   struct device_attribute *attr,
+			   const char *buf, size_t count)
+{
+	struct drm_connector *connector = to_drm_connector(device);
+	u32 param;
+
+	sscanf(buf, "0x%x", &param);
+
+	dsi_display_disp_param_set(connector, param);
+
+	return count;
+}
+
+static ssize_t mipi_reg_show(struct device *device,
+			   struct device_attribute *attr,
+			   char *buf)
+{
+	struct drm_connector *connector = to_drm_connector(device);
+	return dsi_display_mipi_reg_read(connector, buf);
+}
+
+static ssize_t mipi_reg_store(struct device *device,
+			   struct device_attribute *attr,
+			   const char *buf, size_t count)
+{
+	struct drm_connector *connector = to_drm_connector(device);
+	return dsi_display_mipi_reg_write(connector, (char *)buf, count);;
+}
+
 static ssize_t panel_info_show(struct device *device,
 			   struct device_attribute *attr,
 			   char *buf)
 {
-	int written = 0;
-	char pname[128] = {0};
-	struct drm_connector *connector = NULL;
-	struct drm_encoder *encoder = NULL;
-	struct drm_bridge *bridge = NULL;
+	struct drm_connector *connector = to_drm_connector(device);
+	return dsi_display_panel_info_read(connector, buf);
+}
 
-	connector = to_drm_connector(device);
-	if (!connector)
-		return written;
+static ssize_t fod_ui_ready_show(struct device *device,
+			   struct device_attribute *attr,
+			   char *buf)
+{
+	struct drm_connector *connector = to_drm_connector(device);
+	return dsi_display_fod_get(connector, buf);
+}
 
-	encoder = connector->encoder;
-	if (!encoder)
-		return written;
 
-	bridge = encoder->bridge;
-	if (!bridge)
-		return written;
+extern ssize_t smart_fps_value_show(struct device *device,
+			   struct device_attribute *attr,
+			   char *buf);
+extern ssize_t wp_info_show(struct device *device,
+			   struct device_attribute *attr,
+			   char *buf);
+static ssize_t doze_brightness_store(struct device *device,
+			   struct device_attribute *attr,
+			   const char *buf, size_t count)
+{
+	struct drm_connector *connector = to_drm_connector(device);
+	int doze_brightness;
+	int ret;
 
-	written = drm_get_panel_info(bridge, pname);
-	if (written)
-		return snprintf(buf, PAGE_SIZE, "panel_name=%s\n", pname);
+	ret = kstrtoint(buf, 0, &doze_brightness);;
+	if (ret)
+		return ret;
 
-	return written;
+	ret = dsi_display_set_doze_brightness(connector, doze_brightness);
+
+	return ret ? ret : count;
+}
+
+static ssize_t doze_brightness_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct drm_connector *connector = to_drm_connector(dev);
+	return dsi_display_get_doze_brightness(connector, buf);
 }
 
 static DEVICE_ATTR_RW(status);
 static DEVICE_ATTR_RO(enabled);
 static DEVICE_ATTR_RO(dpms);
 static DEVICE_ATTR_RO(modes);
+static DEVICE_ATTR_RW(disp_param);
+static DEVICE_ATTR_RW(mipi_reg);
 static DEVICE_ATTR_RO(panel_info);
+static DEVICE_ATTR_RO(fod_ui_ready);
+static DEVICE_ATTR_RO(wp_info);
+static DEVICE_ATTR_RW(doze_brightness);
+static DEVICE_ATTR_RO(smart_fps_value);
 
 static struct attribute *connector_dev_attrs[] = {
 	&dev_attr_status.attr,
 	&dev_attr_enabled.attr,
 	&dev_attr_dpms.attr,
 	&dev_attr_modes.attr,
+	&dev_attr_disp_param.attr,
+	&dev_attr_mipi_reg.attr,
 	&dev_attr_panel_info.attr,
+	&dev_attr_fod_ui_ready.attr,
+	&dev_attr_wp_info.attr,
+	&dev_attr_doze_brightness.attr,
+	&dev_attr_smart_fps_value.attr,
 	NULL
 };
 
@@ -334,6 +406,16 @@ void drm_sysfs_connector_remove(struct drm_connector *connector)
 	connector->kdev = NULL;
 }
 
+void drm_sysfs_lease_event(struct drm_device *dev)
+{
+	char *event_string = "LEASE=1";
+	char *envp[] = { event_string, NULL };
+
+	DRM_DEBUG("generating lease event\n");
+
+	kobject_uevent_env(&dev->primary->kdev->kobj, KOBJ_CHANGE, envp);
+}
+
 /**
  * drm_sysfs_hotplug_event - generate a DRM uevent
  * @dev: DRM device
@@ -364,9 +446,7 @@ struct device *drm_sysfs_minor_alloc(struct drm_minor *minor)
 	struct device *kdev;
 	int r;
 
-	if (minor->type == DRM_MINOR_CONTROL)
-		minor_str = "controlD%d";
-	else if (minor->type == DRM_MINOR_RENDER)
+	if (minor->type == DRM_MINOR_RENDER)
 		minor_str = "renderD%d";
 	else
 		minor_str = "card%d";

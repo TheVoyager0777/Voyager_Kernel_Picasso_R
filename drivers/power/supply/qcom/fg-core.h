@@ -1,13 +1,6 @@
-/* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2016-2021, The Linux Foundation. All rights reserved.
  */
 
 #ifndef __FG_CORE_H__
@@ -191,6 +184,7 @@ enum fg_sram_param_id {
 	FG_SRAM_VBAT_FINAL,
 	FG_SRAM_IBAT_FINAL,
 	FG_SRAM_IBAT_FLT,
+	FG_SRAM_RCONN,
 	FG_SRAM_ESR,
 	FG_SRAM_ESR_MDL,
 	FG_SRAM_ESR_ACT,
@@ -613,4 +607,5 @@ extern int fg_lerp(const struct fg_pt *pts, size_t tablesize, s32 input,
 			s32 *output);
 void fg_stay_awake(struct fg_dev *fg, int awake_reason);
 void fg_relax(struct fg_dev *fg, int awake_reason);
+extern int fg_dma_mem_req(struct fg_dev *fg, bool request);
 #endif

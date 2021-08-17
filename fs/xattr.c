@@ -23,7 +23,6 @@
 #include <linux/posix_acl_xattr.h>
 
 #include <linux/uaccess.h>
-#include "internal.h"
 
 static const char *
 strcmp_prefix(const char *a, const char *a_prefix)
@@ -204,22 +203,10 @@ int __vfs_setxattr_noperm(struct dentry *dentry, const char *name,
 	return error;
 }
 
-/**
- * __vfs_setxattr_locked: set an extended attribute while holding the inode
- * lock
- *
- *  @dentry - object to perform setxattr on
- *  @name - xattr name to set
- *  @value - value to set @name to
- *  @size - size of @value
- *  @flags - flags to pass into filesystem operations
- *  @delegated_inode - on return, will contain an inode pointer that
- *  a delegation was broken on, NULL if none.
- */
+
 int
-__vfs_setxattr_locked(struct dentry *dentry, const char *name,
-		const void *value, size_t size, int flags,
-		struct inode **delegated_inode)
+vfs_setxattr(struct dentry *dentry, const char *name, const void *value,
+		size_t size, int flags)
 {
 	struct inode *inode = dentry->d_inode;
 	int error;
@@ -228,45 +215,20 @@ __vfs_setxattr_locked(struct dentry *dentry, const char *name,
 	if (error)
 		return error;
 
+	inode_lock(inode);
 	error = security_inode_setxattr(dentry, name, value, size, flags);
-	if (error)
-		goto out;
-
-	error = try_break_deleg(inode, delegated_inode);
 	if (error)
 		goto out;
 
 	error = __vfs_setxattr_noperm(dentry, name, value, size, flags);
 
 out:
-	return error;
-}
-EXPORT_SYMBOL_GPL(__vfs_setxattr_locked);
-
-int
-vfs_setxattr(struct dentry *dentry, const char *name, const void *value,
-		size_t size, int flags)
-{
-	struct inode *inode = dentry->d_inode;
-	struct inode *delegated_inode = NULL;
-	int error;
-
-retry_deleg:
-	inode_lock(inode);
-	error = __vfs_setxattr_locked(dentry, name, value, size, flags,
-	    &delegated_inode);
 	inode_unlock(inode);
-
-	if (delegated_inode) {
-		error = break_deleg_wait(&delegated_inode);
-		if (!error)
-			goto retry_deleg;
-	}
 	return error;
 }
 EXPORT_SYMBOL_GPL(vfs_setxattr);
 
-ssize_t
+static ssize_t
 xattr_getsecurity(struct inode *inode, const char *name, void *value,
 			size_t size)
 {
@@ -291,7 +253,6 @@ out:
 out_noalloc:
 	return len;
 }
-EXPORT_SYMBOL_GPL(xattr_getsecurity);
 
 /*
  * vfs_getxattr_alloc - allocate memory, if necessary, before calling getxattr
@@ -400,7 +361,6 @@ vfs_listxattr(struct dentry *dentry, char *list, size_t size)
 	if (error)
 		return error;
 	if (inode->i_op->listxattr && (inode->i_opflags & IOP_XATTR)) {
-		error = -EOPNOTSUPP;
 		error = inode->i_op->listxattr(dentry, list, size);
 	} else {
 		error = security_inode_listsecurity(inode, list, size);
@@ -426,18 +386,8 @@ __vfs_removexattr(struct dentry *dentry, const char *name)
 }
 EXPORT_SYMBOL(__vfs_removexattr);
 
-/**
- * __vfs_removexattr_locked: set an extended attribute while holding the inode
- * lock
- *
- *  @dentry - object to perform setxattr on
- *  @name - name of xattr to remove
- *  @delegated_inode - on return, will contain an inode pointer that
- *  a delegation was broken on, NULL if none.
- */
 int
-__vfs_removexattr_locked(struct dentry *dentry, const char *name,
-		struct inode **delegated_inode)
+vfs_removexattr(struct dentry *dentry, const char *name)
 {
 	struct inode *inode = dentry->d_inode;
 	int error;
@@ -446,11 +396,8 @@ __vfs_removexattr_locked(struct dentry *dentry, const char *name,
 	if (error)
 		return error;
 
+	inode_lock(inode);
 	error = security_inode_removexattr(dentry, name);
-	if (error)
-		goto out;
-
-	error = try_break_deleg(inode, delegated_inode);
 	if (error)
 		goto out;
 
@@ -462,31 +409,11 @@ __vfs_removexattr_locked(struct dentry *dentry, const char *name,
 	}
 
 out:
-	return error;
-}
-EXPORT_SYMBOL_GPL(__vfs_removexattr_locked);
-
-int
-vfs_removexattr(struct dentry *dentry, const char *name)
-{
-	struct inode *inode = dentry->d_inode;
-	struct inode *delegated_inode = NULL;
-	int error;
-
-retry_deleg:
-	inode_lock(inode);
-	error = __vfs_removexattr_locked(dentry, name, &delegated_inode);
 	inode_unlock(inode);
-
-	if (delegated_inode) {
-		error = break_deleg_wait(&delegated_inode);
-		if (!error)
-			goto retry_deleg;
-	}
-
 	return error;
 }
 EXPORT_SYMBOL_GPL(vfs_removexattr);
+
 
 /*
  * Extended attribute SET operations
@@ -582,10 +509,10 @@ SYSCALL_DEFINE5(fsetxattr, int, fd, const char __user *, name,
 	if (!f.file)
 		return error;
 	audit_file(f.file);
-	error = mnt_want_write_file_path(f.file);
+	error = mnt_want_write_file(f.file);
 	if (!error) {
 		error = setxattr(f.file->f_path.dentry, name, value, size, flags);
-		mnt_drop_write_file_path(f.file);
+		mnt_drop_write_file(f.file);
 	}
 	fdput(f);
 	return error;
@@ -814,10 +741,10 @@ SYSCALL_DEFINE2(fremovexattr, int, fd, const char __user *, name)
 	if (!f.file)
 		return error;
 	audit_file(f.file);
-	error = mnt_want_write_file_path(f.file);
+	error = mnt_want_write_file(f.file);
 	if (!error) {
 		error = removexattr(f.file->f_path.dentry, name);
-		mnt_drop_write_file_path(f.file);
+		mnt_drop_write_file(f.file);
 	}
 	fdput(f);
 	return error;

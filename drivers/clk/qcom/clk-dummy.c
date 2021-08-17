@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2017, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2018, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/clk-provider.h>
@@ -64,7 +56,7 @@ const struct clk_ops clk_dummy_ops = {
 	.set_flags = dummy_clk_set_flags,
 	.debug_init = clk_debug_measure_add,
 };
-EXPORT_SYMBOL_GPL(clk_dummy_ops);
+EXPORT_SYMBOL(clk_dummy_ops);
 
 static int dummy_reset_assert(struct reset_controller_dev *rcdev,
 				unsigned long id)

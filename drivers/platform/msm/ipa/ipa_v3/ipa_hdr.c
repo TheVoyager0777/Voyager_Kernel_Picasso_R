@@ -1,19 +1,12 @@
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  */
 
 #include "ipa_i.h"
 #include "ipahal/ipahal.h"
 
-static const u32 ipa_hdr_bin_sz[IPA_HDR_BIN_MAX] = { 8, 16, 24, 36, 64, 128};
+static const u32 ipa_hdr_bin_sz[IPA_HDR_BIN_MAX] = { 8, 16, 24, 36, 64};
 static const u32 ipa_hdr_proc_ctx_bin_sz[IPA_HDR_PROC_CTX_BIN_MAX] = { 32, 64};
 
 #define HDR_TYPE_IS_VALID(type) \
@@ -42,7 +35,7 @@ static int ipa3_generate_hdr_hw_tbl(struct ipa_mem_buffer *mem)
 	IPADBG_LOW("tbl_sz=%d\n", ipa3_ctx->hdr_tbl.end);
 
 alloc:
-	mem->base = dma_alloc_coherent(ipa3_ctx->pdev, mem->size,
+	mem->base = dma_zalloc_coherent(ipa3_ctx->pdev, mem->size,
 			&mem->phys_base, flag);
 	if (!mem->base) {
 		if (flag == GFP_KERNEL) {
@@ -53,7 +46,6 @@ alloc:
 		return -ENOMEM;
 	}
 
-	memset(mem->base, 0, mem->size);
 	list_for_each_entry(entry, &ipa3_ctx->hdr_tbl.head_hdr_entry_list,
 			link) {
 		if (entry->is_hdr_proc_ctx)
@@ -545,10 +537,6 @@ static int __ipa_add_hdr(struct ipa_hdr_add *hdr, bool user)
 		bin = IPA_HDR_BIN3;
 	else if (hdr->hdr_len <= ipa_hdr_bin_sz[IPA_HDR_BIN4])
 		bin = IPA_HDR_BIN4;
-	/* Starting from IPA4.5, HW supports larger headers. */
-	else if ((hdr->hdr_len <= ipa_hdr_bin_sz[IPA_HDR_BIN5]) &&
-		(ipa3_ctx->ipa_hw_type >= IPA_HW_v4_5))
-		bin = IPA_HDR_BIN5;
 	else {
 		IPAERR_RL("unexpected hdr len %d\n", hdr->hdr_len);
 		goto bad_hdr_len;
@@ -1101,7 +1089,7 @@ int ipa3_reset_hdr(bool user_only)
 				entry->proc_ctx = NULL;
 			} else {
 				/* move the offset entry to free list */
-				entry->offset_entry->ipacm_installed = 0;
+				entry->offset_entry->ipacm_installed = false;
 				list_move(&entry->offset_entry->link,
 				&htbl->head_free_offset_list[
 					entry->offset_entry->bin]);
@@ -1150,7 +1138,7 @@ int ipa3_reset_hdr(bool user_only)
 	list_for_each_entry_safe(
 		ctx_entry,
 		ctx_next,
-		&ipa3_ctx->hdr_proc_ctx_tbl.head_proc_ctx_entry_list,
+		&(htbl_proc->head_proc_ctx_entry_list),
 		link) {
 
 		if (ipa3_id_find(ctx_entry->id) == NULL) {
@@ -1180,24 +1168,22 @@ int ipa3_reset_hdr(bool user_only)
 	if (!user_only) {
 		for (i = 0; i < IPA_HDR_PROC_CTX_BIN_MAX; i++) {
 			list_for_each_entry_safe(ctx_off_entry, ctx_off_next,
-				&ipa3_ctx->hdr_proc_ctx_tbl.head_offset_list[i],
-				link) {
+				&(htbl_proc->head_offset_list[i]), link) {
 				list_del(&ctx_off_entry->link);
 				kmem_cache_free(
 					ipa3_ctx->hdr_proc_ctx_offset_cache,
 					ctx_off_entry);
 			}
 			list_for_each_entry_safe(ctx_off_entry, ctx_off_next,
-				&ipa3_ctx->hdr_proc_ctx_tbl.
-				head_free_offset_list[i], link) {
+				&(htbl_proc->head_free_offset_list[i]), link) {
 				list_del(&ctx_off_entry->link);
 				kmem_cache_free(
 					ipa3_ctx->hdr_proc_ctx_offset_cache,
 					ctx_off_entry);
 			}
 		}
-		ipa3_ctx->hdr_proc_ctx_tbl.end = 0;
-		ipa3_ctx->hdr_proc_ctx_tbl.proc_ctx_cnt = 0;
+		htbl_proc->end = 0;
+		htbl_proc->proc_ctx_cnt = 0;
 	}
 
 	/* commit the change to IPA-HW */

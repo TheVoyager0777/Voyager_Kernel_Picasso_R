@@ -1,7 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * FTS Capacitive touch screen controller (FingerTipS)
  *
- * Copyright (C) 2016-2018, STMicroelectronics Limited.
+ * Copyright (C) 2016-2019, STMicroelectronics Limited.
  * Authors: AMG(Analog Mems Group) <marco.cali@st.com>
  *
  *
@@ -59,7 +60,7 @@
 int readB2(u16 address, u8 *outBuf, int len);
 int readB2U16(u16 address, u8 *outBuf, int byteToRead);
 int releaseInformation(void);
-int lockDownInfo(u8 *data);
+int lockDownInfo(u8 *data, int len);
 int calculateCRC8(u8 *u8_srcBuff, int size, u8 *crc);
 int writeLockDownInfo(u8 *data, int size);
 int rewriteLockDownInfo(u8 *data, int size);

@@ -1,4 +1,5 @@
-/* Copyright (c) 2011-2014, 2017-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2011-2014, 2017-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -190,7 +191,7 @@ void msm_camera_io_dump(void __iomem *addr, int size, int enable)
 	line_str[0] = '\0';
 	for (i = 0; i < size/4; i++) {
 		if (i % 4 == 0) {
-			used = snprintf(line_str + offset,
+			used = scnprintf(line_str + offset,
 				sizeof(line_str) - offset, "0x%04tX: ", p);
 			if (offset + used >= sizeof(line_str)) {
 				pr_err("%s\n", line_str);
@@ -202,7 +203,7 @@ void msm_camera_io_dump(void __iomem *addr, int size, int enable)
 		}
 		data = readl_relaxed(addr + p);
 		p = p + 4;
-		used = snprintf(line_str + offset,
+		used = scnprintf(line_str + offset,
 			sizeof(line_str) - offset, "%08x ", data);
 		if (offset + used >= sizeof(line_str)) {
 			pr_err("%s\n", line_str);
@@ -661,14 +662,14 @@ int msm_camera_config_single_vreg(struct device *dev,
 	}
 	if (cam_vreg->type == VREG_TYPE_CUSTOM) {
 		if (cam_vreg->custom_vreg_name == NULL) {
-			pr_err("%s : can't find sub reg name",
+			pr_err("%s : can't find sub reg name\n",
 				__func__);
 			goto vreg_get_fail;
 		}
 		vreg_name = cam_vreg->custom_vreg_name;
 	} else {
 		if (cam_vreg->reg_name == NULL) {
-			pr_err("%s : can't find reg name", __func__);
+			pr_err("%s : can't find reg name\n", __func__);
 			goto vreg_get_fail;
 		}
 		vreg_name = cam_vreg->reg_name;

@@ -1,14 +1,6 @@
-/* Copyright (c) 2012, 2015-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2012, 2015-2020, The Linux Foundation. All rights reserved.
  */
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
@@ -132,7 +124,7 @@ static bool force_on_xin_clk(u32 bit_off, u32 clk_ctl_reg_off, bool enable)
 
 	clk_forced_on = !(force_on_mask & val);
 
-	if (true == enable)
+	if (enable)
 		val |= force_on_mask;
 	else
 		val &= ~force_on_mask;
@@ -147,7 +139,7 @@ void vbif_lock(struct platform_device *parent_pdev)
 	if (!parent_pdev)
 		return;
 
-	mdp_vbif_lock(parent_pdev, true);
+//	mdp_vbif_lock(parent_pdev, true);
 }
 
 void vbif_unlock(struct platform_device *parent_pdev)
@@ -155,7 +147,7 @@ void vbif_unlock(struct platform_device *parent_pdev)
 	if (!parent_pdev)
 		return;
 
-	mdp_vbif_lock(parent_pdev, false);
+//	mdp_vbif_lock(parent_pdev, false);
 }
 
 void sde_mdp_halt_vbif_xin(struct sde_mdp_vbif_halt_params *params)
@@ -372,7 +364,6 @@ void sde_mdp_set_ot_limit(struct sde_mdp_set_ot_params *params)
 	SDEROT_EVTLOG(params->num, params->xin_id, ot_lim);
 exit:
 	vbif_unlock(mdata->parent_pdev);
-	return;
 }
 
 /*
@@ -983,5 +974,4 @@ void sde_rotator_base_destroy(struct sde_rot_data_type *mdata)
 	sde_mdp_destroy_dt_misc(pdev, mdata);
 	sde_rot_iounmap(&mdata->vbif_nrt_io);
 	sde_rot_iounmap(&mdata->sde_io);
-	devm_kfree(&pdev->dev, mdata);
 }

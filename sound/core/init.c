@@ -139,55 +139,6 @@ static struct snd_info_entry_ops snd_card_state_proc_ops = {
 	.poll = snd_card_state_poll,
 };
 
-#ifdef CONFIG_PM
-static ssize_t snd_card_power_read(struct snd_info_entry *entry,
-			void *file_private_data, struct file *file,
-			char __user *buf, size_t count, loff_t pos)
-{
-	int len, err;
-	char buffer[SND_CARD_STATE_MAX_LEN];
-
-	err = wait_event_interruptible(entry->card->power_sleep,
-			xchg(&entry->card->power_change, 0));
-	if (err == -ERESTARTSYS)
-		return -EINTR;
-
-	/* make sure power is updated prior to wake up */
-	rmb();
-	switch (entry->card->power_state) {
-	case SNDRV_CTL_POWER_D0:
-		len = scnprintf(buffer, sizeof(buffer),
-				"%s\n", "D0");
-		break;
-	case SNDRV_CTL_POWER_D1:
-		len = scnprintf(buffer, sizeof(buffer),
-				"%s\n", "D1");
-		break;
-	case SNDRV_CTL_POWER_D2:
-		len = scnprintf(buffer, sizeof(buffer),
-				"%s\n", "D2");
-		break;
-	case SNDRV_CTL_POWER_D3hot:
-		len = scnprintf(buffer, sizeof(buffer),
-				"%s\n", "D3hot");
-		break;
-	case SNDRV_CTL_POWER_D3cold:
-		len = scnprintf(buffer, sizeof(buffer),
-				"%s\n", "D3cold");
-		break;
-	default:
-		dev_dbg(entry->card->dev, "unknown power state: 0x%x\n",
-				entry->card->power_state);
-		return -EIO;
-	}
-	return simple_read_from_buffer(buf, count, &pos, buffer, len);
-}
-
-static struct snd_info_entry_ops snd_card_power_proc_ops = {
-	.read = snd_card_power_read,
-};
-#endif
-
 static int init_info_for_card(struct snd_card *card)
 {
 	struct snd_info_entry *entry, *entry_state;
@@ -210,19 +161,6 @@ static int init_info_for_card(struct snd_card *card)
 	entry_state->size = SND_CARD_STATE_MAX_LEN;
 	entry_state->content = SNDRV_INFO_CONTENT_DATA;
 	entry_state->c.ops = &snd_card_state_proc_ops;
-
-#ifdef CONFIG_PM
-	entry_state = snd_info_create_card_entry(card, "power",
-						 card->proc_root);
-	if (!entry_state) {
-		dev_dbg(card->dev, "unable to create card entry power\n");
-		card->proc_id = NULL;
-		return -ENOMEM;
-	}
-	entry_state->size = SND_CARD_STATE_MAX_LEN;
-	entry_state->content = SNDRV_INFO_CONTENT_DATA;
-	entry_state->c.ops = &snd_card_power_proc_ops;
-#endif
 
 	return snd_info_card_register(card);
 }
@@ -360,6 +298,7 @@ int snd_card_new(struct device *parent, int idx, const char *xid,
 #ifdef CONFIG_PM
 	init_waitqueue_head(&card->power_sleep);
 #endif
+	init_waitqueue_head(&card->remove_sleep);
 
 	init_waitqueue_head(&card->offline_poll_wait);
 	device_initialize(&card->card_dev);
@@ -449,9 +388,9 @@ static int snd_disconnect_release(struct inode *inode, struct file *file)
 	panic("%s(%p, %p) failed!", __func__, inode, file);
 }
 
-static unsigned int snd_disconnect_poll(struct file * file, poll_table * wait)
+static __poll_t snd_disconnect_poll(struct file * file, poll_table * wait)
 {
-	return POLLERR | POLLNVAL;
+	return EPOLLERR | EPOLLNVAL;
 }
 
 static long snd_disconnect_ioctl(struct file *file,
@@ -510,8 +449,10 @@ int snd_card_disconnect(struct snd_card *card)
 		return 0;
 	}
 	card->shutdown = 1;
+	spin_unlock(&card->files_lock);
 
 	/* replace file->f_op with special dummy operations */
+	spin_lock(&card->files_lock);
 	list_for_each_entry(mfile, &card->files_list, list) {
 		/* it's critical part, use endless loop */
 		/* we have no room to fail */
@@ -555,6 +496,35 @@ int snd_card_disconnect(struct snd_card *card)
 	return 0;	
 }
 EXPORT_SYMBOL(snd_card_disconnect);
+
+/**
+ * snd_card_disconnect_sync - disconnect card and wait until files get closed
+ * @card: card object to disconnect
+ *
+ * This calls snd_card_disconnect() for disconnecting all belonging components
+ * and waits until all pending files get closed.
+ * It assures that all accesses from user-space finished so that the driver
+ * can release its resources gracefully.
+ */
+void snd_card_disconnect_sync(struct snd_card *card)
+{
+	int err;
+
+	err = snd_card_disconnect(card);
+	if (err < 0) {
+		dev_err(card->dev,
+			"snd_card_disconnect error (%d), skipping sync\n",
+			err);
+		return;
+	}
+
+	spin_lock_irq(&card->files_lock);
+	wait_event_lock_irq(card->remove_sleep,
+			    list_empty(&card->files_list),
+			    card->files_lock);
+	spin_unlock_irq(&card->files_lock);
+}
+EXPORT_SYMBOL_GPL(snd_card_disconnect_sync);
 
 static int snd_card_do_free(struct snd_card *card)
 {
@@ -744,7 +714,7 @@ card_id_show_attr(struct device *dev,
 		  struct device_attribute *attr, char *buf)
 {
 	struct snd_card *card = container_of(dev, struct snd_card, card_dev);
-	return snprintf(buf, PAGE_SIZE, "%s\n", card->id);
+	return scnprintf(buf, PAGE_SIZE, "%s\n", card->id);
 }
 
 static ssize_t
@@ -777,17 +747,17 @@ card_id_store_attr(struct device *dev, struct device_attribute *attr,
 	return count;
 }
 
-static DEVICE_ATTR(id, S_IRUGO | S_IWUSR, card_id_show_attr, card_id_store_attr);
+static DEVICE_ATTR(id, 0644, card_id_show_attr, card_id_store_attr);
 
 static ssize_t
 card_number_show_attr(struct device *dev,
 		     struct device_attribute *attr, char *buf)
 {
 	struct snd_card *card = container_of(dev, struct snd_card, card_dev);
-	return snprintf(buf, PAGE_SIZE, "%i\n", card->number);
+	return scnprintf(buf, PAGE_SIZE, "%i\n", card->number);
 }
 
-static DEVICE_ATTR(number, S_IRUGO, card_number_show_attr, NULL);
+static DEVICE_ATTR(number, 0444, card_number_show_attr, NULL);
 
 static struct attribute *card_dev_attrs[] = {
 	&dev_attr_id.attr,
@@ -1061,6 +1031,8 @@ int snd_card_file_remove(struct snd_card *card, struct file *file)
 			break;
 		}
 	}
+	if (list_empty(&card->files_list))
+		wake_up_all(&card->remove_sleep);
 	spin_unlock(&card->files_lock);
 	if (!found) {
 		dev_err(card->dev, "card file remove problem (%p)\n", file);

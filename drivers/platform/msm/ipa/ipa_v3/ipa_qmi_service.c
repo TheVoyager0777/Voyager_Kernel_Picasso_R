@@ -1,14 +1,6 @@
-/* Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -21,7 +13,6 @@
 #include <soc/qcom/subsystem_restart.h>
 #include <linux/ipa.h>
 #include <linux/vmalloc.h>
-#include <soc/qcom/boot_stats.h>
 
 #include "ipa_qmi_service.h"
 #include "ipa_mhi_proxy.h"
@@ -286,11 +277,8 @@ static void ipa3_handle_modem_init_cmplt_req(struct qmi_handle *qmi_handle,
 	cmplt_req = (struct ipa_init_modem_driver_cmplt_req_msg_v01 *)
 		decoded_msg;
 
-	if (ipa3_modem_init_cmplt == false) {
+	if (!ipa3_modem_init_cmplt) {
 		ipa3_modem_init_cmplt = true;
-		if ((ipa3_qmi_modem_init_fin == true) &&
-			(ipa3_ctx->ipa_hw_type == IPA_HW_v4_1))
-			ipa3_uc_map_cntr_reg_notify();
 	}
 
 	memset(&resp, 0, sizeof(resp));
@@ -325,7 +313,7 @@ static void ipa3_handle_mhi_alloc_channel_req(struct qmi_handle *qmi_handle,
 
 	resp = imp_handle_allocate_channel_req(ch_alloc_req);
 	if (!resp) {
-		IPAWANERR("imp handle allocate channel req fails");
+		IPAWANERR("imp handle allocate channel req fails\n");
 		return;
 	}
 
@@ -684,9 +672,6 @@ static int ipa3_qmi_init_modem_send_sync_msg(void)
 	}
 
 	pr_info("QMI_IPA_INIT_MODEM_DRIVER_REQ_V01 response received\n");
-
-	place_marker("M - QMI ready for commands");
-
 	return ipa3_check_qmi_response(rc,
 		QMI_IPA_INIT_MODEM_DRIVER_REQ_V01, resp.resp.result,
 		resp.resp.error, "ipa_init_modem_driver_resp_msg_v01");
@@ -1039,7 +1024,7 @@ int ipa3_qmi_add_offload_request_send(
 		}
 		/* find free spot*/
 		for (j = 0; j < QMI_IPA_MAX_FILTERS_V01; j++) {
-			if (ipa3_qmi_ctx->ipa_offload_cache[j].valid == false)
+			if (!ipa3_qmi_ctx->ipa_offload_cache[j].valid)
 				break;
 		}
 
@@ -1490,8 +1475,7 @@ static void ipa3_q6_clnt_quota_reached_ind_cb(struct qmi_handle *handle,
 	qmi_ind = (struct ipa_data_usage_quota_reached_ind_msg_v01 *) data;
 
 	IPAWANDBG("Quota reached indication on qmux(%d) Mbytes(%lu)\n",
-		qmi_ind->apn.mux_id,
-		(unsigned long int) qmi_ind->apn.num_Mbytes);
+		qmi_ind->apn.mux_id, (unsigned long) qmi_ind->apn.num_Mbytes);
 	ipa3_broadcast_quota_reach_ind(qmi_ind->apn.mux_id,
 		IPA_UPSTEAM_MODEM);
 }
@@ -1563,6 +1547,11 @@ static void ipa3_q6_clnt_svc_arrive(struct work_struct *work)
 	int rc;
 	struct ipa_master_driver_init_complt_ind_msg_v01 ind;
 
+	if (unlikely(!ipa_q6_clnt)) {
+		IPAWANERR("Invalid q6 clnt.Ignore sending ind.\n");
+		return;
+	}
+
 	rc = kernel_connect(ipa_q6_clnt->sock,
 		(struct sockaddr *) &ipa3_qmi_ctx->server_sq,
 		sizeof(ipa3_qmi_ctx->server_sq),
@@ -1608,10 +1597,6 @@ static void ipa3_q6_clnt_svc_arrive(struct work_struct *work)
 	}
 	ipa3_qmi_modem_init_fin = true;
 
-	if ((ipa3_modem_init_cmplt == true) &&
-		(ipa3_ctx->ipa_hw_type == IPA_HW_v4_1))
-		ipa3_uc_map_cntr_reg_notify();
-
 	/* In cold-bootup, first_time_handshake = false */
 	ipa3_q6_handshake_complete(first_time_handshake);
 	first_time_handshake = true;
@@ -1627,7 +1612,7 @@ static void ipa3_q6_clnt_svc_arrive(struct work_struct *work)
 			IPA_QMI_RESULT_SUCCESS_V01;
 
 		if (unlikely(!ipa3_svc_handle)) {
-			IPAWANERR("Invalid svc handle.Ignore sending ind.");
+			IPAWANERR("Invalid svc handle.Ignore sending ind.\n");
 			return;
 		}
 
@@ -1734,6 +1719,14 @@ static struct qmi_msg_handler server_handlers[] = {
 		.ei = ipa3_config_req_msg_data_v01_ei,
 		.decoded_size = sizeof(struct ipa_config_req_msg_v01),
 		.fn = handle_ipa_config_req,
+	},
+	{
+		.type = QMI_REQUEST,
+		.msg_id = QMI_IPA_INIT_MODEM_DRIVER_CMPLT_REQ_V01,
+		.ei = ipa3_init_modem_driver_cmplt_req_msg_data_v01_ei,
+		.decoded_size = sizeof(
+			struct ipa_init_modem_driver_cmplt_req_msg_v01),
+		.fn = ipa3_handle_modem_init_cmplt_req,
 	},
 	{
 		.type = QMI_REQUEST,
@@ -2117,6 +2110,7 @@ int ipa3_qmi_set_aggr_info(enum ipa_aggr_enum_type_v01 aggr_enum_type)
 
 	/* replace to right qmap format */
 	aggr_req.aggr_info[1].aggr_type = aggr_enum_type;
+	aggr_req.aggr_info[1].bytes_count = ipa3_ctx->mpm_teth_aggr_size;
 	aggr_req.aggr_info[2].aggr_type = aggr_enum_type;
 	aggr_req.aggr_info[3].aggr_type = aggr_enum_type;
 	aggr_req.aggr_info[4].aggr_type = aggr_enum_type;
@@ -2157,7 +2151,7 @@ int ipa3_qmi_set_aggr_info(enum ipa_aggr_enum_type_v01 aggr_enum_type)
 		resp.resp.error, "ipa_mhi_prime_aggr_info_req_msg_v01");
 }
 
-int ipa3_qmi_req_ind(void)
+int ipa3_qmi_req_ind(bool bw_reg)
 {
 	struct ipa_indication_reg_req_msg_v01 req;
 	struct ipa_indication_reg_resp_msg_v01 resp;
@@ -2168,7 +2162,7 @@ int ipa3_qmi_req_ind(void)
 	memset(&resp, 0, sizeof(struct ipa_indication_reg_resp_msg_v01));
 
 	req.bw_change_ind_valid = true;
-	req.bw_change_ind = true;
+	req.bw_change_ind = bw_reg;
 
 	req_desc.max_msg_len =
 		QMI_IPA_INDICATION_REGISTER_REQ_MAX_MSG_LEN_V01;
@@ -2373,7 +2367,7 @@ int ipa3_qmi_send_mhi_cleanup_request(struct ipa_mhi_cleanup_req_msg_v01 *req)
 		resp.resp.error, "ipa_mhi_cleanup_req_msg");
 }
 
-int ipa3_qmi_send_endp_desc_indication(
+int ipa3_qmi_send_rsc_pipe_indication(
 	struct ipa_endp_desc_indication_msg_v01 *req)
 {
 	IPAWANDBG("Sending QMI_IPA_ENDP_DESC_INDICATION_V01\n");

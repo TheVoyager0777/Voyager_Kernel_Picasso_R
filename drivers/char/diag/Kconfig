@@ -1,3 +1,4 @@
+# SPDX-License-Identifier: GPL-2.0-only
 menu "Diag Support"
 
 config DIAG_CHAR
@@ -25,24 +26,14 @@ config DIAG_OVER_USB
 	  Diag traffic from the USB endpoint.
 
 config DIAGFWD_BRIDGE_CODE
-	bool "Enable remote DIAG traffic over MHI/HSIC"
+	bool "Enable QSC/9K DIAG traffic over SMUX/HSIC"
 	depends on DIAG_CHAR
-	depends on USB_QTI_DIAG_BRIDGE || MHI_BUS
+	depends on USB_QCOM_DIAG_BRIDGE || MHI_BUS
 	default y
 	help
-	  MHI/HSIC Transport Layer for DIAG Router. When the MHI/HSIC endpoints
-	  become available, this bridge driver enables DIAG traffic over MHI
-	  and HSIC.
-
-config DIAG_OVER_PCIE
-	bool "Enable Diag traffic to go over PCIE"
-	depends on DIAG_CHAR
-	depends on MSM_MHI_DEV
-	help
-	  Diag over PCIE enables sending diag traffic over PCIE endpoint when
-	  pcie is available. Diag PCIE channels should be configured
-	  and connected to use the transport. If PCIE is not configured
-	  diag will switch to usb mode and diag traffic will be routed
-	  over USB.
+	  SMUX/HSIC/MHI Transport Layer for DIAG Router. When the MHI/SMUX
+	  endpoints become available, this bridge driver enables DIAG
+	  over MHI or SMUX to communicate with the remote processors and
+	  receive/send diag traffic to remote processors.
 
 endmenu

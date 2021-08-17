@@ -1,14 +1,5 @@
-/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.*/
 
 #include <linux/module.h>
 #include <linux/kernel.h>
@@ -42,6 +33,8 @@
 			       __func__, ##__VA_ARGS__); \
 } while (0)
 
+#define MHI_NETDEV_NAPI_POLL_WEIGHT (64)
+
 #else
 
 #define MSG_VERB(fmt, ...) do { \
@@ -50,6 +43,8 @@
 		ipc_log_string(mhi_netdev->ipc_log, "[D][%s] " fmt, \
 			       __func__, ##__VA_ARGS__); \
 } while (0)
+
+#define MHI_NETDEV_NAPI_POLL_WEIGHT (128)
 
 #endif
 
@@ -164,7 +159,7 @@ static struct mhi_netbuf *mhi_netdev_alloc(struct device *dev,
 	struct mhi_buf *mhi_buf;
 	void *vaddr;
 
-	page = __dev_alloc_pages(gfp, order);
+	page = __dev_alloc_pages(gfp | __GFP_NOMEMALLOC, order);
 	if (!page)
 		return NULL;
 
@@ -415,6 +410,8 @@ static void mhi_netdev_free_pool(struct mhi_netdev *mhi_netdev)
 		__free_pages(mhi_buf->page, mhi_netdev->order);
 		mhi_netdev->bg_pool_size--;
 	}
+
+	kfree(mhi_netdev->bg_pool);
 }
 
 static int mhi_netdev_alloc_thread(void *data)
@@ -480,7 +477,7 @@ static int mhi_netdev_poll(struct napi_struct *napi, int budget)
 	struct mhi_net_chain *chain = mhi_netdev->chain;
 	int rx_work = 0;
 
-	MSG_VERB("Entered\n");
+	MSG_VERB("Entr:%d\n", budget);
 
 	rx_work = mhi_poll(mhi_dev, budget);
 
@@ -509,7 +506,7 @@ static int mhi_netdev_poll(struct napi_struct *napi, int budget)
 		mhi_netdev->napi_scheduled = false;
 	}
 
-	MSG_VERB("polled %d pkts\n", rx_work);
+	MSG_VERB("polled %d\n", rx_work);
 
 	return rx_work;
 }
@@ -689,7 +686,7 @@ static int mhi_netdev_enable_iface(struct mhi_netdev *mhi_netdev)
 	struct device_node *of_node = mhi_dev->dev.of_node;
 	struct mhi_netdev_priv *mhi_netdev_priv;
 
-	mhi_netdev->alias = of_alias_get_id(of_node, "mhi_netdev");
+	mhi_netdev->alias = of_alias_get_id(of_node, "mhi-netdev");
 	if (mhi_netdev->alias < 0)
 		return -ENODEV;
 
@@ -728,7 +725,8 @@ static int mhi_netdev_enable_iface(struct mhi_netdev *mhi_netdev)
 	}
 
 	netif_napi_add(mhi_netdev->ndev, mhi_netdev->napi,
-		       mhi_netdev_poll, NAPI_POLL_WEIGHT);
+		       mhi_netdev_poll, MHI_NETDEV_NAPI_POLL_WEIGHT);
+
 	ret = register_netdev(mhi_netdev->ndev);
 	if (ret) {
 		MSG_ERR("Network device registration failed\n");
@@ -952,6 +950,7 @@ static void mhi_netdev_remove(struct mhi_device *mhi_dev)
 	unregister_netdev(mhi_netdev->ndev);
 	netif_napi_del(mhi_netdev->napi);
 	free_netdev(mhi_netdev->ndev);
+	mhi_netdev->ndev = NULL;
 
 	if (!IS_ERR_OR_NULL(mhi_netdev->dentry))
 		debugfs_remove_recursive(mhi_netdev->dentry);
@@ -1112,9 +1111,8 @@ static int mhi_netdev_probe(struct mhi_device *mhi_dev,
 
 static const struct mhi_device_id mhi_netdev_match_table[] = {
 	{ .chan = "IP_HW0" },
+	{ .chan = "IP_HW_ADPL" },
 	{ .chan = "IP_HW0_RSC" },
-	{ .chan = "IP_SW0" },
-	{ .chan = "IP_HW1" },
 	{},
 };
 

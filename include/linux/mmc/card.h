@@ -16,8 +16,6 @@
 #include <linux/mod_devicetable.h>
 #include <linux/notifier.h>
 
-#define MMC_CARD_CMDQ_BLK_SIZE 512
-
 struct mmc_cid {
 	unsigned int		manfid;
 	char			prod_name[8];
@@ -60,6 +58,9 @@ struct mmc_ext_csd {
 	u8			part_config;
 	u8			cache_ctrl;
 	u8			rst_n_function;
+	u8			max_packed_writes;
+	u8			max_packed_reads;
+	u8			packed_event_en;
 	unsigned int		part_time;		/* Units: ms */
 	unsigned int		sa_timeout;		/* Units: 100ns */
 	unsigned int		generic_cmd6_time;	/* Units: 10ms */
@@ -169,6 +170,7 @@ struct sd_switch_caps {
 #define UHS_DDR50_MAX_DTR	50000000
 #define UHS_SDR25_MAX_DTR	UHS_DDR50_MAX_DTR
 #define UHS_SDR12_MAX_DTR	25000000
+#define DEFAULT_SPEED_MAX_DTR	UHS_SDR12_MAX_DTR
 	unsigned int		sd3_bus_mode;
 #define UHS_SDR12_BUS_SPEED	0
 #define HIGH_SPEED_BUS_SPEED	1
@@ -241,7 +243,7 @@ struct mmc_queue_req;
  * MMC Physical partitions
  */
 struct mmc_part {
-	u64		size;	/* partition size (in bytes) */
+	unsigned int	size;	/* partition size (in bytes) */
 	unsigned int	part_cfg;	/* partition type */
 	char	name[MAX_MMC_PART_NAME_LEN];
 	bool	force_ro;	/* to make boot parts RO by default */
@@ -308,8 +310,6 @@ enum mmc_pon_type {
 
 #define mmc_card_strobe(c) (((c)->ext_csd).strobe_support & MMC_STROBE_SUPPORT)
 
-#define MMC_QUIRK_CMDQ_DELAY_BEFORE_DCMD 6 /* microseconds */
-
 /*
  * MMC device
  */
@@ -317,10 +317,12 @@ struct mmc_card {
 	struct mmc_host		*host;		/* the host this device belongs to */
 	struct device		dev;		/* the device */
 	u32			ocr;		/* the current OCR setting */
-	unsigned long		clk_scaling_lowest;	/* lowest scaleable*/
-							/* frequency */
-	unsigned long		clk_scaling_highest;	/* highest scaleable */
-							/* frequency */
+	unsigned long		clk_scaling_lowest;	/* lowest scaleable
+							 * frequency
+							 */
+	unsigned long		clk_scaling_highest;	/* highest scaleable
+							 * frequency
+							 */
 	unsigned int		rca;		/* relative card address of device */
 	unsigned int		type;		/* card type */
 #define MMC_TYPE_MMC		0		/* MMC card */
@@ -328,14 +330,15 @@ struct mmc_card {
 #define MMC_TYPE_SDIO		2		/* SDIO card */
 #define MMC_TYPE_SD_COMBO	3		/* SD combo (IO+mem) card */
 	unsigned int		state;		/* (our) card state */
-#define MMC_STATE_CMDQ		(1<<12)         /* card is in cmd queue mode */
 	unsigned int		quirks; 	/* card quirks */
+	unsigned int		quirk_max_rate;	/* max rate set by quirks */
 #define MMC_QUIRK_LENIENT_FN0	(1<<0)		/* allow SDIO FN0 writes outside of the VS CCCR range */
 #define MMC_QUIRK_BLKSZ_FOR_BYTE_MODE (1<<1)	/* use func->cur_blksize */
 						/* for byte mode */
 #define MMC_QUIRK_NONSTD_SDIO	(1<<2)		/* non-standard SDIO card attached */
 						/* (missing CIA registers) */
-#define MMC_QUIRK_BROKEN_CLK_GATING (1<<3)	/* clock gating the sdio bus will make card fail */
+#define MMC_QUIRK_BROKEN_CLK_GATING (1<<3)	/* clock gating the sdio bus */
+						/* will make card fail */
 #define MMC_QUIRK_NONSTD_FUNC_IF (1<<4)		/* SDIO card has nonstd function interfaces */
 #define MMC_QUIRK_DISABLE_CD	(1<<5)		/* disconnect CD/DAT[3] resistor */
 #define MMC_QUIRK_INAND_CMD38	(1<<6)		/* iNAND devices have broken CMD38 */
@@ -355,6 +358,7 @@ struct mmc_card {
 
 /* Make sure CMDQ is empty before queuing DCMD */
 #define MMC_QUIRK_CMDQ_EMPTY_BEFORE_DCMD (1 << 18)
+#define MMC_QUIRK_QCA9379_SETTINGS (1 << 19)    /* QCA9379 card settings*/
 
 	bool			reenable_cmdq;	/* Re-enable Command Queue */
 
@@ -391,11 +395,12 @@ struct mmc_card {
 	struct dentry		*debugfs_root;
 	struct mmc_part	part[MMC_NUM_PHY_PARTITION]; /* physical partitions */
 	unsigned int		nr_parts;
-	unsigned int		part_curr;
+	unsigned int            part_curr;
 
+	struct workqueue_struct *complete_wq;	/* Private workqueue */
+	unsigned int		bouncesz;	/* Bounce buffer size */
 	struct notifier_block   reboot_notify;
 	enum mmc_pon_type	pon_type;
-	bool cmdq_init;
 	struct mmc_bkops_info bkops;
 };
 
@@ -422,7 +427,6 @@ bool mmc_card_is_blockaddr(struct mmc_card *card);
 #define mmc_card_mmc(c)		((c)->type == MMC_TYPE_MMC)
 #define mmc_card_sd(c)		((c)->type == MMC_TYPE_SD)
 #define mmc_card_sdio(c)	((c)->type == MMC_TYPE_SDIO)
-#define mmc_card_cmdq(c)       ((c)->state & MMC_STATE_CMDQ)
 
 static inline bool mmc_card_support_auto_bkops(const struct mmc_card *c)
 {
@@ -449,10 +453,14 @@ static inline bool mmc_enable_qca9377_settings(const struct mmc_card *c)
 	return c->quirks & MMC_QUIRK_QCA9377_SETTINGS;
 }
 
+static inline bool mmc_enable_qca9379_settings(const struct mmc_card *c)
+{
+	return c->quirks & MMC_QUIRK_QCA9379_SETTINGS;
+}
+
 #define mmc_dev_to_card(d)	container_of(d, struct mmc_card, dev)
 #define mmc_get_drvdata(c)	dev_get_drvdata(&(c)->dev)
 #define mmc_set_drvdata(c, d)	dev_set_drvdata(&(c)->dev, d)
 
 extern int mmc_send_pon(struct mmc_card *card);
-extern void mmc_blk_cmdq_req_done(struct mmc_request *mrq);
 #endif /* LINUX_MMC_CARD_H */

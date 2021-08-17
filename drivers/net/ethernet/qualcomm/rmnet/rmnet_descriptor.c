@@ -1,13 +1,5 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  *
  * RMNET Packet Descriptor Framework
  *
@@ -783,24 +775,28 @@ rmnet_frag_segment_coal_data(struct rmnet_frag_descriptor *coal_desc,
 			gro = false;
 	} else if (iph->version == 6) {
 		struct ipv6hdr *ip6h = (struct ipv6hdr *)iph;
+		int ip_len;
 		__be16 frag_off;
 		u8 protocol = ip6h->nexthdr;
 
 		coal_desc->ip_proto = 6;
-		coal_desc->ip_len = rmnet_frag_ipv6_skip_exthdr(coal_desc,
-								sizeof(*ip6h),
-								&protocol,
-								&frag_off);
+		ip_len = rmnet_frag_ipv6_skip_exthdr(coal_desc,
+						     sizeof(*ip6h),
+						     &protocol,
+						     &frag_off);
 		coal_desc->trans_proto = protocol;
 
 		/* If we run into a problem, or this has a fragment header
 		 * (which should technically not be possible, if the HW
 		 * works as intended...), bail.
 		 */
-		if (coal_desc->ip_len < 0 || frag_off) {
+		if (ip_len < 0 || frag_off) {
 			priv->stats.coal.coal_ip_invalid++;
 			return;
-		} else if (coal_desc->ip_len > sizeof(*ip6h)) {
+		}
+
+		coal_desc->ip_len = (u16)ip_len;
+		if (coal_desc->ip_len > sizeof(*ip6h)) {
 			/* Don't allow coalescing of any packets with IPv6
 			 * extension headers.
 			 */

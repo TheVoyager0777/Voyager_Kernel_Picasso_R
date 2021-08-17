@@ -25,7 +25,7 @@
 	#ifdef pr_fmt
 	#undef pr_fmt
 	#endif
-	#define pr_fmt(fmt) "[nxp] %s(): " fmt, __func__
+	#define pr_fmt(fmt) "%s(): " fmt, __func__
 #endif
 /* handle macro for bitfield */
 #define TFA_MK_BF(reg, pos, len) ((reg<<8)|(pos<<4)|(len-1))
@@ -2979,9 +2979,13 @@ enum Tfa98xx_Error tfaRunWaitCalibration(struct tfa_device *tfa, int *calibrateD
  * tfa_dev_start will only do the basics: Going from powerdown to operating or a profile switch.
  * for calibrating or akoustic shock handling use the tfa98xxCalibration function.
  */
-
+/*[nxp34663] CR: support 16bit/24bit/32bit audio data. begin*/
+#ifdef __KERNEL__
+enum tfa_error tfa_dev_start(struct tfa_device *tfa, int next_profile, int vstep, u8 pcm_format)
+#else
 enum tfa_error tfa_dev_start(struct tfa_device *tfa, int next_profile, int vstep)
-
+#endif
+/*[nxp34663] CR: support 16bit/24bit/32bit audio data. end*/
 {
 	enum Tfa98xx_Error err = Tfa98xx_Error_Ok;
 	int active_profile = -1;
@@ -3006,6 +3010,26 @@ enum tfa_error tfa_dev_start(struct tfa_device *tfa, int next_profile, int vstep
 			goto error_exit;
 	}
 
+	/*[nxp34663] CR: support 16bit/24bit/32bit audio data. begin*/
+#ifdef __KERNEL__
+	if ((2 == tfa->tfa_family) && (tfa->daimap & Tfa98xx_DAI_TDM)) {
+		//TFA_SET_BF(tfa, TDMSRCMAP, 2);	/*the TDMSRCMAP should be set in cnt file.*/
+		/* we should remove below settings from cnt file, otherwise will be overwrite by cnt file later.*/
+		if (16 == pcm_format) {
+			TFA_SET_BF(tfa, TDMNBCK, 0);
+			TFA_SET_BF(tfa, TDMSLLN, 15);
+			TFA_SET_BF(tfa, TDMSSIZE, 15);
+		} else if ((24 == pcm_format) || (32 == pcm_format)) {
+			TFA_SET_BF(tfa, TDMNBCK, 2);
+			TFA_SET_BF(tfa, TDMSLLN, 31);
+			TFA_SET_BF(tfa, TDMSSIZE, 31);
+		} else {
+			err = Tfa98xx_Error_Bad_Parameter;
+			goto error_exit;
+		}
+	}
+#endif
+	/*[nxp34663] CR: support 16bit/24bit/32bit audio data. end*/
 
 	if ( tfa->bus != 0 )  { /* non i2c  */
 #ifndef __KERNEL__
@@ -3881,8 +3905,11 @@ enum Tfa98xx_Error tfa_status(struct tfa_device *tfa)
 	return Tfa98xx_Error_Ok;
 }
 
-
+#ifdef __KERNEL__
+int tfa_plop_noise_interrupt(struct tfa_device *tfa, int profile, int vstep, u8 pcm_format)
+#else
 int tfa_plop_noise_interrupt(struct tfa_device *tfa, int profile, int vstep)
+#endif
 {
 	enum tfa_error err;
 	int no_clk=0;
@@ -3898,8 +3925,11 @@ int tfa_plop_noise_interrupt(struct tfa_device *tfa, int profile, int vstep)
 		if (no_clk == 1) {
 			/* Clock is lost. Set I2CR to remove POP noise */
 			pr_info("No clock detected. Resetting the I2CR to avoid pop on 72! \n");
-
+#ifdef __KERNEL__
+			err = tfa_dev_start(tfa, profile, vstep, pcm_format);
+#else
 			err = tfa_dev_start(tfa, profile, vstep);
+#endif
 			if (err != tfa_error_ok) {
 				pr_err("Error loading i2c registers (tfa_dev_start), err=%d\n", err);
 			} else {

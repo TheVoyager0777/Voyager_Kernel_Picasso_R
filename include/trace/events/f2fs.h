@@ -6,7 +6,6 @@
 #define _TRACE_F2FS_H
 
 #include <linux/tracepoint.h>
-#include <uapi/linux/f2fs.h>
 
 #define show_dev(dev)		MAJOR(dev), MINOR(dev)
 #define show_dev_ino(entry)	show_dev(entry->dev), (unsigned long)entry->ino
@@ -122,15 +121,13 @@ TRACE_DEFINE_ENUM(CP_RESIZE);
 
 #define show_alloc_mode(type)						\
 	__print_symbolic(type,						\
-		{ LFS,		"LFS-mode" },				\
-		{ SSR,		"SSR-mode" },				\
-		{ AT_SSR,	"AT_SSR-mode" })
+		{ LFS,	"LFS-mode" },					\
+		{ SSR,	"SSR-mode" })
 
 #define show_victim_policy(type)					\
 	__print_symbolic(type,						\
 		{ GC_GREEDY,	"Greedy" },				\
-		{ GC_CB,	"Cost-Benefit" },			\
-		{ GC_AT,	"Age-threshold" })
+		{ GC_CB,	"Cost-Benefit" })
 
 #define show_cpreason(type)						\
 	__print_flags(type, "|",					\
@@ -155,8 +152,7 @@ TRACE_DEFINE_ENUM(CP_RESIZE);
 		{ CP_NODE_NEED_CP,	"node needs cp" },		\
 		{ CP_FASTBOOT_MODE,	"fastboot mode" },		\
 		{ CP_SPEC_LOG_NUM,	"log type is 2" },		\
-		{ CP_RECOVER_DIR,	"dir needs recovery" },		\
-		{ CP_PARENT_XATTR_SET,	"parent xattr is set" })
+		{ CP_RECOVER_DIR,	"dir needs recovery" })
 
 #define show_shutdown_mode(type)					\
 	__print_symbolic(type,						\
@@ -340,7 +336,7 @@ TRACE_EVENT(f2fs_unlink_enter,
 		__field(ino_t,	ino)
 		__field(loff_t,	size)
 		__field(blkcnt_t, blocks)
-		__field(const char *,	name)
+		__string(name, dentry->d_name.name)
 	),
 
 	TP_fast_assign(
@@ -348,7 +344,7 @@ TRACE_EVENT(f2fs_unlink_enter,
 		__entry->ino	= dir->i_ino;
 		__entry->size	= dir->i_size;
 		__entry->blocks	= dir->i_blocks;
-		__entry->name	= dentry->d_name.name;
+		__assign_str(name, dentry->d_name.name);
 	),
 
 	TP_printk("dev = (%d,%d), dir ino = %lu, i_size = %lld, "
@@ -356,7 +352,7 @@ TRACE_EVENT(f2fs_unlink_enter,
 		show_dev_ino(__entry),
 		__entry->size,
 		(unsigned long long)__entry->blocks,
-		__entry->name)
+		__get_str(name))
 );
 
 DEFINE_EVENT(f2fs__inode_exit, f2fs_unlink_exit,
@@ -516,7 +512,7 @@ DEFINE_EVENT(f2fs__truncate_node, f2fs_truncate_node,
 
 TRACE_EVENT(f2fs_truncate_partial_nodes,
 
-	TP_PROTO(struct inode *inode, nid_t nid[], int depth, int err),
+	TP_PROTO(struct inode *inode, nid_t *nid, int depth, int err),
 
 	TP_ARGS(inode, nid, depth, err),
 
@@ -817,20 +813,20 @@ TRACE_EVENT(f2fs_lookup_start,
 	TP_STRUCT__entry(
 		__field(dev_t,	dev)
 		__field(ino_t,	ino)
-		__field(const char *,	name)
+		__string(name, dentry->d_name.name)
 		__field(unsigned int, flags)
 	),
 
 	TP_fast_assign(
 		__entry->dev	= dir->i_sb->s_dev;
 		__entry->ino	= dir->i_ino;
-		__entry->name	= dentry->d_name.name;
+		__assign_str(name, dentry->d_name.name);
 		__entry->flags	= flags;
 	),
 
 	TP_printk("dev = (%d,%d), pino = %lu, name:%s, flags:%u",
 		show_dev_ino(__entry),
-		__entry->name,
+		__get_str(name),
 		__entry->flags)
 );
 
@@ -844,7 +840,7 @@ TRACE_EVENT(f2fs_lookup_end,
 	TP_STRUCT__entry(
 		__field(dev_t,	dev)
 		__field(ino_t,	ino)
-		__field(const char *,	name)
+		__string(name, dentry->d_name.name)
 		__field(nid_t,	cino)
 		__field(int,	err)
 	),
@@ -852,14 +848,14 @@ TRACE_EVENT(f2fs_lookup_end,
 	TP_fast_assign(
 		__entry->dev	= dir->i_sb->s_dev;
 		__entry->ino	= dir->i_ino;
-		__entry->name	= dentry->d_name.name;
+		__assign_str(name, dentry->d_name.name);
 		__entry->cino	= ino;
 		__entry->err	= err;
 	),
 
 	TP_printk("dev = (%d,%d), pino = %lu, name:%s, ino:%u, err:%d",
 		show_dev_ino(__entry),
-		__entry->name,
+		__get_str(name),
 		__entry->cino,
 		__entry->err)
 );
@@ -1902,69 +1898,6 @@ TRACE_EVENT(f2fs_iostat,
 		__entry->app_rio, __entry->app_drio, __entry->app_brio,
 		__entry->app_mrio, __entry->fs_drio, __entry->fs_gdrio,
 		__entry->fs_cdrio, __entry->fs_nrio, __entry->fs_mrio)
-);
-
-TRACE_EVENT(f2fs_bmap,
-
-	TP_PROTO(struct inode *inode, sector_t lblock, sector_t pblock),
-
-	TP_ARGS(inode, lblock, pblock),
-
-	TP_STRUCT__entry(
-		__field(dev_t, dev)
-		__field(ino_t, ino)
-		__field(sector_t, lblock)
-		__field(sector_t, pblock)
-	),
-
-	TP_fast_assign(
-		__entry->dev		= inode->i_sb->s_dev;
-		__entry->ino		= inode->i_ino;
-		__entry->lblock		= lblock;
-		__entry->pblock		= pblock;
-	),
-
-	TP_printk("dev = (%d,%d), ino = %lu, lblock:%lld, pblock:%lld",
-		show_dev_ino(__entry),
-		(unsigned long long)__entry->lblock,
-		(unsigned long long)__entry->pblock)
-);
-
-TRACE_EVENT(f2fs_fiemap,
-
-	TP_PROTO(struct inode *inode, sector_t lblock, sector_t pblock,
-		unsigned long long len, unsigned int flags, int ret),
-
-	TP_ARGS(inode, lblock, pblock, len, flags, ret),
-
-	TP_STRUCT__entry(
-		__field(dev_t, dev)
-		__field(ino_t, ino)
-		__field(sector_t, lblock)
-		__field(sector_t, pblock)
-		__field(unsigned long long, len)
-		__field(unsigned int, flags)
-		__field(int, ret)
-	),
-
-	TP_fast_assign(
-		__entry->dev		= inode->i_sb->s_dev;
-		__entry->ino		= inode->i_ino;
-		__entry->lblock		= lblock;
-		__entry->pblock		= pblock;
-		__entry->len		= len;
-		__entry->flags		= flags;
-		__entry->ret		= ret;
-	),
-
-	TP_printk("dev = (%d,%d), ino = %lu, lblock:%lld, pblock:%lld, "
-		"len:%llu, flags:%u, ret:%d",
-		show_dev_ino(__entry),
-		(unsigned long long)__entry->lblock,
-		(unsigned long long)__entry->pblock,
-		__entry->len,
-		__entry->flags,
-		__entry->ret)
 );
 
 #endif /* _TRACE_F2FS_H */

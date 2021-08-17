@@ -8,6 +8,7 @@
  * interface.
  *
  * Copyright (C) 2010 IBM Corperation
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * Author: John Stultz <john.stultz@linaro.org>
  *
@@ -65,19 +66,6 @@ static struct rtc_timer		rtctimer;
 static struct rtc_device	*rtcdev;
 static DEFINE_SPINLOCK(rtcdev_lock);
 
-static void alarmtimer_triggered_func(void *p)
-{
-	struct rtc_device *rtc = rtcdev;
-
-	if (!(rtc->irq_data & RTC_AF))
-		return;
-	__pm_wakeup_event(ws, 2 * MSEC_PER_SEC);
-}
-
-static struct rtc_task alarmtimer_rtc_task = {
-	.func = alarmtimer_triggered_func
-};
-
 /**
  * alarmtimer_get_rtcdev - Return selected rtcdevice
  *
@@ -88,7 +76,7 @@ static struct rtc_task alarmtimer_rtc_task = {
 struct rtc_device *alarmtimer_get_rtcdev(void)
 {
 	unsigned long flags;
-	struct rtc_device *ret = NULL;
+	struct rtc_device *ret;
 
 	spin_lock_irqsave(&rtcdev_lock, flags);
 	ret = rtcdev;
@@ -111,6 +99,8 @@ static int alarmtimer_rtc_add_device(struct device *dev,
 
 	if (!rtc->ops->set_alarm)
 		return -1;
+	if (!device_may_wakeup(rtc->dev.parent))
+		return -1;
 
 	__ws = wakeup_source_register(dev, "alarmtimer");
 
@@ -121,31 +111,18 @@ static int alarmtimer_rtc_add_device(struct device *dev,
 			goto unlock;
 		}
 
-		ret = rtc_irq_register(rtc, &alarmtimer_rtc_task);
-		if (ret)
-			goto unlock;
-
 		rtcdev = rtc;
 		/* hold a reference so it doesn't go away */
 		get_device(dev);
 		ws = __ws;
 		__ws = NULL;
 	}
-
 unlock:
 	spin_unlock_irqrestore(&rtcdev_lock, flags);
 
 	wakeup_source_unregister(__ws);
-	return ret;
-}
 
-static void alarmtimer_rtc_remove_device(struct device *dev,
-				struct class_interface *class_intf)
-{
-	if (rtcdev && dev == &rtcdev->dev) {
-		rtc_irq_unregister(rtcdev, &alarmtimer_rtc_task);
-		rtcdev = NULL;
-	}
+	return ret;
 }
 
 static inline void alarmtimer_rtc_timer_init(void)
@@ -155,7 +132,6 @@ static inline void alarmtimer_rtc_timer_init(void)
 
 static struct class_interface alarmtimer_rtc_interface = {
 	.add_dev = &alarmtimer_rtc_add_device,
-	.remove_dev = &alarmtimer_rtc_remove_device,
 };
 
 static int alarmtimer_rtc_interface_setup(void)
@@ -191,7 +167,6 @@ static void alarmtimer_enqueue(struct alarm_base *base, struct alarm *alarm)
 {
 	if (alarm->state & ALARMTIMER_STATE_ENQUEUED)
 		timerqueue_del(&base->timerqueue, &alarm->node);
-
 	timerqueue_add(&base->timerqueue, &alarm->node);
 	alarm->state |= ALARMTIMER_STATE_ENQUEUED;
 }
@@ -248,6 +223,7 @@ static enum hrtimer_restart alarmtimer_fired(struct hrtimer *timer)
 	spin_unlock_irqrestore(&base->lock, flags);
 
 	trace_alarmtimer_fired(alarm, base->gettime());
+
 	return ret;
 
 }
@@ -847,9 +823,9 @@ static int alarm_timer_nsleep(const clockid_t which_clock, int flags,
 	if (flags == TIMER_ABSTIME)
 		return -ERESTARTNOHAND;
 
+	restart->fn = alarm_timer_nsleep_restart;
 	restart->nanosleep.clockid = type;
 	restart->nanosleep.expires = exp;
-	set_restart_fn(restart, alarm_timer_nsleep_restart);
 	return ret;
 }
 
@@ -882,6 +858,7 @@ static struct platform_driver alarmtimer_driver = {
 		.pm = &alarmtimer_pm_ops,
 	}
 };
+
 
 /**
  * alarmtimer_init - Initialize alarm timer code
@@ -920,6 +897,7 @@ static int __init alarmtimer_init(void)
 		error = PTR_ERR(pdev);
 		goto out_drv;
 	}
+
 	return 0;
 
 out_drv:

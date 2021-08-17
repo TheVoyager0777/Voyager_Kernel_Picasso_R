@@ -29,6 +29,7 @@
 
 DEFINE_PER_CPU(struct cpuidle_device *, cpuidle_devices);
 DEFINE_PER_CPU(struct cpuidle_device, cpuidle_dev);
+EXPORT_SYMBOL_GPL(cpuidle_dev);
 
 DEFINE_MUTEX(cpuidle_lock);
 LIST_HEAD(cpuidle_detected_devices);
@@ -36,24 +37,6 @@ LIST_HEAD(cpuidle_detected_devices);
 static int enabled_devices;
 static int off __read_mostly;
 static int initialized __read_mostly;
-
-#ifdef CONFIG_SMP
-static atomic_t idled = ATOMIC_INIT(0);
-
-#if NR_CPUS > 32
-#error idled CPU mask not big enough for NR_CPUS
-#endif
-
-void cpuidle_set_idle_cpu(unsigned int cpu)
-{
-	atomic_or(BIT(cpu), &idled);
-}
-
-void cpuidle_clear_idle_cpu(unsigned int cpu)
-{
-	atomic_andnot(BIT(cpu), &idled);
-}
-#endif
 
 int cpuidle_disabled(void)
 {
@@ -150,6 +133,10 @@ int cpuidle_find_deepest_state(struct cpuidle_driver *drv,
 static void enter_s2idle_proper(struct cpuidle_driver *drv,
 				struct cpuidle_device *dev, int index)
 {
+	ktime_t time_start, time_end;
+
+	time_start = ns_to_ktime(local_clock());
+
 	/*
 	 * trace_suspend_resume() called by tick_freeze() for the last CPU
 	 * executing it contains RCU usage regarded as invalid in the idle
@@ -163,8 +150,7 @@ static void enter_s2idle_proper(struct cpuidle_driver *drv,
 	 */
 	stop_critical_timings();
 	drv->states[index].enter_s2idle(dev, drv, index);
-	if (WARN_ON_ONCE(!irqs_disabled()))
-		local_irq_disable();
+	WARN_ON(!irqs_disabled());
 	/*
 	 * timekeeping_resume() that will be called by tick_unfreeze() for the
 	 * first CPU executing it calls functions containing RCU read-side
@@ -172,6 +158,11 @@ static void enter_s2idle_proper(struct cpuidle_driver *drv,
 	 */
 	RCU_NONIDLE(tick_unfreeze());
 	start_critical_timings();
+
+	time_end = ns_to_ktime(local_clock());
+
+	dev->states_usage[index].s2idle_time += ktime_us_delta(time_end, time_start);
+	dev->states_usage[index].s2idle_usage++;
 }
 
 /**
@@ -414,9 +405,12 @@ int cpuidle_enable_device(struct cpuidle_device *dev)
 	if (dev->enabled)
 		return 0;
 
+	if (!cpuidle_curr_governor)
+		return -EIO;
+
 	drv = cpuidle_get_cpu_driver(dev);
 
-	if (!drv || !cpuidle_curr_governor)
+	if (!drv)
 		return -EIO;
 
 	if (!dev->registered)
@@ -426,9 +420,11 @@ int cpuidle_enable_device(struct cpuidle_device *dev)
 	if (ret)
 		return ret;
 
-	if (cpuidle_curr_governor->enable &&
-	    (ret = cpuidle_curr_governor->enable(drv, dev)))
-		goto fail_sysfs;
+	if (cpuidle_curr_governor->enable) {
+		ret = cpuidle_curr_governor->enable(drv, dev);
+		if (ret)
+			goto fail_sysfs;
+	}
 
 	smp_wmb();
 
@@ -659,6 +655,27 @@ int cpuidle_register(struct cpuidle_driver *drv,
 EXPORT_SYMBOL_GPL(cpuidle_register);
 
 #ifdef CONFIG_SMP
+
+static void wake_up_idle_cpus(void *v)
+{
+	int cpu;
+	struct cpumask cpus;
+
+	preempt_disable();
+	if (v) {
+		cpumask_andnot(&cpus, v, cpu_isolated_mask);
+		cpumask_and(&cpus, &cpus, cpu_online_mask);
+	} else
+		cpumask_andnot(&cpus, cpu_online_mask, cpu_isolated_mask);
+
+	for_each_cpu(cpu, &cpus) {
+		if (cpu == smp_processor_id())
+			continue;
+		wake_up_if_idle(cpu);
+	}
+	preempt_enable();
+}
+
 /*
  * This function gets called when a part of the kernel has a new latency
  * requirement.  This means we need to get only those processors out of their
@@ -668,13 +685,7 @@ EXPORT_SYMBOL_GPL(cpuidle_register);
 static int cpuidle_latency_notify(struct notifier_block *b,
 		unsigned long l, void *v)
 {
-	unsigned long cpus = atomic_read(&idled) & *cpumask_bits(to_cpumask(v));
-
-	/* Use READ_ONCE to get the isolated mask outside cpu_add_remove_lock */
-	cpus &= ~READ_ONCE(*cpumask_bits(cpu_isolated_mask));
-	if (cpus)
-		arch_send_wakeup_ipi_mask(to_cpumask(&cpus));
-
+	wake_up_idle_cpus(v);
 	return NOTIFY_OK;
 }
 

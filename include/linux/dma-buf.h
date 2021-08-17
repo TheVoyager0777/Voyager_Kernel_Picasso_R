@@ -40,12 +40,12 @@ struct dma_buf_attachment;
 
 /**
  * struct dma_buf_ops - operations possible on struct dma_buf
- * @map_atomic: maps a page from the buffer into kernel address
+ * @map_atomic: [optional] maps a page from the buffer into kernel address
  *		space, users may not block until the subsequent unmap call.
  *		This callback must not sleep.
  * @unmap_atomic: [optional] unmaps a atomically mapped page from the buffer.
  *		  This Callback must not sleep.
- * @map: maps a page from the buffer into kernel address space.
+ * @map: [optional] maps a page from the buffer into kernel address space.
  * @unmap: [optional] unmaps a page from the buffer.
  * @vmap: [optional] creates a virtual mapping for the buffer into kernel
  *	  address space. Same restrictions as for vmap and friends apply.
@@ -56,11 +56,11 @@ struct dma_buf_ops {
 	 * @attach:
 	 *
 	 * This is called from dma_buf_attach() to make sure that a given
-	 * &device can access the provided &dma_buf. Exporters which support
-	 * buffer objects in special locations like VRAM or device-specific
-	 * carveout areas should check whether the buffer could be move to
-	 * system memory (or directly accessed by the provided device), and
-	 * otherwise need to fail the attach operation.
+	 * &dma_buf_attachment.dev can access the provided &dma_buf. Exporters
+	 * which support buffer objects in special locations like VRAM or
+	 * device-specific carveout areas should check whether the buffer could
+	 * be move to system memory (or directly accessed by the provided
+	 * device), and otherwise need to fail the attach operation.
 	 *
 	 * The exporter should also in general check whether the current
 	 * allocation fullfills the DMA constraints of the new device. If this
@@ -78,8 +78,7 @@ struct dma_buf_ops {
 	 * to signal that backing storage is already allocated and incompatible
 	 * with the requirements of requesting device.
 	 */
-	int (*attach)(struct dma_buf *, struct device *,
-		      struct dma_buf_attachment *);
+	int (*attach)(struct dma_buf *, struct dma_buf_attachment *);
 
 	/**
 	 * @detach:
@@ -213,7 +212,7 @@ struct dma_buf_ops {
 	 * return -ERESTARTSYS or -EINTR when the call has been interrupted and
 	 * needs to be restarted.
 	 */
-	int (*begin_cpu_access_umapped)(struct dma_buf *,
+	int (*begin_cpu_access_umapped)(struct dma_buf *dmabuf,
 					enum dma_data_direction);
 
 	/**
@@ -247,9 +246,9 @@ struct dma_buf_ops {
 	 * return -ERESTARTSYS or -EINTR when the call has been interrupted and
 	 * needs to be restarted.
 	 */
-	int (*begin_cpu_access_partial)(struct dma_buf *,
+	int (*begin_cpu_access_partial)(struct dma_buf *dmabuf,
 					enum dma_data_direction,
-					unsigned int, unsigned int);
+					unsigned int offset, unsigned int len);
 
 	/**
 	 * @end_cpu_access:
@@ -289,7 +288,7 @@ struct dma_buf_ops {
 	 * -ERESTARTSYS or -EINTR when the call has been interrupted and needs
 	 * to be restarted.
 	 */
-	int (*end_cpu_access_umapped)(struct dma_buf *,
+	int (*end_cpu_access_umapped)(struct dma_buf *dmabuf,
 				      enum dma_data_direction);
 
 	/**
@@ -310,11 +309,10 @@ struct dma_buf_ops {
 	 * -ERESTARTSYS or -EINTR when the call has been interrupted and needs
 	 * to be restarted.
 	 */
-	int (*end_cpu_access_partial)(struct dma_buf *, enum dma_data_direction,
-				      unsigned int, unsigned int);
+	int (*end_cpu_access_partial)(struct dma_buf *dmabuf,
+				      enum dma_data_direction,
+				      unsigned int offset, unsigned int len);
 
-	void *(*map_atomic)(struct dma_buf *, unsigned long);
-	void (*unmap_atomic)(struct dma_buf *, unsigned long, void *);
 	void *(*map)(struct dma_buf *, unsigned long);
 	void (*unmap)(struct dma_buf *, unsigned long, void *);
 
@@ -359,6 +357,21 @@ struct dma_buf_ops {
 	void (*vunmap)(struct dma_buf *, void *vaddr);
 
 	/**
+	 * @get_uuid
+	 *
+	 * This is called by dma_buf_get_uuid to get the UUID which identifies
+	 * the buffer to virtio devices.
+	 *
+	 * This callback is optional.
+	 *
+	 * Returns:
+	 *
+	 * 0 on success or a negative error code on failure. On success uuid
+	 * will be populated with the buffer's UUID.
+	 */
+	int (*get_uuid)(struct dma_buf *dmabuf, uuid_t *uuid);
+
+	/**
 	 * @get_flags:
 	 *
 	 * This is called by dma_buf_get_flags and is used to get the buffer's
@@ -370,8 +383,20 @@ struct dma_buf_ops {
 	 * 0 on success or a negative error code on failure. On success flags
 	 * will be populated with the buffer's flags.
 	 */
-	int (*get_flags)(struct dma_buf *, unsigned long *flags);
+	int (*get_flags)(struct dma_buf *dmabuf, unsigned long *flags);
 };
+
+/**
+ * dma_buf_destructor - dma-buf destructor function
+ * @dmabuf:	[in]	pointer to dma-buf
+ * @dtor_data:	[in]	destructor data associated with this buffer
+ *
+ * The dma-buf destructor which is called when the dma-buf is freed.
+ *
+ * If the destructor returns an error the dma-buf's exporter release function
+ * won't be called.
+ */
+typedef int (*dma_buf_destructor)(struct dma_buf *dmabuf, void *dtor_data);
 
 /**
  * struct dma_buf - shared buffer object
@@ -387,6 +412,7 @@ struct dma_buf_ops {
  * @buf_name: unique name for the buffer
  * @ktime: time (in jiffies) at which the buffer was born
  * @name: userspace-provided name; useful for accounting and debugging.
+ * @name_lock: lock to protect name.
  * @owner: pointer to exporter module; used for refcounting when exporter is a
  *         kernel module.
  * @list_node: node for dma_buf accounting and debugging.
@@ -430,12 +456,15 @@ struct dma_buf {
 		struct dma_fence_cb cb;
 		wait_queue_head_t *poll;
 
-		unsigned long active;
+		__poll_t active;
 	} cb_excl, cb_shared;
 
 	struct list_head refs;
+	dma_buf_destructor dtor;
+	void *dtor_data;
 	atomic_t dent_count;
 
+	bool from_kmem;
 };
 
 /**
@@ -444,6 +473,8 @@ struct dma_buf {
  * @dev: device attached to the buffer.
  * @node: list of dma_buf_attachment.
  * @priv: exporter specific attachment data.
+ * @dma_map_attrs: DMA attributes to be used when the exporter maps the buffer
+ * through dma_buf_map_attachment.
  *
  * This structure holds the attachment information between the dma_buf buffer
  * and its user device(s). The list contains one attachment struct per device
@@ -537,8 +568,6 @@ int dma_buf_end_cpu_access(struct dma_buf *dma_buf,
 int dma_buf_end_cpu_access_partial(struct dma_buf *dma_buf,
 				   enum dma_data_direction dir,
 				   unsigned int offset, unsigned int len);
-void *dma_buf_kmap_atomic(struct dma_buf *, unsigned long);
-void dma_buf_kunmap_atomic(struct dma_buf *, unsigned long, void *);
 void *dma_buf_kmap(struct dma_buf *, unsigned long);
 void dma_buf_kunmap(struct dma_buf *, unsigned long, void *);
 
@@ -547,4 +576,20 @@ int dma_buf_mmap(struct dma_buf *, struct vm_area_struct *,
 void *dma_buf_vmap(struct dma_buf *);
 void dma_buf_vunmap(struct dma_buf *, void *vaddr);
 int dma_buf_get_flags(struct dma_buf *dma_buf, unsigned long *flags);
+int dma_buf_get_uuid(struct dma_buf *dma_buf, uuid_t *uuid);
+
+/**
+ * dma_buf_set_destructor - set the dma-buf's destructor
+ * @dmabuf:		[in]	pointer to dma-buf
+ * @dma_buf_destructor	[in]	the destructor function
+ * @dtor_data:		[in]	destructor data associated with this buffer
+ */
+static inline void dma_buf_set_destructor(struct dma_buf *dmabuf,
+					  dma_buf_destructor dtor,
+					  void *dtor_data)
+{
+	dmabuf->dtor = dtor;
+	dmabuf->dtor_data = dtor_data;
+}
+
 #endif /* __DMA_BUF_H__ */

@@ -1,13 +1,6 @@
-/* Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt)	"Qnovo: %s: " fmt, __func__
@@ -22,6 +15,7 @@
 #include <linux/of_irq.h>
 #include <linux/pmic-voter.h>
 #include <linux/delay.h>
+#include <linux/pinctrl/consumer.h>
 
 #define QNOVO_PE_CTRL			0x45
 #define QNOVO_PTRAIN_EN_BIT		BIT(7)
@@ -127,6 +121,7 @@ struct qnovo {
 	struct votable		*not_ok_to_qnovo_votable;
 	struct votable		*chg_ready_votable;
 	struct votable		*awake_votable;
+	struct votable		*cp_disable_votable;
 	struct work_struct	status_change_work;
 	struct delayed_work	usb_debounce_work;
 	int			base;
@@ -312,7 +307,7 @@ static int qnovo5_parse_dt(struct qnovo *chip)
 
 	chip->pinctrl = devm_pinctrl_get(chip->dev);
 	if (IS_ERR(chip->pinctrl)) {
-		pr_err("Couldn't get pinctrl rc=%d\n", PTR_ERR(chip->pinctrl));
+		pr_err("Couldn't get pinctrl rc=%ld\n", PTR_ERR(chip->pinctrl));
 		chip->pinctrl = NULL;
 	}
 
@@ -342,6 +337,7 @@ enum {
 	OK_TO_QNOVO,
 	QNOVO_ENABLE,
 	PT_ENABLE,
+	STANDALONE,
 	FV_REQUEST,
 	FCC_REQUEST,
 	PE_CTRL_REG,
@@ -672,9 +668,17 @@ static ssize_t ok_to_qnovo_show(struct class *c, struct class_attribute *attr,
 			char *buf)
 {
 	struct qnovo *chip = container_of(c, struct qnovo, qnovo_class);
-	int val = get_effective_result(chip->not_ok_to_qnovo_votable);
+	int val, cp_dis, not_ok =
+		get_effective_result(chip->not_ok_to_qnovo_votable);
+	struct votable *cp_disable_votable = find_votable("CP_DISABLE");
 
-	return snprintf(buf, PAGE_SIZE, "%d\n", !val);
+	val = !not_ok;
+	if (cp_disable_votable) {
+		cp_dis = get_effective_result(cp_disable_votable);
+		val = val && cp_dis;
+	}
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", val);
 }
 static CLASS_ATTR_RO(ok_to_qnovo);
 
@@ -727,6 +731,38 @@ static ssize_t pt_enable_store(struct class *c, struct class_attribute *attr,
 }
 static CLASS_ATTR_RW(pt_enable);
 
+static ssize_t standalone_show(struct class *c, struct class_attribute *attr,
+			char *ubuf)
+{
+	int val;
+	struct votable *cp_disable_votable = find_votable("CP_DISABLE");
+
+	if (!cp_disable_votable)
+		return -ENODEV;
+
+	val = get_client_vote(cp_disable_votable, QNOVO_VOTER);
+
+	return scnprintf(ubuf, PAGE_SIZE, "%d\n", val);
+}
+
+static ssize_t standalone_store(struct class *c, struct class_attribute *attr,
+			const char *ubuf, size_t count)
+{
+	unsigned long val;
+	struct votable *cp_disable_votable;
+
+	if (kstrtoul(ubuf, 0, &val))
+		return -EINVAL;
+
+	cp_disable_votable = find_votable("CP_DISABLE");
+	if (!cp_disable_votable)
+		return -ENODEV;
+
+	vote(cp_disable_votable, QNOVO_VOTER, !!val, 0);
+
+	return count;
+}
+static CLASS_ATTR_RW(standalone);
 
 static ssize_t val_show(struct class *c, struct class_attribute *attr,
 			char *ubuf)
@@ -1084,6 +1120,7 @@ static struct attribute *qnovo_class_attrs[] = {
 	[OK_TO_QNOVO]		= &class_attr_ok_to_qnovo.attr,
 	[QNOVO_ENABLE]		= &class_attr_qnovo_enable.attr,
 	[PT_ENABLE]		= &class_attr_pt_enable.attr,
+	[STANDALONE]		= &class_attr_standalone.attr,
 	[FV_REQUEST]		= &class_attr_fv_uV_request.attr,
 	[FCC_REQUEST]		= &class_attr_fcc_uA_request.attr,
 	[PE_CTRL_REG]		= &class_attr_PE_CTRL_REG.attr,
@@ -1137,6 +1174,7 @@ static void status_change_work(struct work_struct *work)
 	union power_supply_propval pval;
 	bool usb_present = false, hw_ok_to_qnovo = false;
 	int rc, battery_health, charge_status;
+	struct votable *cp_disable_votable = find_votable("CP_DISABLE");
 
 	if (is_usb_available(chip)) {
 		rc = power_supply_get_property(chip->usb_psy,
@@ -1150,6 +1188,9 @@ static void status_change_work(struct work_struct *work)
 		cancel_delayed_work_sync(&chip->usb_debounce_work);
 		vote(chip->awake_votable, USB_READY_VOTER, false, 0);
 		vote(chip->chg_ready_votable, USB_READY_VOTER, false, 0);
+		if (cp_disable_votable)
+			vote(cp_disable_votable, QNOVO_VOTER, false, 0);
+
 		if (chip->pinctrl) {
 			rc = pinctrl_select_state(chip->pinctrl,
 					chip->pinctrl_state1);
@@ -1456,7 +1497,6 @@ static const struct of_device_id match_table[] = {
 static struct platform_driver qnovo5_driver = {
 	.driver		= {
 		.name		= "qcom,qnovo5-driver",
-		.owner		= THIS_MODULE,
 		.of_match_table	= match_table,
 	},
 	.probe		= qnovo5_probe,

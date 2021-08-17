@@ -26,20 +26,22 @@
 int gf_parse_dts(struct gf_dev *gf_dev)
 {
 #ifdef GF_PW_CTL
-	/*get pwr resource*/
-	gf_dev->pwr_gpio = of_get_named_gpio(gf_dev->spi->dev.of_node, "fp-gpio-pwr",
-						0);
 
+	/*get pwr resource*/
+	gf_dev->pwr_gpio = of_get_named_gpio(gf_dev->spi->dev.of_node, "goodix,gpio-pwr",
+						0);
+	pr_info("gf::pwr_gpio:%d\n", gf_dev->pwr_gpio);
 	if (!gpio_is_valid(gf_dev->pwr_gpio)) {
 		pr_info("PWR GPIO is invalid.\n");
 		return -EPERM;
 	}
 
+
 #endif
 	/*get reset resource*/
 	gf_dev->reset_gpio = of_get_named_gpio(gf_dev->spi->dev.of_node,
 						"goodix,gpio-reset", 0);
-
+	pr_info("gf::reset_gpio:%d\n", gf_dev->reset_gpio);
 	if (!gpio_is_valid(gf_dev->reset_gpio)) {
 		pr_info("RESET GPIO is invalid.\n");
 		return -EPERM;

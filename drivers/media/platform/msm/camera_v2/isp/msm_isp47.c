@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -994,7 +995,7 @@ static int32_t msm_vfe47_convert_bpp_to_reg(int32_t bpp, uint32_t *bpp_reg)
 		*bpp_reg = 3;
 		break;
 	default:
-		pr_err("%s:%d invalid bpp %d", __func__, __LINE__, bpp);
+		pr_err("%s:%d invalid bpp %d\n", __func__, __LINE__, bpp);
 		return -EINVAL;
 	}
 
@@ -1291,10 +1292,6 @@ void msm_vfe47_cfg_fetch_engine(struct vfe_device *vfe_dev,
 		case V4L2_PIX_FMT_P16GBRG10:
 		case V4L2_PIX_FMT_P16GRBG10:
 		case V4L2_PIX_FMT_P16RGGB10:
-		case V4L2_PIX_FMT_P16BGGR12:
-		case V4L2_PIX_FMT_P16GBRG12:
-		case V4L2_PIX_FMT_P16GRBG12:
-		case V4L2_PIX_FMT_P16RGGB12:
 			main_unpack_pattern = 0xB210;
 			break;
 		default:
@@ -1312,7 +1309,7 @@ void msm_vfe47_cfg_fetch_engine(struct vfe_device *vfe_dev,
 		msm_camera_io_w(temp, vfe_dev->vfe_base + 0x50);
 
 	} else {
-		pr_err("%s: Invalid mux configuration - mux: %d", __func__,
+		pr_err("%s: Invalid mux configuration - mux: %d\n", __func__,
 			pix_cfg->input_mux);
 	}
 }
@@ -3190,7 +3187,6 @@ static struct platform_driver vfe47_driver = {
 	.probe = vfe_hw_probe,
 	.driver = {
 		.name = "msm_vfe47",
-		.owner = THIS_MODULE,
 		.of_match_table = msm_vfe47_dt_match,
 	},
 };

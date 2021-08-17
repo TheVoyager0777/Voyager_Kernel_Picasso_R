@@ -1,9 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  *  syscore.c - Execution of system core operations.
  *
  *  Copyright (C) 2011 Rafael J. Wysocki <rjw@sisk.pl>, Novell Inc.
- *
- *  This file is released under the GPLv2.
  */
 
 #include <linux/syscore_ops.h>
@@ -57,8 +56,7 @@ int syscore_suspend(void)
 	/* Return error code if there are any wakeup interrupts pending. */
 	if (pm_wakeup_pending())
 		return -EBUSY;
-
-	WARN_ONCE(!irqs_disabled(),
+        WARN_ONCE(!irqs_disabled(),
 		"Interrupts enabled before system core suspend.\n");
 
 	list_for_each_entry_reverse(ops, &syscore_ops_list, node)

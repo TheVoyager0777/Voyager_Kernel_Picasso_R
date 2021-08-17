@@ -18,6 +18,17 @@ static inline int rt_task(struct task_struct *p)
 	return rt_prio(p->prio);
 }
 
+static inline bool task_is_realtime(struct task_struct *tsk)
+{
+	int policy = tsk->policy;
+
+	if (policy == SCHED_FIFO || policy == SCHED_RR)
+		return true;
+	if (policy == SCHED_DEADLINE)
+		return true;
+	return false;
+}
+
 #ifdef CONFIG_RT_MUTEXES
 /*
  * Must hold either p->pi_lock or task_rq(p)->lock.
@@ -48,9 +59,9 @@ extern void normalize_rt_tasks(void);
 
 
 /*
- * default timeslice is 1 jiffy (used only for SCHED_RR tasks).
+ * default timeslice is 100 msecs (used only for SCHED_RR tasks).
  * Timeslices get refilled after they expire.
  */
-#define RR_TIMESLICE		(1)
+#define RR_TIMESLICE		(100 * HZ / 1000)
 
 #endif /* _LINUX_SCHED_RT_H */

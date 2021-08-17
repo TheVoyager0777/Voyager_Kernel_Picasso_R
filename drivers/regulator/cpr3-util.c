@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 /*
@@ -2301,7 +2293,8 @@ static bool _cpr3_adjust_target_quotients(struct cpr3_regulator *vreg,
 					ro_scale[i * CPR3_RO_COUNT + j],
 					volt_adjust[i]);
 				if (quot_adjust) {
-					prev_quot = vreg->corner[i].target_quot[j];
+					prev_quot = vreg->corner[i]
+						.target_quot[j];
 					vreg->corner[i].target_quot[j]
 						+= quot_adjust;
 					cpr3_debug(vreg, "adjusted corner %d RO%d target quot %s: %u --> %u (%d uV)\n",

@@ -49,9 +49,10 @@
 #define PINCTRL_STATE_ACTIVE		"pmx_ts_active"
 #define PINCTRL_STATE_SUSPEND		"pmx_ts_suspend"
 #define PINCTRL_STATE_RELEASE		"pmx_ts_release"
-
+#define MI_DRM_NOTIFIER
 
 #define NVT_DEBUG 1
+#define TOUCH_DISABLE_LPM 1
 
 //---GPIO number---
 #define NVTTOUCH_RST_PIN 980
@@ -98,6 +99,10 @@ extern const uint16_t touch_key_array[TOUCH_KEY_NUM];
 #define NVT_TOUCH_MP_SETTING_CRITERIA_FROM_CSV 1
 #define MT_PROTOCOL_B 1
 #define WAKEUP_GESTURE 1
+#define FUNCPAGE_PALM 4
+#define PACKET_PALM_ON 3
+#define PACKET_PALM_OFF 4
+
 #if WAKEUP_GESTURE
 extern const uint16_t gesture_key_array[];
 #endif
@@ -118,7 +123,7 @@ struct nvt_config_info {
 	u8 tp_vendor;
 	u8 tp_color;
 	u8 display_maker;
-	u8 panel_cg;
+	u8 glass_vendor;
 	const char *nvt_fw_name;
 	const char *nvt_mp_name;
 	const char *nvt_limit_name;
@@ -138,17 +143,21 @@ struct nvt_ts_data {
 	struct input_dev *input_dev;
 	struct delayed_work nvt_fwu_work;
 	struct delayed_work nvt_lockdown_work;
+	struct work_struct switch_mode_work;
+	struct work_struct resist_rf_work;
+	struct timer_list rf_timer;
 	uint16_t addr;
 	int8_t phys[32];
-#if defined(CONFIG_FB)
-#ifdef _DRM_NOTIFIER_H_
+
+#ifdef MI_DRM_NOTIFIER
 	struct notifier_block drm_notif;
 #else
 	struct notifier_block fb_notif;
 #endif
-#elif defined(CONFIG_HAS_EARLYSUSPEND)
+#if defined(CONFIG_HAS_EARLYSUSPEND)
 	struct early_suspend early_suspend;
 #endif
+
 	uint8_t fw_ver;
 	uint8_t x_num;
 	uint8_t y_num;
@@ -182,8 +191,8 @@ struct nvt_ts_data {
 #ifndef NVT_SAVE_TESTDATA_IN_FILE
 	void *testdata;
 #endif
-	bool lkdown_readed;
 	int db_wakeup;
+	bool lkdown_readed;
 	u8 lockdown_info[NVT_LOCKDOWN_SIZE];
 	uint32_t config_array_size;
 	struct nvt_config_info *config_array;
@@ -199,7 +208,7 @@ struct nvt_ts_data {
 	struct dentry *debugfs;
 #endif
 	struct workqueue_struct *event_wq;
-	/*struct work_struct suspend_work;*/
+	struct work_struct suspend_work;
 	struct work_struct resume_work;
 	int result_type;
 	int ic_state;
@@ -208,13 +217,8 @@ struct nvt_ts_data {
 	struct completion dev_pm_suspend_completion;
 	bool palm_sensor_changed;
 	bool palm_sensor_switch;
-	bool first_load_done;
-};
-
-struct nvt_mode_switch {
-	struct nvt_ts_data *ts_data;
-	unsigned char mode;
-	struct work_struct switch_mode_work;
+	bool rf_resist_cmd_waiting;
+	uint8_t debug_flag;
 };
 
 #if NVT_TOUCH_PROC
@@ -234,6 +238,7 @@ typedef enum {
 typedef enum {
     EVENT_MAP_HOST_CMD                      = 0x50,
     EVENT_MAP_HANDSHAKING_or_SUB_CMD_BYTE   = 0x51,
+    EVENT_MAP_RF_RESIST_ADDR                = 0x5D,
     EVENT_MAP_RESET_COMPLETE                = 0x60,
     EVENT_MAP_FWINFO                        = 0x78,
     EVENT_MAP_PROJECTID                     = 0x9A,

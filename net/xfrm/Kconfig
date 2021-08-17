@@ -108,4 +108,3 @@ config NET_KEY_MIGRATE
 	  <draft-sugimoto-mip6-pfkey-migrate>.
 
 	  If unsure, say N.
-

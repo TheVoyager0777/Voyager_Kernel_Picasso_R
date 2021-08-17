@@ -1,15 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
  */
 
 #include <linux/module.h>
@@ -92,11 +83,10 @@
 #define USB_HSPHY_1P8_VOL_MAX			1800000 /* uV */
 #define USB_HSPHY_1P8_HPM_LOAD			19000	/* uA */
 
-#define USB_HSPHY_VDD_HPM_LOAD			30000	/* uA */
-
 struct msm_hsphy {
 	struct usb_phy		phy;
 	void __iomem		*base;
+	void __iomem		*eud_enable_reg;
 
 	struct clk		*ref_clk_src;
 	struct clk		*cfg_ahb_clk;
@@ -112,7 +102,6 @@ struct msm_hsphy {
 	bool			suspended;
 	bool			cable_connected;
 	bool			dpdm_enable;
-	bool			no_rext_present;
 
 	int			*param_override_seq;
 	int			param_override_seq_cnt;
@@ -123,13 +112,6 @@ struct msm_hsphy {
 	struct mutex		phy_lock;
 	struct regulator_desc	dpdm_rdesc;
 	struct regulator_dev	*dpdm_rdev;
-
-	/* emulation targets specific */
-	void __iomem		*emu_phy_base;
-	int			*emu_init_seq;
-	int			emu_init_seq_len;
-	int			*emu_dcm_reset_seq;
-	int			emu_dcm_reset_seq_len;
 
 	/* debugfs entries */
 	struct dentry		*root;
@@ -164,6 +146,23 @@ static void msm_hsphy_enable_clocks(struct msm_hsphy *phy, bool on)
 	}
 
 }
+static int msm_hsphy_config_vdd(struct msm_hsphy *phy, int high)
+{
+	int min, ret;
+
+	min = high ? 1 : 0; /* low or none? */
+	ret = regulator_set_voltage(phy->vdd, phy->vdd_levels[min],
+				    phy->vdd_levels[2]);
+	if (ret) {
+		dev_err(phy->phy.dev, "unable to set voltage for hsusb vdd\n");
+		return ret;
+	}
+
+	dev_dbg(phy->phy.dev, "%s: min_vol:%d max_vol:%d\n", __func__,
+		phy->vdd_levels[min], phy->vdd_levels[2]);
+
+	return ret;
+}
 
 static int msm_hsphy_enable_power(struct msm_hsphy *phy, bool on)
 {
@@ -180,17 +179,11 @@ static int msm_hsphy_enable_power(struct msm_hsphy *phy, bool on)
 	if (!on)
 		goto disable_vdda33;
 
-	ret = regulator_set_load(phy->vdd, USB_HSPHY_VDD_HPM_LOAD);
-	if (ret < 0) {
-		dev_err(phy->phy.dev, "Unable to set HPM of vdd:%d\n", ret);
-		goto err_vdd;
-	}
-
-	ret = regulator_set_voltage(phy->vdd, phy->vdd_levels[1],
-				    phy->vdd_levels[2]);
+	ret = msm_hsphy_config_vdd(phy, true);
 	if (ret) {
-		dev_err(phy->phy.dev, "unable to set voltage for hsusb vdd\n");
-		goto put_vdd_lpm;
+		dev_err(phy->phy.dev, "Unable to config VDD:%d\n",
+							ret);
+		goto err_vdd;
 	}
 
 	ret = regulator_enable(phy->vdd);
@@ -279,18 +272,20 @@ put_vdda18_lpm:
 disable_vdd:
 	ret = regulator_disable(phy->vdd);
 	if (ret)
-		dev_err(phy->phy.dev, "Unable to disable vdd:%d\n", ret);
+		dev_err(phy->phy.dev, "Unable to disable vdd:%d\n",
+								ret);
 
 unconfig_vdd:
-	ret = regulator_set_voltage(phy->vdd, phy->vdd_levels[0],
-				    phy->vdd_levels[2]);
+	ret = msm_hsphy_config_vdd(phy, false);
 	if (ret)
-		dev_err(phy->phy.dev, "unable to set voltage for hsusb vdd\n");
-
-put_vdd_lpm:
-	ret = regulator_set_load(phy->vdd, 0);
-	if (ret < 0)
-		dev_err(phy->phy.dev, "Unable to set LPM of vdd\n");
+		dev_err(phy->phy.dev, "Unable unconfig VDD:%d\n",
+								ret);
+	/* Return from here based on power_enabled. If it is not set
+	 * then return -EINVAL since either set_voltage or
+	 * regulator_enable failed
+	 */
+	if (!phy->power_enabled)
+		return -EINVAL;
 err_vdd:
 	phy->power_enabled = false;
 	dev_dbg(phy->phy.dev, "HSUSB PHY's regulators are turned OFF.\n");
@@ -346,37 +341,6 @@ static void hsusb_phy_write_seq(void __iomem *base, u32 *seq, int cnt,
 	}
 }
 
-static int msm_hsphy_emu_init(struct usb_phy *uphy)
-{
-	struct msm_hsphy *phy = container_of(uphy, struct msm_hsphy, phy);
-	int ret;
-
-	dev_dbg(uphy->dev, "%s\n", __func__);
-
-	ret = msm_hsphy_enable_power(phy, true);
-	if (ret)
-		return ret;
-
-	msm_hsphy_enable_clocks(phy, true);
-	msm_hsphy_reset(phy);
-
-	if (phy->emu_init_seq) {
-		hsusb_phy_write_seq(phy->base,
-			phy->emu_init_seq,
-			phy->emu_init_seq_len, 10000);
-
-		/* Wait for 5ms as per QUSB2 RUMI sequence */
-		usleep_range(5000, 7000);
-
-		if (phy->emu_dcm_reset_seq)
-			hsusb_phy_write_seq(phy->emu_phy_base,
-					phy->emu_dcm_reset_seq,
-					phy->emu_dcm_reset_seq_len, 10000);
-	}
-
-	return 0;
-}
-
 static int msm_hsphy_init(struct usb_phy *uphy)
 {
 	struct msm_hsphy *phy = container_of(uphy, struct msm_hsphy, phy);
@@ -385,11 +349,17 @@ static int msm_hsphy_init(struct usb_phy *uphy)
 
 	dev_dbg(uphy->dev, "%s\n", __func__);
 
+	if (phy->eud_enable_reg && readl_relaxed(phy->eud_enable_reg)) {
+		dev_err(phy->phy.dev, "eud is enabled\n");
+		return 0;
+	}
+
 	ret = msm_hsphy_enable_power(phy, true);
 	if (ret)
 		return ret;
 
 	msm_hsphy_enable_clocks(phy, true);
+
 	msm_hsphy_reset(phy);
 
 	msm_usb_write_readback(phy->base, USB2_PHY_USB_PHY_CFG0,
@@ -473,15 +443,6 @@ static int msm_hsphy_init(struct usb_phy *uphy)
 				phy->rcal_mask, phy->phy_rcal_reg, rcal_code);
 	}
 
-	/*
-	 * Use external resistor value only if:
-	 * a. It is present and
-	 * b. efuse is not programmed.
-	 */
-	if (!phy->no_rext_present && !rcal_code)
-		msm_usb_write_readback(phy->base, USB2PHY_USB_PHY_RTUNE_SEL,
-			RTUNE_SEL, RTUNE_SEL);
-
 	msm_usb_write_readback(phy->base, USB2_PHY_USB_PHY_HS_PHY_CTRL_COMMON2,
 				VREGBYPASS, VREGBYPASS);
 
@@ -533,7 +494,6 @@ static int msm_hsphy_set_suspend(struct usb_phy *uphy, int suspend)
 					USB2_PHY_USB_PHY_HS_PHY_CTRL2,
 					USB2_AUTO_RESUME, 0);
 			}
-
 			msm_hsphy_enable_clocks(phy, false);
 		} else {/* Cable disconnect */
 			mutex_lock(&phy->phy_lock);
@@ -587,9 +547,8 @@ static int msm_hsphy_drive_dp_pulse(struct usb_phy *uphy,
 		return ret;
 	}
 	msm_hsphy_enable_clocks(phy, true);
-
-	/* set UTMI_PHY_CMN_CNTRL_OVERRIDE_EN &
-	 * UTMI_PHY_DATAPATH_CTRL_OVERRIDE_EN
+	/* set utmi_phy_cmn_cntrl_override_en &
+	 * utmi_phy_datapath_ctrl_override_en
 	 */
 	msm_usb_write_readback(phy->base, USB2_PHY_USB_PHY_CFG0,
 				UTMI_PHY_CMN_CTRL_OVERRIDE_EN,
@@ -597,23 +556,23 @@ static int msm_hsphy_drive_dp_pulse(struct usb_phy *uphy,
 	msm_usb_write_readback(phy->base, USB2_PHY_USB_PHY_CFG0,
 				UTMI_PHY_DATAPATH_CTRL_OVERRIDE_EN,
 				UTMI_PHY_DATAPATH_CTRL_OVERRIDE_EN);
-	/* set OPMODE to normal i.e. 0x0 & termsel to fs */
+	/* set opmode to normal i.e. 0x0 & termsel to fs */
 	msm_usb_write_readback(phy->base, USB2_PHY_USB_PHY_UTMI_CTRL0,
 				OPMODE_MASK, OPMODE_NORMAL);
 	msm_usb_write_readback(phy->base, USB2_PHY_USB_PHY_UTMI_CTRL0,
 				TERMSEL, TERMSEL);
-	/* set XCVRSEL to fs */
+	/* set xcvrsel to fs */
 	msm_usb_write_readback(phy->base, USB2_PHY_USB_PHY_UTMI_CTRL1,
 					XCVRSEL, XCVRSEL);
 	msleep(interval_ms);
-	/* clear TERMSEL to fs */
+	/* clear termsel to fs */
 	msm_usb_write_readback(phy->base, USB2_PHY_USB_PHY_UTMI_CTRL0,
 				TERMSEL, 0x00);
-	/* clear XCVRSEL */
+	/* clear xcvrsel */
 	msm_usb_write_readback(phy->base, USB2_PHY_USB_PHY_UTMI_CTRL1,
 					XCVRSEL, 0x00);
-	/* clear UTMI_PHY_CMN_CNTRL_OVERRIDE_EN &
-	 * UTMI_PHY_DATAPATH_CTRL_OVERRIDE_EN
+	/* clear utmi_phy_cmn_cntrl_override_en &
+	 * utmi_phy_datapath_ctrl_override_en
 	 */
 	msm_usb_write_readback(phy->base, USB2_PHY_USB_PHY_CFG0,
 				UTMI_PHY_CMN_CTRL_OVERRIDE_EN, 0x00);
@@ -639,6 +598,11 @@ static int msm_hsphy_dpdm_regulator_enable(struct regulator_dev *rdev)
 	dev_dbg(phy->phy.dev, "%s dpdm_enable:%d\n",
 				__func__, phy->dpdm_enable);
 
+	if (phy->eud_enable_reg && readl_relaxed(phy->eud_enable_reg)) {
+		dev_err(phy->phy.dev, "eud is enabled\n");
+		return 0;
+	}
+
 	mutex_lock(&phy->phy_lock);
 	if (!phy->dpdm_enable) {
 		ret = msm_hsphy_enable_power(phy, true);
@@ -648,6 +612,7 @@ static int msm_hsphy_dpdm_regulator_enable(struct regulator_dev *rdev)
 		}
 
 		msm_hsphy_enable_clocks(phy, true);
+
 		msm_hsphy_reset(phy);
 
 		/*
@@ -755,8 +720,7 @@ static int msm_hsphy_probe(struct platform_device *pdev)
 	struct msm_hsphy *phy;
 	struct device *dev = &pdev->dev;
 	struct resource *res;
-	int ret = 0, size = 0;
-
+	int ret = 0;
 
 	phy = devm_kzalloc(dev, sizeof(*phy), GFP_KERNEL);
 	if (!phy) {
@@ -799,12 +763,12 @@ static int msm_hsphy_probe(struct platform_device *pdev)
 	}
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM,
-							"emu_phy_base");
+			"eud_enable_reg");
 	if (res) {
-		phy->emu_phy_base = devm_ioremap_resource(dev, res);
-		if (IS_ERR(phy->emu_phy_base)) {
-			dev_dbg(dev, "couldn't ioremap emu_phy_base\n");
-			phy->emu_phy_base = NULL;
+		phy->eud_enable_reg = devm_ioremap_resource(dev, res);
+		if (IS_ERR(phy->eud_enable_reg)) {
+			dev_err(dev, "err getting eud_enable_reg address\n");
+			return PTR_ERR(phy->eud_enable_reg);
 		}
 	}
 
@@ -831,54 +795,6 @@ static int msm_hsphy_probe(struct platform_device *pdev)
 	phy->phy_reset = devm_reset_control_get(dev, "phy_reset");
 	if (IS_ERR(phy->phy_reset))
 		return PTR_ERR(phy->phy_reset);
-
-	of_get_property(dev->of_node, "qcom,emu-init-seq", &size);
-	if (size) {
-		phy->emu_init_seq = devm_kzalloc(dev,
-						size, GFP_KERNEL);
-		if (phy->emu_init_seq) {
-			phy->emu_init_seq_len =
-				(size / sizeof(*phy->emu_init_seq));
-			if (phy->emu_init_seq_len % 2) {
-				dev_err(dev, "invalid emu_init_seq_len\n");
-				return -EINVAL;
-			}
-
-			of_property_read_u32_array(dev->of_node,
-				"qcom,emu-init-seq",
-				phy->emu_init_seq,
-				phy->emu_init_seq_len);
-		} else {
-			dev_dbg(dev,
-			"error allocating memory for emu_init_seq\n");
-		}
-	}
-
-	size = 0;
-	of_get_property(dev->of_node, "qcom,emu-dcm-reset-seq", &size);
-	if (size) {
-		phy->emu_dcm_reset_seq = devm_kzalloc(dev,
-						size, GFP_KERNEL);
-		if (phy->emu_dcm_reset_seq) {
-			phy->emu_dcm_reset_seq_len =
-				(size / sizeof(*phy->emu_dcm_reset_seq));
-			if (phy->emu_dcm_reset_seq_len % 2) {
-				dev_err(dev, "invalid emu_dcm_reset_seq_len\n");
-				return -EINVAL;
-			}
-
-			of_property_read_u32_array(dev->of_node,
-				"qcom,emu-dcm-reset-seq",
-				phy->emu_dcm_reset_seq,
-				phy->emu_dcm_reset_seq_len);
-		} else {
-			dev_dbg(dev,
-			"error allocating memory for emu_dcm_reset_seq\n");
-		}
-	}
-
-	phy->no_rext_present = of_property_read_bool(dev->of_node,
-					"qcom,no-rext-present");
 
 	phy->param_override_seq_cnt = of_property_count_elems_of_size(
 					dev->of_node,
@@ -941,10 +857,7 @@ static int msm_hsphy_probe(struct platform_device *pdev)
 	mutex_init(&phy->phy_lock);
 	platform_set_drvdata(pdev, phy);
 
-	if (phy->emu_init_seq)
-		phy->phy.init			= msm_hsphy_emu_init;
-	else
-		phy->phy.init			= msm_hsphy_init;
+	phy->phy.init			= msm_hsphy_init;
 	phy->phy.set_suspend		= msm_hsphy_set_suspend;
 	phy->phy.notify_connect		= msm_hsphy_notify_connect;
 	phy->phy.notify_disconnect	= msm_hsphy_notify_disconnect;

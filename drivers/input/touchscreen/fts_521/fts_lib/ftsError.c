@@ -41,11 +41,11 @@ static ErrorList errors;
 */
 void logError(int force, const char *msg, ...)
 {
-	if (force == 1
-#ifdef DEBUG
+/* 	if (force == 1
+#ifdef 1
 	    || 1
 #endif
-	    ) {
+	    )  */{
 		va_list args;
 		va_start(args, msg);
 		vprintk(msg, args);
@@ -144,7 +144,7 @@ int errorHandler(u8 *event, int size)
 
 	if (info != NULL && event != NULL && size > 1
 	    && event[0] == EVT_ID_ERROR) {
-		logError(1, "%s errorHandler: Starting handling...\n", tag);
+		logError(0, "%s errorHandler: Starting handling...\n", tag);
 		addErrorIntoList(event, size);
 		switch (event[1]) {
 		case EVT_TYPE_ERROR_ESD:
@@ -176,7 +176,8 @@ int errorHandler(u8 *event, int size)
 			break;
 
 		case EVT_TYPE_ERROR_ITO_FORCETOGND:
-			logError(1, "%s errorHandler: Force Short to GND!\n", tag);
+			logError(1, "%s errorHandler: Force Short to GND!\n",
+				 tag);
 			break;
 		case EVT_TYPE_ERROR_ITO_SENSETOGND:
 			logError(1, "%s errorHandler: Sense short to GND! \n",
@@ -191,11 +192,13 @@ int errorHandler(u8 *event, int size)
 				 tag);
 			break;
 		case EVT_TYPE_ERROR_ITO_FORCE_P2P:
-			logError(1, "%s errorHandler: Force Pin to Pin Short!\n",
+			logError(1,
+				 "%s errorHandler: Force Pin to Pin Short!\n",
 				 tag);
 			break;
 		case EVT_TYPE_ERROR_ITO_SENSE_P2P:
-			logError(1, "%s errorHandler: Sense Pin to Pin Short!\n",
+			logError(1,
+				 "%s errorHandler: Sense Pin to Pin Short!\n",
 				 tag);
 			break;
 		case EVT_TYPE_ERROR_ITO_FORCEOPEN:
@@ -209,12 +212,12 @@ int errorHandler(u8 *event, int size)
 			break;
 
 		default:
-			logError(1, "%s errorHandler: No Action taken! \n",
+			logError(0, "%s errorHandler: No Action taken! \n",
 				 tag);
 			break;
 
 		}
-		logError(1, "%s errorHandler: handling Finished! res = %08X\n",
+		logError(0, "%s errorHandler: handling Finished! res = %08X\n",
 			 tag, res);
 		return res;
 	} else {
@@ -236,7 +239,7 @@ int addErrorIntoList(u8 *event, int size)
 {
 	int i = 0;
 
-	logError(1, "%s Adding error in to ErrorList... \n", tag);
+	logError(0, "%s Adding error in to ErrorList... \n", tag);
 
 	memcpy(&errors.list[errors.last_index * FIFO_EVENT_SIZE], event, size);
 	i = FIFO_EVENT_SIZE - size;
@@ -247,7 +250,7 @@ int addErrorIntoList(u8 *event, int size)
 		memset(&errors.list[errors.last_index * FIFO_EVENT_SIZE + size],
 		       0, i);
 	}
-	logError(1, "%s Adding error in to ErrorList... FINISHED!\n", tag);
+	logError(0, "%s Adding error in to ErrorList... FINISHED!\n", tag);
 
 	errors.count += 1;
 	if (errors.count > FIFO_DEPTH)

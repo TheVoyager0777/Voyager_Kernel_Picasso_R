@@ -1,18 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2013-2018, 2020, The Linux Foundation. All rights reserved.
- * Copyright (C) 1994 Martin Schaller
  *
- * 2001 - Documented with DocBook
- * - Brad Douglas <brad@neruo.com>
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
  */
 
 #include <linux/compat.h>
@@ -122,6 +111,7 @@ static void  __copy_atomic_commit_struct(struct mdp_layer_commit  *commit,
 	unsigned int destSize = sizeof(commit->commit_v1.reserved);
 	unsigned int srcSize = sizeof(commit32->commit_v1.reserved);
 	unsigned int count = (destSize <= srcSize ? destSize : srcSize);
+
 	commit->version = commit32->version;
 	commit->commit_v1.flags = commit32->commit_v1.flags;
 	commit->commit_v1.input_layer_cnt =
@@ -322,6 +312,7 @@ static int __compat_atomic_commit(struct fb_info *info, unsigned int cmd,
 
 	if (commit32.commit_v1.output_layer) {
 		int buffer_size = sizeof(struct mdp_output_layer);
+
 		output_layer = kzalloc(buffer_size, GFP_KERNEL);
 		if (!output_layer)
 			return -ENOMEM;
@@ -517,8 +508,7 @@ static int mdss_fb_compat_buf_sync(struct fb_info *info, unsigned int cmd,
 			sizeof(int))) {
 		if (buf_sync->flags & MDP_BUF_SYNC_FLAG_RETIRE_FENCE)
 			return -EFAULT;
-		else
-			pr_debug("%s: no retire fence fd for wb\n",
+		pr_debug("%s: no retire fence fd for wb\n",
 				__func__);
 	}
 
@@ -1263,6 +1253,7 @@ static int __from_user_pgc_lut_data_v1_7(
 {
 	struct mdp_pgc_lut_data_v1_7_32 pgc_cfg_payload_32;
 	struct mdp_pgc_lut_data_v1_7 pgc_cfg_payload;
+
 	if (copy_from_user(&pgc_cfg_payload_32,
 			   compat_ptr(pgc_lut32->cfg_payload),
 			   sizeof(pgc_cfg_payload_32))) {
@@ -2803,6 +2794,7 @@ static u32 __pp_compat_size_hist_lut(void)
 static u32 __pp_compat_size_pgc(void)
 {
 	u32 tbl_sz_max = 0;
+
 	tbl_sz_max =  3 * GC_LUT_SEGMENTS * sizeof(struct mdp_ar_gc_lut_data);
 	tbl_sz_max += sizeof(struct mdp_pgc_lut_data_v1_7);
 	return tbl_sz_max;
@@ -3786,7 +3778,7 @@ static int __copy_layer_pp_info_params(struct mdp_input_layer *layer,
 		goto exit;
 	}
 
-	pp_info = kmalloc(sizeof(struct mdp_overlay_pp_params), GFP_KERNEL);
+	pp_info = kzalloc(sizeof(struct mdp_overlay_pp_params), GFP_KERNEL);
 	if (!pp_info) {
 		ret = -ENOMEM;
 		goto exit;

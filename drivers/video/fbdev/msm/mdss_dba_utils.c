@@ -1,15 +1,5 @@
-/* Copyright (c) 2015-2018, 2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2015-2018, 2020, The Linux Foundation. All rights reserved. */
 
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
@@ -135,7 +125,7 @@ static void mdss_dba_utils_notify_audio(
 		udata->sdev_audio.state);
 }
 
-static ssize_t mdss_dba_utils_sysfs_rda_connected(struct device *dev,
+static ssize_t connected_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -153,13 +143,13 @@ static ssize_t mdss_dba_utils_sysfs_rda_connected(struct device *dev,
 		return -EINVAL;
 	}
 
-	ret = snprintf(buf, PAGE_SIZE, "%d\n", udata->hpd_state);
+	ret = scnprintf(buf, PAGE_SIZE, "%d\n", udata->hpd_state);
 	pr_debug("'%d'\n", udata->hpd_state);
 
 	return ret;
 }
 
-static ssize_t mdss_dba_utils_sysfs_rda_video_mode(struct device *dev,
+static ssize_t video_mode_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -177,13 +167,13 @@ static ssize_t mdss_dba_utils_sysfs_rda_video_mode(struct device *dev,
 		return -EINVAL;
 	}
 
-	ret = snprintf(buf, PAGE_SIZE, "%d\n", udata->current_vic);
+	ret = scnprintf(buf, PAGE_SIZE, "%d\n", udata->current_vic);
 	pr_debug("'%d'\n", udata->current_vic);
 
 	return ret;
 }
 
-static ssize_t mdss_dba_utils_sysfs_wta_hpd(struct device *dev,
+static ssize_t hpd_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct mdss_dba_utils_data *udata = NULL;
@@ -220,7 +210,7 @@ static ssize_t mdss_dba_utils_sysfs_wta_hpd(struct device *dev,
 	return count;
 }
 
-static ssize_t mdss_dba_utils_sysfs_rda_hpd(struct device *dev,
+static ssize_t hpd_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -238,20 +228,17 @@ static ssize_t mdss_dba_utils_sysfs_rda_hpd(struct device *dev,
 		return -EINVAL;
 	}
 
-	ret = snprintf(buf, PAGE_SIZE, "%d\n", udata->hpd_state);
+	ret = scnprintf(buf, PAGE_SIZE, "%d\n", udata->hpd_state);
 	pr_debug("'%d'\n", udata->hpd_state);
 
 	return ret;
 }
 
-static DEVICE_ATTR(connected, 0444,
-		mdss_dba_utils_sysfs_rda_connected, NULL);
+static DEVICE_ATTR_RO(connected);
 
-static DEVICE_ATTR(video_mode, 0444,
-		mdss_dba_utils_sysfs_rda_video_mode, NULL);
+static DEVICE_ATTR_RO(video_mode);
 
-static DEVICE_ATTR(hpd, 0644, mdss_dba_utils_sysfs_rda_hpd,
-		mdss_dba_utils_sysfs_wta_hpd);
+static DEVICE_ATTR_RW(hpd);
 
 static struct attribute *mdss_dba_utils_fs_attrs[] = {
 	&dev_attr_connected.attr,

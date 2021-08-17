@@ -1,13 +1,6 @@
-/* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  */
 
 #include "ipa_ut_framework.h"
@@ -163,7 +156,6 @@ static int ipa_test_hw_stats_add_FnR(void *priv)
 	flt_rule->rules = (uint64_t)kzalloc(1 *
 		sizeof(struct ipa_flt_rule_add_v2), GFP_KERNEL);
 	if (!flt_rule->rules) {
-		IPA_UT_DBG("no mem\n");
 		ret = -ENOMEM;
 		goto free_flt;
 	}
@@ -171,7 +163,6 @@ static int ipa_test_hw_stats_add_FnR(void *priv)
 	counter = kzalloc(sizeof(struct ipa_ioc_flt_rt_counter_alloc),
 					  GFP_KERNEL);
 	if (!counter) {
-		IPA_UT_DBG("no mem\n");
 		ret = -ENOMEM;
 		goto free_flt;
 	}
@@ -190,7 +181,6 @@ static int ipa_test_hw_stats_add_FnR(void *priv)
 	query = kzalloc(sizeof(struct ipa_ioc_flt_rt_query),
 		GFP_KERNEL);
 	if (!query) {
-		IPA_UT_DBG("no mem\n");
 		ret = -ENOMEM;
 		goto free_counter;
 	}
@@ -203,7 +193,6 @@ static int ipa_test_hw_stats_add_FnR(void *priv)
 		sizeof(struct ipa_flt_rt_stats);
 	query->stats = (uint64_t)kzalloc(pyld_size, GFP_KERNEL);
 	if (!query->stats) {
-		IPA_UT_DBG("no mem\n");
 		ret = -ENOMEM;
 		goto free_query;
 	}
@@ -472,18 +461,15 @@ static int ipa_test_hw_stats_add_FnR(void *priv)
 	ret = 0;
 
 free_query:
-	if (query->stats)
-		kfree((void *)(query->stats));
+	kfree((void *)(query->stats));
 	kfree(query);
 free_counter:
 	kfree(counter);
 free_flt:
-	if (flt_rule->rules)
-		kfree((void *)(flt_rule->rules));
+	kfree((void *)(flt_rule->rules));
 	kfree(flt_rule);
 free_rt:
-	if (rt_rule->rules)
-		kfree((void *)(rt_rule->rules));
+	kfree((void *)(rt_rule->rules));
 	kfree(rt_rule);
 	return ret;
 }
@@ -495,10 +481,8 @@ static int ipa_test_hw_stats_query_FnR_one_by_one(void *priv)
 	int pyld_size = 0;
 
 	query = kzalloc(sizeof(struct ipa_ioc_flt_rt_query), GFP_KERNEL);
-	if (!query) {
-		IPA_UT_DBG("no mem\n");
+	if (!query)
 		return -ENOMEM;
-	}
 	pyld_size = IPA_MAX_FLT_RT_CNT_INDEX *
 		sizeof(struct ipa_flt_rt_stats);
 	query->stats = (uint64_t)kzalloc(pyld_size, GFP_KERNEL);
@@ -601,10 +585,8 @@ static int ipa_test_hw_stats_query_FnR_one_shot(void *priv)
 	int pyld_size = 0;
 
 	query = kzalloc(sizeof(struct ipa_ioc_flt_rt_query), GFP_KERNEL);
-	if (!query) {
-		IPA_UT_DBG("no mem\n");
+	if (!query)
 		return -ENOMEM;
-	}
 	pyld_size = IPA_MAX_FLT_RT_CNT_INDEX *
 		sizeof(struct ipa_flt_rt_stats);
 	query->stats = (uint64_t)kzalloc(pyld_size, GFP_KERNEL);
@@ -681,6 +663,257 @@ static int ipa_test_hw_stats_query_FnR_clean(void *priv)
 	return ret;
 }
 
+
+static int ipa_test_hw_stats_query_sw_stats(void *priv)
+{
+	int ret, i, start = 0;
+	struct ipa_ioc_flt_rt_query *query;
+	int pyld_size = 0;
+
+	query = kzalloc(sizeof(struct ipa_ioc_flt_rt_query), GFP_KERNEL);
+	if (!query)
+		return -ENOMEM;
+	pyld_size = IPA_MAX_FLT_RT_CNT_INDEX *
+		sizeof(struct ipa_flt_rt_stats);
+	query->stats = (uint64_t)kzalloc(pyld_size, GFP_KERNEL);
+	if (!query->stats) {
+		kfree(query);
+		return -ENOMEM;
+	}
+
+	/* query all together */
+	IPA_UT_INFO("========query all SW counters========\n");
+	query->start_id = IPA_FLT_RT_HW_COUNTER + 1;
+	query->end_id = IPA_MAX_FLT_RT_CNT_INDEX;
+	ipa_get_flt_rt_stats(query);
+	start = 0;
+	for (i = IPA_FLT_RT_HW_COUNTER + 1;
+		i <= IPA_MAX_FLT_RT_CNT_INDEX; i++) {
+		IPA_UT_INFO(
+			"counter %u pkt_cnt %u bytes cnt %llu\n",
+			i, ((struct ipa_flt_rt_stats *)
+			query->stats)[start].num_pkts,
+			((struct ipa_flt_rt_stats *)
+			query->stats)[start].num_bytes);
+		start++;
+	}
+	IPA_UT_INFO("================ done ============\n");
+
+	ret = 0;
+	kfree((void *)(query->stats));
+	kfree(query);
+	return ret;
+}
+
+static int ipa_test_hw_stats_set_sw_stats(void *priv)
+{
+	int ret = 0, i, start = 0;
+	struct ipa_flt_rt_stats stats;
+
+	/* set sw counters */
+	IPA_UT_INFO("========set all SW counters========\n");
+	for (i = IPA_FLT_RT_HW_COUNTER + 1;
+		i <= IPA_MAX_FLT_RT_CNT_INDEX; i++) {
+		stats.num_bytes = start;
+		stats.num_pkts_hash = start + 10;
+		stats.num_pkts = start + 100;
+		IPA_UT_INFO(
+			"set counter %u pkt_cnt %u bytes cnt %llu\n",
+			i, stats.num_pkts, stats.num_bytes);
+		ipa_set_flt_rt_stats(i, stats);
+		start++;
+	}
+	IPA_UT_INFO("================ done ============\n");
+
+	return ret;
+}
+
+static int ipa_test_hw_stats_set_uc_event_ring(void *priv)
+{
+	struct ipa_ioc_flt_rt_counter_alloc *counter = NULL;
+	int ret = 0;
+
+	/* set uc event ring */
+	IPA_UT_INFO("========set uc event ring ========\n");
+
+	if (ipa3_ctx->ipa_hw_type >= IPA_HW_v4_5 &&
+		ipa3_ctx->ipa_hw_type != IPA_HW_v4_7) {
+		if (ipa3_ctx->uc_ctx.uc_loaded &&
+			!ipa3_ctx->uc_ctx.uc_event_ring_valid) {
+			if (ipa3_uc_setup_event_ring()) {
+				IPA_UT_ERR("failed to set uc_event ring\n");
+				ret = -EFAULT;
+			}
+		} else
+			IPA_UT_ERR("uc-loaded %d, ring-valid %d",
+				ipa3_ctx->uc_ctx.uc_loaded,
+				ipa3_ctx->uc_ctx.uc_event_ring_valid);
+	}
+	IPA_UT_INFO("================ done ============\n");
+
+	/* allocate counters */
+	IPA_UT_INFO("========set hw counter ========\n");
+
+	counter = kzalloc(sizeof(struct ipa_ioc_flt_rt_counter_alloc),
+					  GFP_KERNEL);
+	if (!counter)
+		return -ENOMEM;
+
+	counter->hw_counter.num_counters = 4;
+	counter->sw_counter.num_counters = 4;
+
+	/* allocate counters */
+	ret = ipa3_alloc_counter_id(counter);
+	if (ret < 0) {
+		IPA_UT_ERR("ipa3_alloc_counter_id fails\n");
+		ret = -ENOMEM;
+	}
+	ipa3_ctx->fnr_info.hw_counter_offset = counter->hw_counter.start_id;
+	ipa3_ctx->fnr_info.sw_counter_offset = counter->sw_counter.start_id;
+	IPA_UT_INFO("hw-offset %d, sw-offset %d\n",
+		ipa3_ctx->fnr_info.hw_counter_offset,
+			ipa3_ctx->fnr_info.sw_counter_offset);
+
+	kfree(counter);
+	return ret;
+}
+
+static int ipa_test_hw_stats_set_quota(void *priv)
+{
+	int ret;
+	uint64_t quota = 500;
+
+	IPA_UT_INFO("========set quota ========\n");
+	ret = ipa3_uc_quota_monitor(quota);
+	if (ret < 0) {
+		IPA_UT_ERR("ipa3_uc_quota_monitor fails\n");
+		ret = -ENOMEM;
+	}
+	IPA_UT_INFO("================ done ============\n");
+	return ret;
+}
+
+static int ipa_test_hw_stats_set_bw(void *priv)
+{
+	int ret;
+	struct ipa_wdi_bw_info *info = NULL;
+
+	IPA_UT_INFO("========set BW voting ========\n");
+	info = kzalloc(sizeof(struct ipa_wdi_bw_info),
+					  GFP_KERNEL);
+	if (!info)
+		return -ENOMEM;
+
+	info->num = 3;
+	info->threshold[0] = 200;
+	info->threshold[1] = 400;
+	info->threshold[2] = 600;
+
+	ret = ipa3_uc_bw_monitor(info);
+	if (ret < 0) {
+		IPA_UT_ERR("ipa3_uc_bw_monitor fails\n");
+		ret = -ENOMEM;
+	}
+
+	IPA_UT_INFO("================ done ============\n");
+
+	kfree(info);
+	return ret;
+}
+static int ipa_test_hw_stats_hit_quota(void *priv)
+{
+	int ret = 0, counter_index, i;
+	struct ipa_flt_rt_stats stats;
+
+	/* set sw counters */
+	IPA_UT_INFO("========set quota hit========\n");
+	counter_index = ipa3_ctx->fnr_info.sw_counter_offset + UL_WLAN_TX;
+
+	for (i = 0; i < 5; i++) {
+		IPA_UT_INFO("========set 100 ========\n");
+		memset(&stats, 0, sizeof(struct ipa_flt_rt_stats));
+		stats.num_bytes = 100;
+		stats.num_pkts = 69;
+		IPA_UT_INFO(
+			"set counter %u pkt_cnt %u bytes cnt %llu\n",
+			counter_index, stats.num_pkts, stats.num_bytes);
+		ret = ipa_set_flt_rt_stats(counter_index, stats);
+		if (ret < 0) {
+			IPA_UT_ERR("ipa_set_flt_rt_stats fails\n");
+			ret = -ENOMEM;
+		}
+		msleep(1000);
+		IPA_UT_INFO("========set 200 ========\n");
+		memset(&stats, 0, sizeof(struct ipa_flt_rt_stats));
+		stats.num_bytes = 200;
+		stats.num_pkts = 69;
+		IPA_UT_INFO(
+			"set counter %u pkt_cnt %u bytes cnt %llu\n",
+			counter_index, stats.num_pkts, stats.num_bytes);
+		ret = ipa_set_flt_rt_stats(counter_index, stats);
+		if (ret < 0) {
+			IPA_UT_ERR("ipa_set_flt_rt_stats fails\n");
+			ret = -ENOMEM;
+		}
+		msleep(1000);
+		IPA_UT_INFO("========set 300 ========\n");
+		memset(&stats, 0, sizeof(struct ipa_flt_rt_stats));
+		stats.num_bytes = 300;
+		stats.num_pkts = 69;
+		IPA_UT_INFO(
+			"set counter %u pkt_cnt %u bytes cnt %llu\n",
+			counter_index, stats.num_pkts, stats.num_bytes);
+		ret = ipa_set_flt_rt_stats(counter_index, stats);
+		if (ret < 0) {
+			IPA_UT_ERR("ipa_set_flt_rt_stats fails\n");
+			ret = -ENOMEM;
+		}
+		msleep(1000);
+		IPA_UT_INFO("========set 500 ========\n");
+		memset(&stats, 0, sizeof(struct ipa_flt_rt_stats));
+		stats.num_bytes = 500;
+		stats.num_pkts = 69;
+		IPA_UT_INFO(
+			"set counter %u pkt_cnt %u bytes cnt %llu\n",
+			counter_index, stats.num_pkts, stats.num_bytes);
+		ret = ipa_set_flt_rt_stats(counter_index, stats);
+		if (ret < 0) {
+			IPA_UT_ERR("ipa_set_flt_rt_stats fails\n");
+			ret = -ENOMEM;
+		}
+		msleep(1000);
+		IPA_UT_INFO("========set 600 ========\n");
+		memset(&stats, 0, sizeof(struct ipa_flt_rt_stats));
+		stats.num_bytes = 600;
+		stats.num_pkts = 69;
+		IPA_UT_INFO(
+			"set counter %u pkt_cnt %u bytes cnt %llu\n",
+			counter_index, stats.num_pkts, stats.num_bytes);
+		ret = ipa_set_flt_rt_stats(counter_index, stats);
+		if (ret < 0) {
+			IPA_UT_ERR("ipa_set_flt_rt_stats fails\n");
+			ret = -ENOMEM;
+		}
+		msleep(1000);
+		IPA_UT_INFO("========set 1000 ========\n");
+		memset(&stats, 0, sizeof(struct ipa_flt_rt_stats));
+		stats.num_bytes = 1000;
+		stats.num_pkts = 69;
+		IPA_UT_INFO(
+			"set counter %u pkt_cnt %u bytes cnt %llu\n",
+			counter_index, stats.num_pkts, stats.num_bytes);
+		ret = ipa_set_flt_rt_stats(counter_index, stats);
+		if (ret < 0) {
+			IPA_UT_ERR("ipa_set_flt_rt_stats fails\n");
+			ret = -ENOMEM;
+		}
+	}
+	IPA_UT_INFO("================ done ============\n");
+	return ret;
+}
+
+
+
 /* Suite definition block */
 IPA_UT_DEFINE_SUITE_START(hw_stats, "HW stats test",
 	ipa_test_hw_stats_suite_setup, ipa_test_hw_stats_suite_teardown)
@@ -701,6 +934,30 @@ IPA_UT_DEFINE_SUITE_START(hw_stats, "HW stats test",
 
 	IPA_UT_ADD_TEST(query_stats_one_shot_clean, "Query and clean",
 		ipa_test_hw_stats_query_FnR_clean, false,
+		IPA_HW_v4_5, IPA_HW_MAX),
+
+	IPA_UT_ADD_TEST(query_sw_stats, "Query SW stats",
+		ipa_test_hw_stats_query_sw_stats, false,
+		IPA_HW_v4_5, IPA_HW_MAX),
+
+	IPA_UT_ADD_TEST(set_sw_stats, "Set SW stats to dummy values",
+		ipa_test_hw_stats_set_sw_stats, false,
+		IPA_HW_v4_5, IPA_HW_MAX),
+
+	IPA_UT_ADD_TEST(set_uc_evtring, "Set uc event ring",
+		ipa_test_hw_stats_set_uc_event_ring, false,
+		IPA_HW_v4_5, IPA_HW_MAX),
+
+	IPA_UT_ADD_TEST(set_quota, "Set quota",
+		ipa_test_hw_stats_set_quota, false,
+		IPA_HW_v4_5, IPA_HW_MAX),
+
+	IPA_UT_ADD_TEST(set_bw_voting, "Set bw_voting",
+		ipa_test_hw_stats_set_bw, false,
+		IPA_HW_v4_5, IPA_HW_MAX),
+
+	IPA_UT_ADD_TEST(hit_quota, "quota hits",
+		ipa_test_hw_stats_hit_quota, false,
 		IPA_HW_v4_5, IPA_HW_MAX),
 
 } IPA_UT_DEFINE_SUITE_END(hw_stats);

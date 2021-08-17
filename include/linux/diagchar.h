@@ -1,13 +1,5 @@
-/* Copyright (c) 2008-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 */
+/* Copyright (c) 2008-2021, The Linux Foundation. All rights reserved.
  */
 
 #ifndef DIAGCHAR_SHARED
@@ -32,7 +24,6 @@
 #define UART_MODE			4
 #define SOCKET_MODE			5
 #define CALLBACK_MODE			6
-#define PCIE_MODE			7
 
 /* different values that go in for diag_data_type */
 #define DATA_TYPE_EVENT			0
@@ -69,6 +60,9 @@
 #define DIAG_IOCTL_QUERY_PD_LOGGING	39
 #define DIAG_IOCTL_QUERY_CON_ALL	40
 #define DIAG_IOCTL_QUERY_MD_PID	41
+#define DIAG_IOCTL_QUERY_PD_FEATUREMASK	42
+#define DIAG_IOCTL_PASSTHRU_CONTROL	43
+#define DIAG_IOCTL_MDM_HDLC_TOGGLE	44
 
 /* PC Tools IDs */
 #define APQ8060_TOOLS_ID	4062
@@ -149,7 +143,7 @@
  * a new RANGE of SSIDs to the msg_mask_tbl.
  */
 #define MSG_MASK_TBL_CNT		26
-#define APPS_EVENT_LAST_ID		0xCCD
+#define APPS_EVENT_LAST_ID		0xCEB
 
 #define MSG_SSID_0			0
 #define MSG_SSID_0_LAST			134
@@ -928,7 +922,7 @@ static const uint32_t msg_bld_masks_25[] = {
 /* LOG CODES */
 static const uint32_t log_code_last_tbl[] = {
 	0x0,	/* EQUIP ID 0 */
-	0x1CE8,	/* EQUIP ID 1 */
+	0x1D10,	/* EQUIP ID 1 */
 	0x0,	/* EQUIP ID 2 */
 	0x0,	/* EQUIP ID 3 */
 	0x4910,	/* EQUIP ID 4 */

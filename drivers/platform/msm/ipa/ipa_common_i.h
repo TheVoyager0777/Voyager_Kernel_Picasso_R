@@ -1,13 +1,6 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/ipa_mhi.h>
@@ -131,16 +124,14 @@
  * are coming back to back.
  */
 
-#define pr_err_ratelimited_ipa(fmt, ...)				\
-	printk_ratelimited_ipa(KERN_ERR pr_fmt(fmt), ##__VA_ARGS__)
-#define printk_ratelimited_ipa(fmt, ...)				\
+#define pr_err_ratelimited_ipa(fmt, args...)				\
 ({									\
 	static DEFINE_RATELIMIT_STATE(_rs,				\
 				      DEFAULT_RATELIMIT_INTERVAL,	\
 				      IPA_RATELIMIT_BURST);		\
 									\
 	if (__ratelimit(&_rs))						\
-		printk(fmt, ##__VA_ARGS__);				\
+		pr_err(fmt, ## args);					\
 })
 
 #define ipa_assert_on(condition)\
@@ -154,8 +145,8 @@ do {\
 #define IPA_CLIENT_IS_CONS(x) \
 	(x < IPA_CLIENT_MAX && (x & 0x1) == 1)
 
-#define IPA_GSI_CHANNEL_STOP_SLEEP_MIN_USEC (1000)
-#define IPA_GSI_CHANNEL_STOP_SLEEP_MAX_USEC (2000)
+#define IPA_GSI_CHANNEL_STOP_SLEEP_MIN_USEC (3000)
+#define IPA_GSI_CHANNEL_STOP_SLEEP_MAX_USEC (5000)
 
 enum ipa_active_client_log_type {
 	EP,
@@ -383,8 +374,7 @@ int ipa_mhi_start_channel_internal(enum ipa_client_type client);
 bool ipa_mhi_sps_channel_empty(enum ipa_client_type client);
 int ipa_mhi_resume_channels_internal(enum ipa_client_type client,
 		bool LPTransitionRejected, bool brstmode_enabled,
-		union gsi_channel_scratch ch_scratch, u8 index,
-		bool is_switch_to_dbmode);
+		union __packed gsi_channel_scratch ch_scratch, u8 index);
 int ipa_mhi_handle_ipa_config_req(struct ipa_config_req_msg_v01 *config_req);
 int ipa_mhi_query_ch_info(enum ipa_client_type client,
 		struct gsi_chan_info *ch_info);
@@ -438,8 +428,6 @@ int ipa_disable_wdi_pipes(int ipa_ep_idx_tx, int ipa_ep_idx_rx);
 const char *ipa_get_version_string(enum ipa_hw_type ver);
 int ipa_start_gsi_channel(u32 clnt_hdl);
 
-bool ipa_pm_is_used(void);
-
 int ipa_smmu_store_sgt(struct sg_table **out_ch_ptr,
 		struct sg_table *in_sgt_ptr);
 int ipa_smmu_free_sgt(struct sg_table **out_sgt_ptr);
@@ -447,14 +435,17 @@ int ipa_smmu_free_sgt(struct sg_table **out_sgt_ptr);
 int ipa_ut_module_init(void);
 void ipa_ut_module_exit(void);
 
-int ipa_wigig_uc_init(
+int ipa_wigig_internal_init(
 	struct ipa_wdi_uc_ready_params *inout,
 	ipa_wigig_misc_int_cb int_notify,
 	phys_addr_t *uc_db_pa);
 
-int ipa_conn_wigig_rx_pipe_i(void *in, struct ipa_wigig_conn_out_params *out);
+int ipa_conn_wigig_rx_pipe_i(void *in, struct ipa_wigig_conn_out_params *out,
+	struct dentry **parent);
 
-int ipa_conn_wigig_client_i(void *in, struct ipa_wigig_conn_out_params *out);
+int ipa_conn_wigig_client_i(void *in, struct ipa_wigig_conn_out_params *out,
+	ipa_notify_cb tx_notify,
+	void *priv);
 
 int ipa_wigig_uc_msi_init(
 	bool init,
@@ -475,6 +466,8 @@ int ipa_disable_wigig_pipe_i(enum ipa_client_type client);
 int ipa_wigig_send_msg(int msg_type,
 	const char *netdev_name, u8 *mac,
 	enum ipa_client_type client, bool to_wigig);
+
+int ipa_wigig_save_regs(void);
 
 void ipa_register_client_callback(int (*client_cb)(bool is_lock),
 			bool (*teth_port_state)(void), u32 ipa_ep_idx);

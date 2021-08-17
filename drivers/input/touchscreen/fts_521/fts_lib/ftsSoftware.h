@@ -293,7 +293,7 @@ typedef enum {
 #define EVT_TYPE_STATUS_FORCE_CAL			0x05	/*Force Calibration has triggered*/
 #define EVT_TYPE_STATUS_WATER				0x06	/*Water Mode*/
 #define EVT_TYPE_STATUS_SS_RAW_SAT			0x07	/*Self Sense data saturated*/
-#define EVT_TYPE_STATUS_POCKET				0x0A
+#define EVT_TYPE_STATUS_POCKET				0x09
 /** @} */
 
 /** @defgroup user_type	 User Event Types
@@ -336,8 +336,6 @@ typedef enum {
 #define EVT_TYPE_ERROR_CRC_CX_SUB			0xA6	/*CRC error in the CX Subsection Area*/
 
 #define EVT_TYPE_ERROR_ESD					0xF0	/*ESD error*/
-#define EVT_TYPE_ERROR_M3						0x02	/*ic M3 run error*/
-
 /** @}*/
 
 /** @defgroup address Chip Address

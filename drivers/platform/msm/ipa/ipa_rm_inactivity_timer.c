@@ -1,13 +1,6 @@
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2013-2018, 2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/jiffies.h>
@@ -47,7 +40,7 @@ struct ipa_rm_it_private {
 	bool reschedule_work;
 	bool work_in_progress;
 	unsigned long jiffies;
-	struct wakeup_source w_lock;
+	struct wakeup_source *w_lock;
 	char w_lock_name[MAX_WS_NAME];
 };
 
@@ -90,7 +83,7 @@ static void ipa_rm_inactivity_timer_func(struct work_struct *work)
 	} else {
 		IPA_RM_DBG_LOW("calling release_resource on resource %d\n",
 			me->resource_name);
-		__pm_relax(&ipa_rm_it_handles[me->resource_name].w_lock);
+		__pm_relax(ipa_rm_it_handles[me->resource_name].w_lock);
 		ipa_rm_release_resource(me->resource_name);
 		ipa_rm_it_handles[me->resource_name].work_in_progress = false;
 	}
@@ -114,7 +107,6 @@ static void ipa_rm_inactivity_timer_func(struct work_struct *work)
 int ipa_rm_inactivity_timer_init(enum ipa_rm_resource_name resource_name,
 				 unsigned long msecs)
 {
-	struct wakeup_source *pwlock;
 	char *name;
 
 	IPA_RM_DBG_LOW("resource %d\n", resource_name);
@@ -136,13 +128,19 @@ int ipa_rm_inactivity_timer_init(enum ipa_rm_resource_name resource_name,
 	ipa_rm_it_handles[resource_name].resource_requested = false;
 	ipa_rm_it_handles[resource_name].reschedule_work = false;
 	ipa_rm_it_handles[resource_name].work_in_progress = false;
-	pwlock = &(ipa_rm_it_handles[resource_name].w_lock);
 	name = ipa_rm_it_handles[resource_name].w_lock_name;
 	snprintf(name, MAX_WS_NAME, "IPA_RM%d\n", resource_name);
-	wakeup_source_init(pwlock, name);
+	ipa_rm_it_handles[resource_name].w_lock =
+		wakeup_source_register(NULL, name);
+	if (!ipa_rm_it_handles[resource_name].w_lock) {
+		IPA_RM_ERR("IPA wakeup source register failed %s\n",
+			   name);
+		return -ENOMEM;
+	}
+
 	INIT_DELAYED_WORK(&ipa_rm_it_handles[resource_name].work,
 			  ipa_rm_inactivity_timer_func);
-	ipa_rm_it_handles[resource_name].initied = 1;
+	ipa_rm_it_handles[resource_name].initied = true;
 
 	return 0;
 }
@@ -158,8 +156,6 @@ EXPORT_SYMBOL(ipa_rm_inactivity_timer_init);
  */
 int ipa_rm_inactivity_timer_destroy(enum ipa_rm_resource_name resource_name)
 {
-	struct wakeup_source *pwlock;
-
 	IPA_RM_DBG_LOW("resource %d\n", resource_name);
 
 	if (resource_name < 0 ||
@@ -175,8 +171,7 @@ int ipa_rm_inactivity_timer_destroy(enum ipa_rm_resource_name resource_name)
 	}
 
 	cancel_delayed_work_sync(&ipa_rm_it_handles[resource_name].work);
-	pwlock = &(ipa_rm_it_handles[resource_name].w_lock);
-	wakeup_source_trash(pwlock);
+	wakeup_source_unregister(ipa_rm_it_handles[resource_name].w_lock);
 
 	memset(&ipa_rm_it_handles[resource_name], 0,
 	       sizeof(struct ipa_rm_it_private));
@@ -271,7 +266,7 @@ int ipa_rm_inactivity_timer_release_resource(
 	}
 	ipa_rm_it_handles[resource_name].work_in_progress = true;
 	ipa_rm_it_handles[resource_name].reschedule_work = false;
-	__pm_stay_awake(&ipa_rm_it_handles[resource_name].w_lock);
+	__pm_stay_awake(ipa_rm_it_handles[resource_name].w_lock);
 	IPA_RM_DBG_LOW("setting delayed work\n");
 	queue_delayed_work(system_unbound_wq,
 			      &ipa_rm_it_handles[resource_name].work,

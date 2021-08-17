@@ -1,19 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* drivers/cpufreq/qcom-cpufreq.c
  *
  * MSM architecture cpufreq driver
  *
  * Copyright (C) 2007 Google, Inc.
- * Copyright (c) 2007-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2007-2019, The Linux Foundation. All rights reserved.
  * Author: Mike A. Chan <mikechan@google.com>
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.	 See the
- * GNU General Public License for more details.
  *
  */
 
@@ -162,7 +154,8 @@ static int msm_cpufreq_init(struct cpufreq_policy *policy)
 		if (cpu_clk[cpu] == cpu_clk[policy->cpu])
 			cpumask_set_cpu(cpu, policy->cpus);
 
-	ret = cpufreq_table_validate_and_show(policy, table);
+	policy->freq_table = table;
+	ret = cpufreq_table_validate_and_sort(policy);
 	if (ret) {
 		pr_err("cpufreq: failed to get policy min/max\n");
 		return ret;
@@ -312,12 +305,12 @@ static struct freq_attr *msm_freq_attr[] = {
 static void msm_cpufreq_ready(struct cpufreq_policy *policy)
 {
 	struct device_node *np, *lmh_node;
-	unsigned int cpu = 0;
+	unsigned int cpu = policy->cpu;
 
-	if (cdev[policy->cpu])
+	if (cdev[cpu])
 		return;
 
-	np = of_cpu_device_node_get(policy->cpu);
+	np = of_cpu_device_node_get(cpu);
 	if (WARN_ON(!np))
 		return;
 
@@ -332,20 +325,11 @@ static void msm_cpufreq_ready(struct cpufreq_policy *policy)
 			goto ready_exit;
 		}
 
-		for_each_cpu(cpu, policy->related_cpus) {
-
-			of_node_put(np);
-			np = of_cpu_device_node_get(cpu);
-			if (WARN_ON(!np))
-				return;
-
-			cdev[cpu] = of_cpufreq_cooling_register(np, policy);
-			if (IS_ERR(cdev[cpu])) {
-				pr_err(
-				"running cpufreq for CPU%d without cooling dev: %ld\n",
-				cpu, PTR_ERR(cdev[cpu]));
-				cdev[cpu] = NULL;
-			}
+		cdev[cpu] = of_cpufreq_cooling_register(policy);
+		if (IS_ERR(cdev[cpu])) {
+			pr_err("running cpufreq for CPU%d without cooling dev: %ld\n",
+			       cpu, PTR_ERR(cdev[cpu]));
+			cdev[cpu] = NULL;
 		}
 	}
 

@@ -1,13 +1,6 @@
-/* Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _IPAHAL_I_H_
@@ -64,10 +57,7 @@
 	} while (0)
 
 #define IPAHAL_DBG_REG_IPC_ONLY(fmt, args...) \
-	do { \
-		IPA_IPC_LOGGING(ipahal_ctx->regdumpbuf, \
-			" %s:%d " fmt, ## args); \
-	} while (0)
+		IPA_IPC_LOGGING(ipahal_ctx->regdumpbuf, " %s:%d " fmt, ## args)
 
 #define IPAHAL_MEM_ALLOC(__size, __is_atomic_ctx) \
 	(kzalloc((__size), ((__is_atomic_ctx) ? GFP_ATOMIC : GFP_KERNEL)))
@@ -576,7 +566,7 @@ struct ipa_imm_cmd_hw_dma_task_32b_addr {
  * @frag_rule: Frag rule index in H/W frag table in case of frag hit
  * @hw_specific: H/W specific reserved value
  */
-struct ipa_pkt_status_hw {
+struct ipa_gen_pkt_status_hw {
 	u64 status_opcode:8;
 	u64 exception:8;
 	u64 status_mask:16;
@@ -607,7 +597,68 @@ struct ipa_pkt_status_hw {
 	u64 frag_hit:1;
 	u64 frag_rule:4;
 	u64 hw_specific:16;
-};
+} __packed;
+
+/*
+ * struct ipa_frag_pkt_status_hw - IPA status packet payload in H/W format.
+ *  This structure describes the frag status packet H/W structure for the
+ *   following statuses: IPA_NEW_FRAG_RULE.
+ * @status_opcode: The Type of the status (Opcode).
+ * @frag_rule_idx: Frag rule index value.
+ * @rsvd1: reserved
+ * @tbl_idx: Table index valid or not.
+ * @endp_src_idx: Source end point index.
+ * @exception: (not bitmask) - the first exception that took place.
+ *  In case of exception, src endp and pkt len are always valid.
+ * @rsvd2: reserved
+ * @seq_num: Packet sequence number.
+ * @src_ip_addr: Source packet IP address.
+ * @dest_ip_addr: Destination packet IP address.
+ * @rsvd3: reserved
+ * @nat_type: Defines the type of the NAT operation:
+ *	00: No NAT
+ *	01: Source NAT
+ *	10: Destination NAT
+ *	11: Reserved
+ * @protocol: Protocal number.
+ * @ip_id: IP packet IP ID number.
+ * @tlated_ip_addr: IP address.
+ * @hdr_local: Header table location flag: In header insertion, was the header
+ *  taken from the table resides in local memory? (If no, then system mem)
+ * @hdr_offset: Offset of used header in the header table
+ * @endp_dest_idx: Destination end point index.
+ * @ip_cksum_diff: IP packet checksum difference.
+ * @metadata: meta data value used by packet
+ * @rsvd4: reserved
+ */
+struct ipa_frag_pkt_status_hw {
+	u64 status_opcode:8;
+	u64 frag_rule_idx:4;
+	u64 reserved_1:3;
+	u64 tbl_idx:1;
+	u64 endp_src_idx:5;
+	u64 exception:1;
+	u64 reserved_2:2;
+	u64 seq_num:8;
+	u64 src_ip_addr:32;
+	u64 dest_ip_addr:32;
+	u64 reserved_3:6;
+	u64 nat_type:2;
+	u64 protocol:8;
+	u64 ip_id:16;
+	u64 tlated_ip_addr:32;
+	u64 hdr_local:1;
+	u64 hdr_offset:10;
+	u64 endp_dest_idx:5;
+	u64 ip_cksum_diff:16;
+	u64 metadata:32;
+	u64 reserved_4:32;
+} __packed;
+
+union ipa_pkt_status_hw {
+	struct ipa_gen_pkt_status_hw ipa_pkt;
+	struct ipa_frag_pkt_status_hw frag_pkt;
+} __packed;
 
 /* Size of H/W Packet Status */
 #define IPA3_0_PKT_STATUS_SIZE 32
@@ -621,10 +672,9 @@ struct ipa_pkt_status_hw {
 #define IPA_HDR_UCP_ETHII_TO_ETHII		9
 #define IPA_HDR_UCP_L2TP_HEADER_ADD		10
 #define IPA_HDR_UCP_L2TP_HEADER_REMOVE		11
-#define IPA_HDR_UCP_L2TP_UDP_HEADER_ADD		12
+#define IPA_HDR_UCP_L2TP_UDP_HEADER_ADD	12
 #define IPA_HDR_UCP_L2TP_UDP_HEADER_REMOVE	13
 #define IPA_HDR_UCP_ETHII_TO_ETHII_EX		14
-#define IPA_HDR_UCP_SET_DSCP		16
 
 /* Processing context TLV type */
 #define IPA_PROC_CTX_TLV_TYPE_END 0
@@ -759,17 +809,6 @@ struct ipa_hw_hdr_proc_ctx_add_hdr_ex {
 struct ipa_hw_hdr_proc_ctx_add_hdr_cmd_seq_ex {
 	struct ipa_hw_hdr_proc_ctx_hdr_add hdr_add;
 	struct ipa_hw_hdr_proc_ctx_add_hdr_ex hdr_add_ex;
-	struct ipa_hw_hdr_proc_ctx_tlv end;
-};
-
-/**
- * struct ipa_hw_hdr_proc_ctx_remove_l2tp_udp_hdr_cmd_seq -
- * IPA processing context header - process command sequence
- * @l2tp_params: l2tp params for header removal
- * @end: tlv end command (cmd.type must be 0)
- */
-struct ipa_hw_hdr_proc_ctx_remove_l2tp_udp_hdr_cmd_seq {
-	struct ipa_hw_hdr_proc_ctx_l2tp_remove_hdr l2tp_params;
 	struct ipa_hw_hdr_proc_ctx_tlv end;
 };
 

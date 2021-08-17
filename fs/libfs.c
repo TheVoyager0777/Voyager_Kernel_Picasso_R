@@ -252,7 +252,7 @@ struct dentry *mount_pseudo_xattr(struct file_system_type *fs_type, char *name,
 	struct inode *root;
 	struct qstr d_name = QSTR_INIT(name, strlen(name));
 
-	s = sget_userns(fs_type, NULL, set_anon_super, MS_KERNMOUNT|MS_NOUSER,
+	s = sget_userns(fs_type, NULL, set_anon_super, SB_KERNMOUNT|SB_NOUSER,
 			&init_user_ns, NULL);
 	if (IS_ERR(s))
 		return ERR_CAST(s);
@@ -283,7 +283,7 @@ struct dentry *mount_pseudo_xattr(struct file_system_type *fs_type, char *name,
 	d_instantiate(dentry, root);
 	s->s_root = dentry;
 	s->s_d_op = dops;
-	s->s_flags |= MS_ACTIVE;
+	s->s_flags |= SB_ACTIVE;
 	return dget(s->s_root);
 
 Enomem:
@@ -584,7 +584,7 @@ int simple_pin_fs(struct file_system_type *type, struct vfsmount **mount, int *c
 	spin_lock(&pin_fs_lock);
 	if (unlikely(!*mount)) {
 		spin_unlock(&pin_fs_lock);
-		mnt = vfs_kern_mount(type, MS_KERNMOUNT, type->name, NULL);
+		mnt = vfs_kern_mount(type, SB_KERNMOUNT, type->name, NULL);
 		if (IS_ERR(mnt))
 			return PTR_ERR(mnt);
 		spin_lock(&pin_fs_lock);
@@ -870,7 +870,7 @@ ssize_t simple_attr_write(struct file *file, const char __user *buf,
 			  size_t len, loff_t *ppos)
 {
 	struct simple_attr *attr;
-	unsigned long long val;
+	u64 val;
 	size_t size;
 	ssize_t ret;
 
@@ -888,9 +888,7 @@ ssize_t simple_attr_write(struct file *file, const char __user *buf,
 		goto out;
 
 	attr->set_buf[size] = '\0';
-	ret = kstrtoull(attr->set_buf, 0, &val);
-	if (ret)
-		goto out;
+	val = simple_strtoll(attr->set_buf, NULL, 0);
 	ret = attr->set(attr->data, val);
 	if (ret == 0)
 		ret = len; /* on success, claim we got the whole input */
@@ -1070,6 +1068,45 @@ int noop_fsync(struct file *file, loff_t start, loff_t end, int datasync)
 }
 EXPORT_SYMBOL(noop_fsync);
 
+int noop_set_page_dirty(struct page *page)
+{
+	/*
+	 * Unlike __set_page_dirty_no_writeback that handles dirty page
+	 * tracking in the page object, dax does all dirty tracking in
+	 * the inode address_space in response to mkwrite faults. In the
+	 * dax case we only need to worry about potentially dirty CPU
+	 * caches, not dirty page cache pages to write back.
+	 *
+	 * This callback is defined to prevent fallback to
+	 * __set_page_dirty_buffers() in set_page_dirty().
+	 */
+	return 0;
+}
+EXPORT_SYMBOL_GPL(noop_set_page_dirty);
+
+void noop_invalidatepage(struct page *page, unsigned int offset,
+		unsigned int length)
+{
+	/*
+	 * There is no page cache to invalidate in the dax case, however
+	 * we need this callback defined to prevent falling back to
+	 * block_invalidatepage() in do_invalidatepage().
+	 */
+}
+EXPORT_SYMBOL_GPL(noop_invalidatepage);
+
+ssize_t noop_direct_IO(struct kiocb *iocb, struct iov_iter *iter)
+{
+	/*
+	 * iomap based filesystems support direct I/O without need for
+	 * this callback. However, it still needs to be set in
+	 * inode->a_ops so that open/fcntl know that direct I/O is
+	 * generally supported.
+	 */
+	return -EINVAL;
+}
+EXPORT_SYMBOL_GPL(noop_direct_IO);
+
 /* Because kfree isn't assignment-compatible with void(void*) ;-/ */
 void kfree_link(void *p)
 {
@@ -1234,28 +1271,20 @@ bool needs_casefold(const struct inode *dir)
 }
 EXPORT_SYMBOL(needs_casefold);
 
-/**
- * generic_ci_d_compare - generic d_compare implementation for casefolding filesystems
- * @dentry:	dentry whose name we are checking against
- * @len:	len of name of dentry
- * @str:	str pointer to name of dentry
- * @name:	Name to compare against
- *
- * Return: 0 if names match, 1 if mismatch, or -ERRNO
- */
-static int generic_ci_d_compare(const struct dentry *dentry, unsigned int len,
-				const char *str, const struct qstr *name)
+int generic_ci_d_compare(const struct dentry *dentry, unsigned int len,
+			  const char *str, const struct qstr *name)
 {
 	const struct dentry *parent = READ_ONCE(dentry->d_parent);
-	const struct inode *dir = READ_ONCE(parent->d_inode);
+	const struct inode *inode = READ_ONCE(parent->d_inode);
 	const struct super_block *sb = dentry->d_sb;
 	const struct unicode_map *um = sb->s_encoding;
-	struct qstr qstr = QSTR_INIT(str, len);
+	struct qstr entry = QSTR_INIT(str, len);
 	char strbuf[DNAME_INLINE_LEN];
 	int ret;
 
-	if (!dir || !needs_casefold(dir))
+	if (!inode || !needs_casefold(inode))
 		goto fallback;
+
 	/*
 	 * If the dentry name is stored in-line, then it may be concurrently
 	 * modified by a rename.  If this happens, the VFS will eventually retry
@@ -1266,45 +1295,47 @@ static int generic_ci_d_compare(const struct dentry *dentry, unsigned int len,
 	if (len <= DNAME_INLINE_LEN - 1) {
 		memcpy(strbuf, str, len);
 		strbuf[len] = 0;
-		qstr.name = strbuf;
+		entry.name = strbuf;
 		/* prevent compiler from optimizing out the temporary buffer */
 		barrier();
 	}
 
-	ret = utf8_strncasecmp(um, name, &qstr);
+	ret = utf8_strncasecmp(um, name, &entry);
 	if (ret >= 0)
 		return ret;
 
-	if (sb_has_strict_encoding(sb))
+	if (sb_has_enc_strict_mode(sb))
 		return -EINVAL;
 fallback:
 	if (len != name->len)
 		return 1;
 	return !!memcmp(str, name->name, len);
 }
+EXPORT_SYMBOL(generic_ci_d_compare);
 
-/**
- * generic_ci_d_hash - generic d_hash implementation for casefolding filesystems
- * @dentry:	dentry of the parent directory
- * @str:	qstr of name whose hash we should fill in
- *
- * Return: 0 if hash was successful or unchanged, and -EINVAL on error
- */
-static int generic_ci_d_hash(const struct dentry *dentry, struct qstr *str)
+int generic_ci_d_hash(const struct dentry *dentry, struct qstr *str)
 {
-	const struct inode *dir = READ_ONCE(dentry->d_inode);
+	const struct inode *inode = READ_ONCE(dentry->d_inode);
 	struct super_block *sb = dentry->d_sb;
 	const struct unicode_map *um = sb->s_encoding;
 	int ret = 0;
 
-	if (!dir || !needs_casefold(dir))
+	if (!inode || !needs_casefold(inode))
 		return 0;
 
 	ret = utf8_casefold_hash(um, dentry, str);
-	if (ret < 0 && sb_has_strict_encoding(sb))
-		return -EINVAL;
+	if (ret < 0)
+		goto err;
+
 	return 0;
+err:
+	if (sb_has_enc_strict_mode(sb))
+		ret = -EINVAL;
+	else
+		ret = 0;
+	return ret;
 }
+EXPORT_SYMBOL(generic_ci_d_hash);
 
 static const struct dentry_operations generic_ci_dentry_ops = {
 	.d_hash = generic_ci_d_hash,
@@ -1318,7 +1349,7 @@ static const struct dentry_operations generic_encrypted_dentry_ops = {
 };
 #endif
 
-#if defined(CONFIG_FS_ENCRYPTION) && defined(CONFIG_UNICODE)
+#if IS_ENABLED(CONFIG_UNICODE) && IS_ENABLED(CONFIG_FS_ENCRYPTION)
 static const struct dentry_operations generic_encrypted_ci_dentry_ops = {
 	.d_hash = generic_ci_d_hash,
 	.d_compare = generic_ci_d_compare,
@@ -1328,48 +1359,28 @@ static const struct dentry_operations generic_encrypted_ci_dentry_ops = {
 
 /**
  * generic_set_encrypted_ci_d_ops - helper for setting d_ops for given dentry
- * @dentry:	dentry to set ops on
+ * @dir:	parent of dentry whose ops to set
+ * @dentry:	detnry to set ops on
  *
- * Casefolded directories need d_hash and d_compare set, so that the dentries
- * contained in them are handled case-insensitively.  Note that these operations
- * are needed on the parent directory rather than on the dentries in it, and
- * while the casefolding flag can be toggled on and off on an empty directory,
- * dentry_operations can't be changed later.  As a result, if the filesystem has
- * casefolding support enabled at all, we have to give all dentries the
- * casefolding operations even if their inode doesn't have the casefolding flag
- * currently (and thus the casefolding ops would be no-ops for now).
- *
- * Encryption works differently in that the only dentry operation it needs is
- * d_revalidate, which it only needs on dentries that have the no-key name flag.
- * The no-key flag can't be set "later", so we don't have to worry about that.
- *
- * Finally, to maximize compatibility with overlayfs (which isn't compatible
- * with certain dentry operations) and to avoid taking an unnecessary
- * performance hit, we use custom dentry_operations for each possible
- * combination rather than always installing all operations.
+ * This function sets the dentry ops for the given dentry to handle both
+ * casefolding and encryption of the dentry name.
  */
-void generic_set_encrypted_ci_d_ops(struct dentry *dentry)
+void generic_set_encrypted_ci_d_ops(struct inode *dir, struct dentry *dentry)
 {
 #ifdef CONFIG_FS_ENCRYPTION
-	bool needs_encrypt_ops = dentry->d_flags & DCACHE_NOKEY_NAME;
-#endif
+	if (dentry->d_flags & DCACHE_ENCRYPTED_NAME) {
 #ifdef CONFIG_UNICODE
-	bool needs_ci_ops = dentry->d_sb->s_encoding;
+		if (dir->i_sb->s_encoding) {
+			d_set_d_op(dentry, &generic_encrypted_ci_dentry_ops);
+			return;
+		}
 #endif
-#if defined(CONFIG_FS_ENCRYPTION) && defined(CONFIG_UNICODE)
-	if (needs_encrypt_ops && needs_ci_ops) {
-		d_set_d_op(dentry, &generic_encrypted_ci_dentry_ops);
-		return;
-	}
-#endif
-#ifdef CONFIG_FS_ENCRYPTION
-	if (needs_encrypt_ops) {
 		d_set_d_op(dentry, &generic_encrypted_dentry_ops);
 		return;
 	}
 #endif
 #ifdef CONFIG_UNICODE
-	if (needs_ci_ops) {
+	if (dir->i_sb->s_encoding) {
 		d_set_d_op(dentry, &generic_ci_dentry_ops);
 		return;
 	}

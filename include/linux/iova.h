@@ -1,6 +1,5 @@
 /*
  * Copyright (c) 2006, Intel Corporation.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This file is released under the GPLv2.
  *
@@ -15,7 +14,6 @@
 #include <linux/types.h>
 #include <linux/kernel.h>
 #include <linux/rbtree.h>
-#include <linux/radix-tree.h>
 #include <linux/atomic.h>
 #include <linux/dma-mapping.h>
 
@@ -72,10 +70,13 @@ struct iova_fq {
 struct iova_domain {
 	spinlock_t	iova_rbtree_lock; /* Lock to protect update of rbtree */
 	struct rb_root	rbroot;		/* iova domain rbtree root */
-	struct rb_node	*cached32_node; /* Save last alloced node */
+	struct rb_node	*cached_node;	/* Save last alloced node */
+	struct rb_node	*cached32_node; /* Save last 32-bit alloced node */
 	unsigned long	granule;	/* pfn granularity for this domain */
 	unsigned long	start_pfn;	/* Lower limit for this domain */
+	unsigned long	end_pfn;        /* Upper limit for this domain */
 	unsigned long	dma_32bit_pfn;
+	struct iova	anchor;		/* rbtree lookup anchor */
 	struct iova_rcache rcaches[IOVA_RANGE_CACHE_MAX_SIZE];	/* IOVA range caches */
 
 	iova_flush_cb	flush_cb;	/* Call-Back function to flush IOMMU
@@ -96,8 +97,6 @@ struct iova_domain {
 						   flush-queues */
 	atomic_t fq_timer_on;			/* 1 when timer is active, 0
 						   when not */
-	// add by xiaomi
-	struct radix_tree_root rdroot;
 	bool best_fit;
 };
 
@@ -153,12 +152,12 @@ void queue_iova(struct iova_domain *iovad,
 		unsigned long pfn, unsigned long pages,
 		unsigned long data);
 unsigned long alloc_iova_fast(struct iova_domain *iovad, unsigned long size,
-			      unsigned long limit_pfn);
+			      unsigned long limit_pfn, bool flush_rcache);
 struct iova *reserve_iova(struct iova_domain *iovad, unsigned long pfn_lo,
 	unsigned long pfn_hi);
 void copy_reserved_iova(struct iova_domain *from, struct iova_domain *to);
 void init_iova_domain(struct iova_domain *iovad, unsigned long granule,
-	unsigned long start_pfn, unsigned long pfn_32bit);
+	unsigned long start_pfn);
 bool has_iova_flush_queue(struct iova_domain *iovad);
 int init_iova_flush_queue(struct iova_domain *iovad,
 			  iova_flush_cb flush_cb, iova_entry_dtor entry_dtor);
@@ -167,7 +166,7 @@ void put_iova_domain(struct iova_domain *iovad);
 struct iova *split_and_remove_iova(struct iova_domain *iovad,
 	struct iova *iova, unsigned long pfn_lo, unsigned long pfn_hi);
 void free_cpu_cached_iovas(unsigned int cpu, struct iova_domain *iovad);
-void iommu_debug_init(struct iova_domain *iovad, const char *name);
+void free_global_cached_iovas(struct iova_domain *iovad);
 #else
 static inline int iova_cache_get(void)
 {
@@ -217,7 +216,8 @@ static inline void queue_iova(struct iova_domain *iovad,
 
 static inline unsigned long alloc_iova_fast(struct iova_domain *iovad,
 					    unsigned long size,
-					    unsigned long limit_pfn)
+					    unsigned long limit_pfn,
+					    bool flush_rcache)
 {
 	return 0;
 }
@@ -236,8 +236,7 @@ static inline void copy_reserved_iova(struct iova_domain *from,
 
 static inline void init_iova_domain(struct iova_domain *iovad,
 				    unsigned long granule,
-				    unsigned long start_pfn,
-				    unsigned long pfn_32bit)
+				    unsigned long start_pfn)
 {
 }
 
@@ -275,9 +274,11 @@ static inline void free_cpu_cached_iovas(unsigned int cpu,
 					 struct iova_domain *iovad)
 {
 }
-static inline void iommu_debug_init(struct iova_domain *iovad, const char *name)
+
+static inline void free_global_cached_iovas(struct iova_domain *iovad)
 {
 }
+
 #endif
 
 #endif

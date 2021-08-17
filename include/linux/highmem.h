@@ -42,7 +42,6 @@ void kmap_flush_unused(void);
 
 #ifdef CONFIG_ARCH_WANT_KMAP_ATOMIC_FLUSH
 void kmap_atomic_flush_unused(void);
-int kmap_remove_unused_cpu(unsigned int cpu);
 #else
 static inline void kmap_atomic_flush_unused(void) { }
 #endif
@@ -92,10 +91,6 @@ static inline void __kunmap_atomic(void *addr)
 #endif
 
 #endif /* CONFIG_HIGHMEM */
-
-#if !defined(CONFIG_HIGHMEM) || !defined(CONFIG_ARCH_WANT_KMAP_ATOMIC_FLUSH)
-static inline int kmap_remove_unused_cpu(unsigned int cpu) { return 0; }
-#endif
 
 #if defined(CONFIG_HIGHMEM) || defined(CONFIG_X86_32)
 
@@ -254,6 +249,8 @@ static inline void copy_user_highpage(struct page *to, struct page *from,
 
 #endif
 
+#ifndef __HAVE_ARCH_COPY_HIGHPAGE
+
 static inline void copy_highpage(struct page *to, struct page *from)
 {
 	char *vfrom, *vto;
@@ -264,5 +261,7 @@ static inline void copy_highpage(struct page *to, struct page *from)
 	kunmap_atomic(vto);
 	kunmap_atomic(vfrom);
 }
+
+#endif
 
 #endif /* _LINUX_HIGHMEM_H */

@@ -1,13 +1,5 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  */
 
 
@@ -31,6 +23,8 @@
 #include <dsp/msm_audio_ion.h>
 #include <dsp/q6adm-v2.h>
 #include "msm-pcm-afe-v2.h"
+
+#define DRV_NAME "msm-pcm-afe-v2"
 
 #define TIMEOUT_MS	1000
 #define MIN_PLAYBACK_PERIOD_SIZE (128 * 2)
@@ -864,13 +858,14 @@ static int msm_asoc_pcm_new(struct snd_soc_pcm_runtime *rtd)
 	return ret;
 }
 
-static int msm_afe_afe_probe(struct snd_soc_platform *platform)
+static int msm_afe_afe_probe(struct snd_soc_component *component)
 {
 	pr_debug("%s\n", __func__);
 	return 0;
 }
 
-static struct snd_soc_platform_driver msm_soc_platform = {
+static struct snd_soc_component_driver msm_soc_component = {
+	.name		= DRV_NAME,
 	.ops		= &msm_afe_ops,
 	.pcm_new	= msm_asoc_pcm_new,
 	.probe		= msm_afe_afe_probe,
@@ -880,14 +875,14 @@ static int msm_afe_probe(struct platform_device *pdev)
 {
 
 	pr_debug("%s: dev name %s\n", __func__, dev_name(&pdev->dev));
-	return snd_soc_register_platform(&pdev->dev,
-				   &msm_soc_platform);
+	return snd_soc_register_component(&pdev->dev,
+				   &msm_soc_component, NULL, 0);
 }
 
 static int msm_afe_remove(struct platform_device *pdev)
 {
 	pr_debug("%s\n", __func__);
-	snd_soc_unregister_platform(&pdev->dev);
+	snd_soc_unregister_component(&pdev->dev);
 	return 0;
 }
 static const struct of_device_id msm_pcm_afe_dt_match[] = {
@@ -901,6 +896,7 @@ static struct platform_driver msm_afe_driver = {
 		.name = "msm-pcm-afe",
 		.owner = THIS_MODULE,
 		.of_match_table = msm_pcm_afe_dt_match,
+		.suppress_bind_attrs = true,
 	},
 	.probe = msm_afe_probe,
 	.remove = msm_afe_remove,

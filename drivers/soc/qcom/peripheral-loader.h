@@ -1,13 +1,6 @@
-/* Copyright (c) 2010-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2010-2019, The Linux Foundation. All rights reserved.
  */
 #ifndef __MSM_PERIPHERAL_LOADER_H
 #define __MSM_PERIPHERAL_LOADER_H
@@ -50,6 +43,7 @@ do { \
  * @modem_ssr: true if modem is restarting, false if booting for first time.
  * @clear_fw_region: Clear fw region on failure in loading.
  * @subsys_vmid: memprot id for the subsystem.
+ * @extra_size: extra memory allocated at the end of the image.
  */
 struct pil_desc {
 	const char *name;
@@ -74,14 +68,13 @@ struct pil_desc {
 	bool signal_aop;
 	struct mbox_client cl;
 	struct mbox_chan *mbox;
-#ifdef CONFIG_QCOM_MINIDUMP
 	struct md_ss_toc *minidump_ss;
 	struct md_ss_toc **aux_minidump;
 	int minidump_id;
 	int *aux_minidump_ids;
 	int num_aux_minidump_ids;
 	bool minidump_as_elf32;
-#endif
+	u32 extra_size;
 };
 
 /**

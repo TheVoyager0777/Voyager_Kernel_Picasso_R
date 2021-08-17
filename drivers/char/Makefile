@@ -27,7 +27,6 @@ obj-$(CONFIG_SONYPI)		+= sonypi.o
 obj-$(CONFIG_RTC)		+= rtc.o
 obj-$(CONFIG_HPET)		+= hpet.o
 obj-$(CONFIG_EFI_RTC)		+= efirtc.o
-obj-$(CONFIG_DS1302)		+= ds1302.o
 obj-$(CONFIG_XILINX_HWICAP)	+= xilinx_hwicap/
 ifeq ($(CONFIG_GENERIC_NVRAM),y)
   obj-$(CONFIG_NVRAM)	+= generic_nvram.o
@@ -58,20 +57,16 @@ obj-$(CONFIG_PS3_FLASH)		+= ps3flash.o
 obj-$(CONFIG_JS_RTC)		+= js-rtc.o
 js-rtc-y = rtc.o
 
-obj-$(CONFIG_TILE_SROM)		+= tile-srom.o
 obj-$(CONFIG_XILLYBUS)		+= xillybus/
 obj-$(CONFIG_POWERNV_OP_PANEL)	+= powernv-op-panel.o
-obj-$(CONFIG_DIAG_CHAR)		+= diag/
 obj-$(CONFIG_MSM_ADSPRPC)	+= adsprpc.o
 ifdef CONFIG_COMPAT
   obj-$(CONFIG_MSM_ADSPRPC)	+= adsprpc_compat.o
 endif
-obj-$(CONFIG_VIRTIO_FASTRPC)	+= virtio_fastrpc.o
-ifdef CONFIG_COMPAT
-  obj-$(CONFIG_VIRTIO_FASTRPC)	+= adsprpc_compat.o
-endif
 obj-$(CONFIG_MSM_FASTCVPD)	+= fastcvpd.o
 obj-$(CONFIG_MSM_RDBG)		+= rdbg.o
+obj-$(CONFIG_ADI)		+= adi.o
+obj-$(CONFIG_DIAG_CHAR)		+= diag/
 obj-$(CONFIG_OKL4_PIPE)		+= okl4_pipe.o
 CFLAGS_okl4_pipe.o			+= -Werror
 obj-$(CONFIG_VSERVICES_SERIAL)		+= vservices_serial.o
@@ -80,3 +75,6 @@ obj-$(CONFIG_VSERVICES_SERIAL_CLIENT)	+= vs_serial_client.o
 CFLAGS_vs_serial_client.o	 += -Werror
 obj-$(CONFIG_VSERVICES_SERIAL_SERVER)	+= vs_serial_server.o
 CFLAGS_vs_serial_server.o	+= -Werror
+obj-$(CONFIG_XLOGCHAR)		+= xlogchar.o
+obj-$(CONFIG_RB5_FAN_CONTROLLER)	+= rb5_fan.o
+obj-$(CONFIG_RB5_GPIOS_ENABLE)	+= rb5-gpios-enable.o

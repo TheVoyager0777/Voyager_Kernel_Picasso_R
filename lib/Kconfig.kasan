@@ -5,13 +5,11 @@ config HAVE_ARCH_KASAN
 config HAVE_ARCH_KASAN_SW_TAGS
 	bool
 
-# Upstream uses $(cc-option, -fsanitize=kernel-address), which requires
-# cc-option support. Here we instead check CC in scripts/Makefile.kasan.
 config CC_HAS_KASAN_GENERIC
-	def_bool HAVE_ARCH_KASAN
+	def_bool $(cc-option, -fsanitize=kernel-address)
 
 config CC_HAS_KASAN_SW_TAGS
-	def_bool HAVE_ARCH_KASAN_SW_TAGS
+	def_bool $(cc-option, -fsanitize=kernel-hwaddress)
 
 config KASAN
 	bool "KASAN: runtime memory debugger"

@@ -1,13 +1,6 @@
-/* Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
+/*
+ * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
  */
 
 /*
@@ -2212,8 +2205,7 @@ struct ipa_ul_firewall_config_result_type_v01 {
  * uplink firewall rules.
  */
 struct ipa_configure_ul_firewall_rules_ind_msg_v01 {
-
-	 struct ipa_ul_firewall_config_result_type_v01 result;
+	struct ipa_ul_firewall_config_result_type_v01 result;
 };  /* Message */
 
 
@@ -2494,8 +2486,6 @@ enum ipa_ep_desc_type_enum_v01 {
 	DATA_EP_DESC_TYPE_TETH_PROD_V01 = 0x07,
 	DATA_EP_DESC_TYPE_TETH_RMNET_CONS_V01 = 0x08,
 	DATA_EP_DESC_TYPE_TETH_RMNET_PROD_V01 = 0x09,
-	DATA_EP_DESC_TYPE_EMB_FLOW_CTL_CONS_V01 = 0x0A,
-	DATA_EP_DESC_TYPE_EMB_FLOW_CTL_PROD_V01 = 0x0B,
 	IPA_EP_DESC_TYPE_ENUM_MAX_VAL_V01 = IPA_INT_MAX,
 };
 

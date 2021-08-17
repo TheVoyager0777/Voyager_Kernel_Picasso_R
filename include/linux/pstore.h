@@ -2,6 +2,7 @@
  * Persistent Storage - pstore.h
  *
  * Copyright (C) 2010 Intel Corporation <tony.luck@intel.com>
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This code is the generic layer to export data records from platform
  * level persistent storage via a file system.
@@ -71,7 +72,7 @@ struct pstore_record {
 	struct pstore_info	*psi;
 	enum pstore_type_id	type;
 	u64			id;
-	struct timespec		time;
+	struct timespec64	time;
 	char			*buf;
 	ssize_t			size;
 	ssize_t			ecc_notice_size;
@@ -90,10 +91,7 @@ struct pstore_record {
  *
  * @buf_lock:	semaphore to serialize access to @buf
  * @buf:	preallocated crash dump buffer
- * @bufsize:	size of @buf available for crash dump bytes (must match
- *		smallest number of bytes available for writing to a
- *		backend entry, since compressed bytes don't take kindly
- *		to being truncated)
+ * @bufsize:	size of @buf available for crash dump writes
  *
  * @read_mutex:	serializes @open, @read, @close, and @erase callbacks
  * @flags:	bitfield of frontends the backend can accept writes for

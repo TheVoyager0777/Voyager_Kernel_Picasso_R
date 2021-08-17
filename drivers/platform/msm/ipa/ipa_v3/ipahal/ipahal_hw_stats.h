@@ -1,13 +1,6 @@
-/* Copyright (c) 2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _IPAHAL_HW_STATS_H_
@@ -266,5 +259,15 @@ int ipahal_stats_get_offset(enum ipahal_hw_stats_type type, void *params,
 int ipahal_parse_stats(enum ipahal_hw_stats_type type, void *init_params,
 	void *raw_stats, void *parsed_stats);
 
+
+/*
+ * ipahal_set_flt_rt_sw_stats - set sw counter stats for FnR
+ * @raw_stats: stats write to IPA SRAM
+ * @sw_stats: FnR sw stats to be written
+ *
+ * Return: None
+ */
+void ipahal_set_flt_rt_sw_stats(void *raw_stats,
+	struct ipa_flt_rt_stats sw_stats);
 
 #endif /* _IPAHAL_HW_STATS_H_ */

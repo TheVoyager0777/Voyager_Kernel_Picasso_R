@@ -1,4 +1,5 @@
-/* Copyright (c) 2016, 2018-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2016, 2018-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -125,10 +126,8 @@ static int cpp_get_clk_freq_tbl_dt(struct cpp_device *cpp_dev)
 
 	rc = of_property_read_u32_array(of_node, "qcom,src-clock-rates",
 		rates, count);
-	if (rc) {
+	if (rc)
 		rc = -EINVAL;
-		goto mem_free;
-	}
 
 	for (i = 0; i < count; i++) {
 		pr_debug("entry=%d\n", rates[i]);
@@ -146,8 +145,6 @@ static int cpp_get_clk_freq_tbl_dt(struct cpp_device *cpp_dev)
 	pr_debug("%s: idx %d\n", __func__, idx);
 	hw_info->freq_tbl_count = idx;
 
-mem_free:
-	devm_kfree(&cpp_dev->pdev->dev, rates);
 err:
 	return rc;
 }

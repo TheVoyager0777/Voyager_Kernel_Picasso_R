@@ -1,16 +1,8 @@
-/* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
  */
 
-/* SPDX-License-Identifier: GPL-2.0 */
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM kmem
 
@@ -184,24 +176,21 @@ TRACE_EVENT(mm_page_free,
 
 TRACE_EVENT(mm_page_free_batched,
 
-	TP_PROTO(struct page *page, int cold),
+	TP_PROTO(struct page *page),
 
-	TP_ARGS(page, cold),
+	TP_ARGS(page),
 
 	TP_STRUCT__entry(
 		__field(	unsigned long,	pfn		)
-		__field(	int,		cold		)
 	),
 
 	TP_fast_assign(
 		__entry->pfn		= page_to_pfn(page);
-		__entry->cold		= cold;
 	),
 
-	TP_printk("page=%p pfn=%lu order=0 cold=%d",
+	TP_printk("page=%p pfn=%lu order=0",
 			pfn_to_page(__entry->pfn),
-			__entry->pfn,
-			__entry->cold)
+			__entry->pfn)
 );
 
 TRACE_EVENT(mm_page_alloc,
@@ -861,6 +850,54 @@ DEFINE_EVENT(iommu_sec_ptbl_map_range, iommu_sec_ptbl_map_range_end,
 		size_t len),
 
 	TP_ARGS(sec_id, num, va, pa, len)
+	);
+
+/*
+ * Required for uniquely and securely identifying mm in rss_stat tracepoint.
+ */
+#ifndef __PTR_TO_HASHVAL
+static unsigned int __maybe_unused mm_ptr_to_hash(const void *ptr)
+{
+	int ret;
+	unsigned long hashval;
+
+	ret = ptr_to_hashval(ptr, &hashval);
+	if (ret)
+		return 0;
+
+	/* The hashed value is only 32-bit */
+	return (unsigned int)hashval;
+}
+#define __PTR_TO_HASHVAL
+#endif
+
+TRACE_EVENT(rss_stat,
+
+	TP_PROTO(struct mm_struct *mm,
+		int member,
+		long count),
+
+	TP_ARGS(mm, member, count),
+
+	TP_STRUCT__entry(
+		__field(unsigned int, mm_id)
+		__field(unsigned int, curr)
+		__field(int, member)
+		__field(long, size)
+	),
+
+	TP_fast_assign(
+		__entry->mm_id = mm_ptr_to_hash(mm);
+		__entry->curr = !!(current->mm == mm);
+		__entry->member = member;
+		__entry->size = (count << PAGE_SHIFT);
+	),
+
+	TP_printk("mm_id=%u curr=%d member=%d size=%ldB",
+		__entry->mm_id,
+		__entry->curr,
+		__entry->member,
+		__entry->size)
 	);
 #endif /* _TRACE_KMEM_H */
 

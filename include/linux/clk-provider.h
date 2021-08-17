@@ -13,6 +13,7 @@
 
 #include <linux/io.h>
 #include <linux/of.h>
+#include <linux/of_clk.h>
 #include <linux/mutex.h>
 
 #ifdef CONFIG_COMMON_CLK
@@ -21,6 +22,8 @@
  * flags used across common struct clk.  these flags should only affect the
  * top-level framework.  custom flags for dealing with hardware specifics
  * belong in struct clk_foo
+ *
+ * Please update clk_flags[] in drivers/clk/clk.c when making changes here!
  */
 #define CLK_SET_RATE_GATE	BIT(0) /* must be gated across rate change */
 #define CLK_SET_PARENT_GATE	BIT(1) /* must be gated across re-parent */
@@ -38,12 +41,13 @@
 #define CLK_OPS_PARENT_ENABLE	BIT(12)
 /* duty cycle call may be forwarded to the parent clock */
 #define CLK_DUTY_CYCLE_PARENT	BIT(13)
-#define CLK_ENABLE_HAND_OFF	BIT(14) /* enable clock when registered. */
+#define CLK_DONT_HOLD_STATE	BIT(14) /* Don't hold state */
+#define CLK_ENABLE_HAND_OFF	BIT(15) /* enable clock when registered. */
 					/*
 					 * hand-off enable_count & prepare_count
 					 * to first consumer that enables clk
 					 */
-#define CLK_IS_MEASURE          BIT(15) /* measure clock */
+#define CLK_IS_MEASURE          BIT(16) /* measure clock */
 
 struct clk;
 struct clk_hw;
@@ -261,7 +265,7 @@ struct clk_ops {
 	int		(*set_duty_cycle)(struct clk_hw *hw,
 					  struct clk_duty *duty);
 	void		(*init)(struct clk_hw *hw);
-	int		(*debug_init)(struct clk_hw *hw, struct dentry *dentry);
+	void		(*debug_init)(struct clk_hw *hw, struct dentry *dentry);
 	int		(*set_flags)(struct clk_hw *hw, unsigned int flags);
 	void		(*list_registers)(struct seq_file *f,
 							struct clk_hw *hw);
@@ -516,6 +520,7 @@ struct clk_divider {
 	spinlock_t	*lock;
 };
 
+#define clk_div_mask(width)	((1 << (width)) - 1)
 #define to_clk_divider(_hw) container_of(_hw, struct clk_divider, hw)
 
 #define CLK_DIVIDER_ONE_BASED		BIT(0)
@@ -525,7 +530,6 @@ struct clk_divider {
 #define CLK_DIVIDER_ROUND_CLOSEST	BIT(4)
 #define CLK_DIVIDER_READ_ONLY		BIT(5)
 #define CLK_DIVIDER_MAX_AT_ZERO		BIT(6)
-#define CLK_DIVIDER_ROUND_KHZ	BIT(7)
 
 extern const struct clk_ops clk_divider_ops;
 extern const struct clk_ops clk_divider_ro_ops;
@@ -537,6 +541,10 @@ long divider_round_rate_parent(struct clk_hw *hw, struct clk_hw *parent,
 			       unsigned long rate, unsigned long *prate,
 			       const struct clk_div_table *table,
 			       u8 width, unsigned long flags);
+long divider_ro_round_rate_parent(struct clk_hw *hw, struct clk_hw *parent,
+				  unsigned long rate, unsigned long *prate,
+				  const struct clk_div_table *table, u8 width,
+				  unsigned long flags, unsigned int val);
 int divider_get_val(unsigned long rate, unsigned long parent_rate,
 		const struct clk_div_table *table, u8 width,
 		unsigned long flags);
@@ -567,8 +575,9 @@ void clk_hw_unregister_divider(struct clk_hw *hw);
  *
  * @hw:		handle between common and hardware-specific interfaces
  * @reg:	register controlling multiplexer
+ * @table:	array of register values corresponding to the parent index
  * @shift:	shift to multiplexer bit field
- * @width:	width of mutliplexer bit field
+ * @mask:	mask of mutliplexer bit field
  * @flags:	hardware-specific flags
  * @lock:	register lock
  *
@@ -627,6 +636,10 @@ struct clk_hw *clk_hw_register_mux_table(struct device *dev, const char *name,
 		unsigned long flags,
 		void __iomem *reg, u8 shift, u32 mask,
 		u8 clk_mux_flags, u32 *table, spinlock_t *lock);
+
+int clk_mux_val_to_index(struct clk_hw *hw, u32 *table, unsigned int flags,
+			 unsigned int val);
+unsigned int clk_mux_index_to_val(u32 *table, unsigned int flags, u8 index);
 
 void clk_unregister_mux(struct clk *clk);
 void clk_hw_unregister_mux(struct clk_hw *hw);
@@ -802,10 +815,10 @@ struct clk_gpio {
 
 extern const struct clk_ops clk_gpio_gate_ops;
 struct clk *clk_register_gpio_gate(struct device *dev, const char *name,
-		const char *parent_name, unsigned gpio, bool active_low,
+		const char *parent_name, struct gpio_desc *gpiod,
 		unsigned long flags);
 struct clk_hw *clk_hw_register_gpio_gate(struct device *dev, const char *name,
-		const char *parent_name, unsigned gpio, bool active_low,
+		const char *parent_name, struct gpio_desc *gpiod,
 		unsigned long flags);
 void clk_hw_unregister_gpio_gate(struct clk_hw *hw);
 
@@ -821,11 +834,11 @@ void clk_hw_unregister_gpio_gate(struct clk_hw *hw);
 
 extern const struct clk_ops clk_gpio_mux_ops;
 struct clk *clk_register_gpio_mux(struct device *dev, const char *name,
-		const char * const *parent_names, u8 num_parents, unsigned gpio,
-		bool active_low, unsigned long flags);
+		const char * const *parent_names, u8 num_parents, struct gpio_desc *gpiod,
+		unsigned long flags);
 struct clk_hw *clk_hw_register_gpio_mux(struct device *dev, const char *name,
-		const char * const *parent_names, u8 num_parents, unsigned gpio,
-		bool active_low, unsigned long flags);
+		const char * const *parent_names, u8 num_parents, struct gpio_desc *gpiod,
+		unsigned long flags);
 void clk_hw_unregister_gpio_mux(struct clk_hw *hw);
 
 /**
@@ -850,6 +863,7 @@ void devm_clk_unregister(struct device *dev, struct clk *clk);
 
 void clk_hw_unregister(struct clk_hw *hw);
 void devm_clk_hw_unregister(struct device *dev, struct clk_hw *hw);
+void clk_sync_state(struct device *dev);
 
 /* helper functions */
 const char *__clk_get_name(const struct clk *clk);
@@ -867,6 +881,7 @@ unsigned long clk_hw_get_flags(const struct clk_hw *hw);
 	(clk_hw_get_flags((hw)) & CLK_SET_RATE_PARENT)
 
 bool clk_hw_is_prepared(const struct clk_hw *hw);
+bool clk_hw_rate_is_protected(const struct clk_hw *hw);
 bool clk_hw_is_enabled(const struct clk_hw *hw);
 bool __clk_is_enabled(struct clk *clk);
 struct clk *__clk_lookup(const char *name);
@@ -902,14 +917,23 @@ static inline long divider_round_rate(struct clk_hw *hw, unsigned long rate,
 					 rate, prate, table, width, flags);
 }
 
+static inline long divider_ro_round_rate(struct clk_hw *hw, unsigned long rate,
+					 unsigned long *prate,
+					 const struct clk_div_table *table,
+					 u8 width, unsigned long flags,
+					 unsigned int val)
+{
+	return divider_ro_round_rate_parent(hw, clk_hw_get_parent(hw),
+					    rate, prate, table, width, flags,
+					    val);
+}
+
 /*
  * FIXME clock api without lock protection
  */
 unsigned long clk_hw_round_rate(struct clk_hw *hw, unsigned long rate);
 
 struct of_device_id;
-
-typedef void (*of_clk_init_cb_t)(struct device_node *);
 
 struct clk_onecell_data {
 	struct clk **clks;
@@ -937,6 +961,44 @@ extern struct of_device_id __clk_of_table;
 	}								\
 	OF_DECLARE_1(clk, name, compat, name##_of_clk_init_driver)
 
+#define CLK_HW_INIT(_name, _parent, _ops, _flags)		\
+	(&(struct clk_init_data) {				\
+		.flags		= _flags,			\
+		.name		= _name,			\
+		.parent_names	= (const char *[]) { _parent },	\
+		.num_parents	= 1,				\
+		.ops		= _ops,				\
+	})
+
+#define CLK_HW_INIT_PARENTS(_name, _parents, _ops, _flags)	\
+	(&(struct clk_init_data) {				\
+		.flags		= _flags,			\
+		.name		= _name,			\
+		.parent_names	= _parents,			\
+		.num_parents	= ARRAY_SIZE(_parents),		\
+		.ops		= _ops,				\
+	})
+
+#define CLK_HW_INIT_NO_PARENT(_name, _ops, _flags)	\
+	(&(struct clk_init_data) {			\
+		.flags          = _flags,		\
+		.name           = _name,		\
+		.parent_names   = NULL,			\
+		.num_parents    = 0,			\
+		.ops            = _ops,			\
+	})
+
+#define CLK_FIXED_FACTOR(_struct, _name, _parent,			\
+			_div, _mult, _flags)				\
+	struct clk_fixed_factor _struct = {				\
+		.div		= _div,					\
+		.mult		= _mult,				\
+		.hw.init	= CLK_HW_INIT(_name,			\
+					      _parent,			\
+					      &clk_fixed_factor_ops,	\
+					      _flags),			\
+	}
+
 #ifdef CONFIG_OF
 int of_clk_add_provider(struct device_node *np,
 			struct clk *(*clk_src_get)(struct of_phandle_args *args,
@@ -959,13 +1021,10 @@ struct clk_hw *of_clk_hw_simple_get(struct of_phandle_args *clkspec,
 struct clk *of_clk_src_onecell_get(struct of_phandle_args *clkspec, void *data);
 struct clk_hw *of_clk_hw_onecell_get(struct of_phandle_args *clkspec,
 				     void *data);
-unsigned int of_clk_get_parent_count(struct device_node *np);
 int of_clk_parent_fill(struct device_node *np, const char **parents,
 		       unsigned int size);
-const char *of_clk_get_parent_name(struct device_node *np, int index);
 int of_clk_detect_critical(struct device_node *np, int index,
 			    unsigned long *flags);
-void of_clk_init(const struct of_device_id *matches);
 
 #else /* !CONFIG_OF */
 
@@ -1012,26 +1071,16 @@ of_clk_hw_onecell_get(struct of_phandle_args *clkspec, void *data)
 {
 	return ERR_PTR(-ENOENT);
 }
-static inline unsigned int of_clk_get_parent_count(struct device_node *np)
-{
-	return 0;
-}
 static inline int of_clk_parent_fill(struct device_node *np,
 				     const char **parents, unsigned int size)
 {
 	return 0;
-}
-static inline const char *of_clk_get_parent_name(struct device_node *np,
-						 int index)
-{
-	return NULL;
 }
 static inline int of_clk_detect_critical(struct device_node *np, int index,
 					  unsigned long *flags)
 {
 	return 0;
 }
-static inline void of_clk_init(const struct of_device_id *matches) {}
 #endif /* CONFIG_OF */
 
 /*
@@ -1064,17 +1113,6 @@ static inline void clk_writel(u32 val, u32 __iomem *reg)
 }
 
 #endif	/* platform dependent I/O accessors */
-
-#ifdef CONFIG_DEBUG_FS
-struct dentry *clk_debugfs_add_file(struct clk_hw *hw, char *name, umode_t mode,
-				void *data, const struct file_operations *fops);
-#endif
-#else
-struct of_device_id;
-
-static inline void __init of_clk_init(const struct of_device_id *matches)
-{
-}
 
 #endif /* CONFIG_COMMON_CLK */
 #endif /* CLK_PROVIDER_H */

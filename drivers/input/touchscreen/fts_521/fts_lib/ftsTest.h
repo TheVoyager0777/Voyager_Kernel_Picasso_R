@@ -92,11 +92,7 @@
 #define MS_TOTAL_CX_ADJH_LP_MAP_MAX "MS_TOUCH_LOWPOWER_TOTAL_CX_ADJ_HORIZONTAL"
 #define MS_TOTAL_CX_ADJV_LP_MAP_MAX "MS_TOUCH_LOWPOWER_TOTAL_CX_ADJ_VERTICAL"
 #define SS_RAW_FORCE_MIN_MAX			"SS_RAW_DATA_FORCE_MIN_MAX"
-#define SS_RAW_FORCE_EACH_NODE_MIN 	"SS_RAW_DATA_FORCE_EACH_MIN"
-#define SS_RAW_FORCE_EACH_NODE_MAX	"SS_RAW_DATA_FORCE_EACH_MAX"
 #define SS_RAW_SENSE_MIN_MAX			"SS_RAW_DATA_SENSE_MIN_MAX"
-#define SS_RAW_SENSE_EACH_NODE_MIN 	"SS_RAW_DATA_SENSE_EACH_MIN"
-#define SS_RAW_SENSE_EACH_NODE_MAX	"SS_RAW_DATA_SENSE_EACH_MAX"
 #define SS_RAW_FORCE_GAP				"SS_RAW_DATA_FORCE_GAP"
 #define SS_RAW_SENSE_GAP				"SS_RAW_DATA_SENSE_GAP"
 #define SS_RAW_LP_FORCE_MIN_MAX			"SS_RAW_LOWPOWER_DATA_FORCE_MIN_MAX"
@@ -162,14 +158,10 @@
 typedef struct {
 	int MutualRaw;																/*MS Raw min/Max test*/
 	int MutualRawEachNode;
-	int MutualRawMap;/* /< MS Raw min/Max test for each node */
-	int MutualRawGap;															/*MS Raw Gap(max-min) test*/
-	int MutualRawAdj;
-	int MutualRawAdjGap;/* /< MS Raw Adjacent Gap (max-min) test */
-	int MutualRawAdjPeak;															/*MS Raw Adjacent test*/
-	int MutualRawLP;
-	int MutualRawMapLP;															/*MS Low Power Raw min/Max test*/
-	int MutualRawGapLP;															/*MS Low Power Raw Gap(max-min) test*/
+    int MutualRawGap;															/*MS Raw Gap(max-min) test*/
+	int MutualRawAdj;															/*MS Raw Adjacent test*/
+	int MutualRawLP;															/*MS Low Power Raw min/Max test*/
+    int MutualRawGapLP;															/*MS Low Power Raw Gap(max-min) test*/
 	int MutualRawAdjLP;															/*MS Low Power Raw Adjacent test*/
 	int MutualRawAdjITO;														/*MS Raw Adjacent test during ITO test*/
 
@@ -180,7 +172,7 @@ typedef struct {
 	int MutualCxTotalAdj;														/*MS Total vertical and Horizontal Adj Cx2 min/Max (for each node) test*/
 	int MutualCx1LP;	/* /< MS LowPower Cx1 min/Max test */
 	int MutualCx2LP;	/* /< MS LowPower Cx2 min/Max (for each node) test */
-	int MutualCx2TotalLP;	/* /< MS LowPower Vertical and Horizontal Adj Cx2 min/Max
+	int MutualCx2AdjLP;	/* /< MS LowPower Vertical and Horizontal Adj Cx2 min/Max
 				 * (for each node) test */
 	int MutualCxTotalLP;	/* /< MS Total LowPower Cx min/Max (for each node) test
 				 * */
@@ -196,12 +188,11 @@ typedef struct {
 	int SelfHoverSenceRaw;														/*SS Hover Sence Raw min/Max test */
 	int SelfHoverForceIxTotal;													/*SS Hover Total Force Ix min/Max (for each node)* test */
 	int SelfHoverSenceIxTotal;													/*SS Hover Total Sence Ix min/Max (for each node)* test */
-	int SelfForceRaw;	/* /< SS Force Raw min/Max test */
-	int SelfForceRawGap;	/* /< SS Force Raw Gap(max-min) test */
-	int SelfForceRawMap;	/* /< SS Force Raw min/Max Map test */
-	int SelfForceRawLP;	/* /< SS Low Power Force Raw min/Max test */
-	int SelfForceRawGapLP;	/* /< SS Low Power Force Raw Gap(max-min)test */
-	int SelfForceRawMapLP;	/* /< SS Low Power Force Raw min/Max Map test */
+
+	int SelfForceRaw;															/*SS Force Raw min/Max test*/
+    int SelfForceRawGap;														/*SS Force Raw Gap(max-min) test*/
+	int SelfForceRawLP;															/*SS Low Power Force Raw min/Max test*/
+    int SelfForceRawGapLP;														/*SS Low Power Force Raw Gap(max-min) test*/
 
 	int SelfForceIx1;															/*SS Force Ix1 min/Max test*/
 	int SelfForceIx2;															/*SS Force Ix2 min/Max (for each node) test*/
@@ -213,29 +204,11 @@ typedef struct {
 	int SelfForceCx2Adj;														/*SS Vertical Adj Force Cx2 min/Max (for each node) test*/
 	int SelfForceCxTotal;														/*SS Total Force Cx min/Max (for each node) test*/
 	int SelfForceCxTotalAdj;													/*SS Total Vertical Adj Force Cx min/Max (for each node) test*/
-	int SelfForceIx1LP;	/* /< SS LP Force Ix1 min/Max test */
-	int SelfForceIx2LP;	/* /< SS LP Force Ix2 min/Max (for each node)
-				 *  test */
-	int SelfForceIx2AdjLP;	/* /< SS LP Vertical Adj Force Ix2 min/Max
-				  * (for each node) test */
-	int SelfForceIxTotalLP;	/* /< SS LP Total Force Ix min/Max
-				 * (for each node) test */
-	int SelfForceIxTotalAdjLP;	/* /< SS LP Total Vertical Adj Force Ix
-					 * min/Max (for each node) test */
-	int SelfForceCx1LP;	/* /< SS LP Force Cx1 min/Max test */
-	int SelfForceCx2LP; /* /< SS LP Force Cx2 min/Max (for each node) test */
-	int SelfForceCx2AdjLP;	/* /< SS LP Vertical Adj Force Cx2 min/Max (for
-				 * each node) test */
-	int SelfForceCxTotalLP;	/* /< SS LP Total Force Cx min/Max
-				 * (for each node) test */
-	int SelfForceCxTotalAdjLP;	/* /< SS LP Total Vertical Adj Force Cx
-					 * min/Max (for each node) test */
+
 	int SelfSenseRaw;															/*SS Sense Raw min/Max test*/
-	int SelfSenseRawGap;
-	int SelfSenseRawMap;/* /< SS Sense Raw min/Max test for each node */														/*SS Sense Raw Gap(max-min) test*/
+    int SelfSenseRawGap;														/*SS Sense Raw Gap(max-min) test*/
 	int SelfSenseRawLP;															/*SS Low Power Sense Raw min/Max test*/
-	int SelfSenseRawGapLP;														/*SS Low Power Sense Raw Gap(max-min) test*/
-	int SelfSenseRawMapLP;	/* /< SS Low Power Sense Raw min/Max test for each node */
+    int SelfSenseRawGapLP;														/*SS Low Power Sense Raw Gap(max-min) test*/
 
 	int SelfSenseIx1;															/*SS Sense Ix1 min/Max test*/
 	int SelfSenseIx2;															/*SS Sense Ix2 min/Max (for each node) test*/
@@ -248,24 +221,6 @@ typedef struct {
 	int SelfSenseCxTotal;														/*SS Total Sense Cx min/Max (for each node) test*/
 	int SelfSenseCxTotalAdj;													/*SS Total Horizontal Adj Sense Cx min/Max (for each node) test*/
 
-	int SelfSenseIx1LP;	/* /< SS LP Sense Ix1 min/Max test */
-	int SelfSenseIx2LP; /* /< SS LP Sense Ix2 min/Max (for each node)
-			     * test */
-	int SelfSenseIx2AdjLP;	/* /< SS LP Horizontal Adj Sense Ix2 min/Max
-				  * (for each node) test */
-	int SelfSenseIxTotalLP;	/* /< SS LP Total Horizontal Sense Ix min/Max
-				  * (for each node) test */
-	int SelfSenseIxTotalAdjLP; /* /< SS LP Total Horizontal Adj Sense Ix
-					 * min/Max (for each node) test */
-	int SelfSenseCx1LP;	/* /< SS LP Sense Cx1 min/Max test */
-	int SelfSenseCx2LP; /* /< SS LP Sense Cx2 min/Max (for each node)
-				* test */
-	int SelfSenseCx2AdjLP;	/* /< SS LP Horizontal Adj Sense Cx2 min/Max
-				  * (for each node) test */
-	int SelfSenseCxTotalLP;	/* /< SS LP Total Sense Cx min/Max
-				 * (for each node) test */
-	int SelfSenseCxTotalAdjLP; /* /< SS LP Total Horizontal Adj Sense Cx
-					 * min/Max (for each node) test */
 } TestToDo;
 
 #define MAX_LIMIT_FILE_NAME					100									/*max number of chars of the limit file name*/

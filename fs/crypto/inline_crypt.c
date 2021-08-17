@@ -16,7 +16,6 @@
 #include <linux/blkdev.h>
 #include <linux/buffer_head.h>
 #include <linux/keyslot-manager.h>
-#include <linux/overflow.h>
 #include <linux/uio.h>
 
 #include "fscrypt_private.h"

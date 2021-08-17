@@ -1,14 +1,5 @@
-/* Copyright (c) 2010-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2010-2018, 2020, The Linux Foundation. All rights reserved. */
 
 #include <linux/io.h>
 #include <linux/types.h>
@@ -263,7 +254,7 @@ error:
 	return NULL;
 }
 
-static ssize_t hdmi_edid_sysfs_rda_audio_data_block(struct device *dev,
+static ssize_t audio_data_block_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	int adb_size, adb_count;
@@ -299,11 +290,9 @@ static ssize_t hdmi_edid_sysfs_rda_audio_data_block(struct device *dev,
 
 	return ret;
 }
-static DEVICE_ATTR(audio_data_block, 0444,
-	hdmi_edid_sysfs_rda_audio_data_block,
-	NULL);
+static DEVICE_ATTR_RO(audio_data_block);
 
-static ssize_t hdmi_edid_sysfs_rda_spkr_alloc_data_block(struct device *dev,
+static ssize_t spkr_alloc_data_block_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	int sadb_size, sadb_count;
@@ -339,10 +328,9 @@ static ssize_t hdmi_edid_sysfs_rda_spkr_alloc_data_block(struct device *dev,
 
 	return ret;
 }
-static DEVICE_ATTR(spkr_alloc_data_block, 0444,
-	hdmi_edid_sysfs_rda_spkr_alloc_data_block, NULL);
+static DEVICE_ATTR_RO(spkr_alloc_data_block);
 
-static ssize_t hdmi_edid_sysfs_wta_modes(struct device *dev,
+static ssize_t edid_modes_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	ssize_t ret = strnlen(buf, PAGE_SIZE);
@@ -373,7 +361,7 @@ error:
 	return ret;
 }
 
-static ssize_t hdmi_edid_sysfs_rda_modes(struct device *dev,
+static ssize_t edid_modes_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret = 0;
@@ -416,10 +404,9 @@ static ssize_t hdmi_edid_sysfs_rda_modes(struct device *dev,
 
 	return ret;
 } /* hdmi_edid_sysfs_rda_modes */
-static DEVICE_ATTR(edid_modes, 0644, hdmi_edid_sysfs_rda_modes,
-	hdmi_edid_sysfs_wta_modes);
+static DEVICE_ATTR_RW(edid_modes);
 
-static ssize_t hdmi_edid_sysfs_rda_res_info_data(struct device *dev,
+static ssize_t res_info_data_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -475,10 +462,9 @@ static ssize_t hdmi_edid_sysfs_rda_res_info_data(struct device *dev,
 
 	return offset;
 }
-static DEVICE_ATTR(res_info_data, 0444, hdmi_edid_sysfs_rda_res_info_data,
-	NULL);
+static DEVICE_ATTR_RO(res_info_data);
 
-static ssize_t hdmi_edid_sysfs_wta_res_info(struct device *dev,
+static ssize_t res_info_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	int rc, page_id;
@@ -519,7 +505,7 @@ static ssize_t hdmi_edid_sysfs_wta_res_info(struct device *dev,
 	return ret;
 }
 
-static ssize_t hdmi_edid_sysfs_rda_res_info(struct device *dev,
+static ssize_t res_info_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -603,10 +589,9 @@ static ssize_t hdmi_edid_sysfs_rda_res_info(struct device *dev,
 
 	return size_to_write - sizeof(info);
 }
-static DEVICE_ATTR(res_info, 0644, hdmi_edid_sysfs_rda_res_info,
-	hdmi_edid_sysfs_wta_res_info);
+static DEVICE_ATTR_RW(res_info);
 
-static ssize_t hdmi_edid_sysfs_rda_audio_latency(struct device *dev,
+static ssize_t edid_audio_latency_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -622,10 +607,9 @@ static ssize_t hdmi_edid_sysfs_rda_audio_latency(struct device *dev,
 
 	return ret;
 } /* hdmi_edid_sysfs_rda_audio_latency */
-static DEVICE_ATTR(edid_audio_latency, 0444,
-	hdmi_edid_sysfs_rda_audio_latency, NULL);
+static DEVICE_ATTR_RO(edid_audio_latency);
 
-static ssize_t hdmi_edid_sysfs_rda_video_latency(struct device *dev,
+static ssize_t edid_video_latency_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -641,10 +625,9 @@ static ssize_t hdmi_edid_sysfs_rda_video_latency(struct device *dev,
 
 	return ret;
 } /* hdmi_edid_sysfs_rda_video_latency */
-static DEVICE_ATTR(edid_video_latency, 0444,
-	hdmi_edid_sysfs_rda_video_latency, NULL);
+static DEVICE_ATTR_RO(edid_video_latency);
 
-static ssize_t hdmi_edid_sysfs_rda_physical_address(struct device *dev,
+static ssize_t pa_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -660,9 +643,9 @@ static ssize_t hdmi_edid_sysfs_rda_physical_address(struct device *dev,
 
 	return ret;
 } /* hdmi_edid_sysfs_rda_physical_address */
-static DEVICE_ATTR(pa, 0400, hdmi_edid_sysfs_rda_physical_address, NULL);
+static DEVICE_ATTR_RO(pa);
 
-static ssize_t hdmi_edid_sysfs_rda_scan_info(struct device *dev,
+static ssize_t scan_info_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -679,9 +662,9 @@ static ssize_t hdmi_edid_sysfs_rda_scan_info(struct device *dev,
 
 	return ret;
 } /* hdmi_edid_sysfs_rda_scan_info */
-static DEVICE_ATTR(scan_info, 0444, hdmi_edid_sysfs_rda_scan_info, NULL);
+static DEVICE_ATTR_RO(scan_info);
 
-static ssize_t hdmi_edid_sysfs_rda_3d_modes(struct device *dev,
+static ssize_t edid_3d_modes_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret = 0;
@@ -723,9 +706,9 @@ static ssize_t hdmi_edid_sysfs_rda_3d_modes(struct device *dev,
 
 	return ret;
 } /* hdmi_edid_sysfs_rda_3d_modes */
-static DEVICE_ATTR(edid_3d_modes, 0444, hdmi_edid_sysfs_rda_3d_modes, NULL);
+static DEVICE_ATTR_RO(edid_3d_modes);
 
-static ssize_t hdmi_common_rda_edid_raw_data(struct device *dev,
+static ssize_t edid_raw_data_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	struct hdmi_edid_ctrl *edid_ctrl = hdmi_edid_get_ctrl(dev);
@@ -744,9 +727,9 @@ static ssize_t hdmi_common_rda_edid_raw_data(struct device *dev,
 
 	return size;
 } /* hdmi_common_rda_edid_raw_data */
-static DEVICE_ATTR(edid_raw_data, 0444, hdmi_common_rda_edid_raw_data, NULL);
+static DEVICE_ATTR_RO(edid_raw_data);
 
-static ssize_t hdmi_edid_sysfs_wta_add_resolution(struct device *dev,
+static ssize_t add_res_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	int rc;
@@ -798,9 +781,9 @@ err:
 	edid_ctrl->keep_resv_timings = false;
 	return -EFAULT;
 }
-static DEVICE_ATTR(add_res, 0200, NULL, hdmi_edid_sysfs_wta_add_resolution);
+static DEVICE_ATTR_WO(add_res);
 
-static ssize_t hdmi_edid_sysfs_rda_hdr_data(struct device *dev,
+static ssize_t hdr_data_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -822,7 +805,7 @@ static ssize_t hdmi_edid_sysfs_rda_hdr_data(struct device *dev,
 
 	return ret;
 }
-static DEVICE_ATTR(hdr_data, 0444, hdmi_edid_sysfs_rda_hdr_data, NULL);
+static DEVICE_ATTR_RO(hdr_data);
 
 static struct attribute *hdmi_edid_fs_attrs[] = {
 	&dev_attr_edid_modes.attr,
@@ -1262,11 +1245,8 @@ static void hdmi_edid_extract_audio_data_blocks(
 				DEV_DBG("%s: No/Invalid Audio Data Block\n",
 					__func__);
 				return;
-			} else {
-				DEV_DBG("%s: No more valid ADB found\n",
-					__func__);
 			}
-
+			DEV_DBG("%s: No more valid ADB found\n", __func__);
 			continue;
 		}
 
@@ -2195,9 +2175,8 @@ static void hdmi_edid_get_display_mode(struct hdmi_edid_ctrl *edid_ctrl)
 			hdmi_edid_add_sink_video_format(edid_ctrl,
 				HDMI_VFRMT_1024x768p60_4_3);
 			break;
-		} else {
-			offset += 2;
 		}
+		offset += 2;
 		std_blk++;
 	}
 
@@ -2648,7 +2627,7 @@ bool hdmi_edid_get_sink_scrambler_support(void *input)
 
 	if (!edid_ctrl) {
 		DEV_ERR("%s: invalid edid ctrl data\n", __func__);
-		return 0;
+		return false;
 	}
 
 	if (edid_ctrl->edid_override &&

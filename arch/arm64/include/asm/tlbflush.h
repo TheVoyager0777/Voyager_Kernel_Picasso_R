@@ -41,14 +41,14 @@
 		   ALTERNATIVE("nop\n			nop",		       \
 			       "dsb ish\n		tlbi " #op,	       \
 			       ARM64_WORKAROUND_REPEAT_TLBI,		       \
-			       CONFIG_ARM64_WORKAROUND_REPEAT_TLBI)	       \
+			       CONFIG_QCOM_FALKOR_ERRATUM_1009)		       \
 			    : : )
 
 #define __TLBI_1(op, arg) asm ("tlbi " #op ", %0\n"			       \
 		   ALTERNATIVE("nop\n			nop",		       \
 			       "dsb ish\n		tlbi " #op ", %0",     \
 			       ARM64_WORKAROUND_REPEAT_TLBI,		       \
-			       CONFIG_ARM64_WORKAROUND_REPEAT_TLBI)	       \
+			       CONFIG_QCOM_FALKOR_ERRATUM_1009)		       \
 			    : : "r" (arg))
 
 #define __TLBI_N(op, arg, n, ...) __TLBI_##n(op, arg)
@@ -224,6 +224,7 @@ static inline void __flush_tlb_kernel_pgtable(unsigned long kaddr)
 
 	__tlbi(vaae1is, addr);
 	dsb(ish);
+	isb();
 }
 #endif
 

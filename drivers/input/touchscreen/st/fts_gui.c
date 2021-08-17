@@ -1,7 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * FTS Capacitive touch screen controller (FingerTipS)
  *
- * Copyright (C) 2016-2018, STMicroelectronics Limited.
+ * Copyright (C) 2016-2019, STMicroelectronics Limited.
  * Authors: AMG(Analog Mems Group) <marco.cali@st.com>
  *
  *
@@ -43,38 +44,38 @@
 
 #ifdef SCRIPTLESS
 
-unsigned int data[CMD_RESULT_STR_LEN] = {0};
-unsigned char pAddress_i2c[CMD_RESULT_STR_LEN] = {0};
-int byte_count_read;
-char Out_buff[TSP_BUF_SIZE];
+static unsigned int fts_data[CMD_RESULT_STR_LEN] = {0};
+static unsigned char fts_pAddress_i2c[CMD_RESULT_STR_LEN] = {0};
+static int byte_count_read;
+static char Out_buff[TSP_BUF_SIZE];
 
 
 /*I2C CMd functions: functions to interface with GUI without script */
 
-ssize_t fts_i2c_wr_show(struct device *dev, struct device_attribute *attr,
-	char *buf)
+ssize_t fts_i2c_wr_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
 {
 	struct i2c_client *client = to_i2c_client(dev);
 	struct fts_ts_info *info = i2c_get_clientdata(client);
 	int i;
 	char buff[16];
 
-	memset(Out_buff, 0x00, ARRAY_SIZE(Out_buff));
+	memset(Out_buff, 0x00, sizeof(Out_buff));
 	if (byte_count_read == 0) {
-		snprintf(Out_buff, sizeof(Out_buff), "{FAILED}");
+		snprintf(Out_buff, sizeof(Out_buff), "{FAILED}\n");
 		return snprintf(buf, TSP_BUF_SIZE, "%s\n", Out_buff);
 	}
 #ifdef SCRIPTLESS_DEBUG
-	pr_err("%s:DATA READ {", __func__);
+	pr_err("%s:DATA READ {\n", __func__);
 	for (i = 0; i < byte_count_read; i++) {
-		pr_err(" %02X", (unsigned int)info->cmd_wr_result[i]);
+		pr_err(" %02X\n", (unsigned int)info->cmd_wr_result[i]);
 		if (i < (byte_count_read - 1))
-			pr_err(" ");
+			pr_err("\n");
 	}
 	pr_err("}\n");
 #endif
 	snprintf(buff, sizeof(buff), "{");
-	strlcat(Out_buff, buff, ARRAY_SIZE(Out_buff));
+	strlcat(Out_buff, buff, sizeof(Out_buff));
 	for (i = 0; i < (byte_count_read + 2); i++) {
 		char temp_byte_count_read;
 
@@ -94,14 +95,14 @@ ssize_t fts_i2c_wr_show(struct device *dev, struct device_attribute *attr,
 				info->cmd_wr_result[i-2]);
 		}
 		//snprintf(buff, sizeof(buff), "%02X", info->cmd_wr_result[i]);
-		strlcat(Out_buff, buff,  ARRAY_SIZE(Out_buff));
+		strlcat(Out_buff, buff,  sizeof(Out_buff));
 		if (i < (byte_count_read + 1)) {
 			snprintf(buff, sizeof(buff), " ");
-			strlcat(Out_buff, buff, ARRAY_SIZE(Out_buff));
+			strlcat(Out_buff, buff, sizeof(Out_buff));
 		}
 	}
 	snprintf(buff, sizeof(buff), "}");
-	strlcat(Out_buff, buff, ARRAY_SIZE(Out_buff));
+	strlcat(Out_buff, buff, sizeof(Out_buff));
 	return snprintf(buf, TSP_BUF_SIZE, "%s\n", Out_buff);
 }
 
@@ -111,18 +112,18 @@ ssize_t fts_i2c_wr_store(struct device *dev, struct device_attribute *attr,
 	int ret;
 	struct i2c_client *client = to_i2c_client(dev);
 	struct fts_ts_info *info = i2c_get_clientdata(client);
-	unsigned char pAddress[9] = {0};
+	unsigned char pAddress[9];
 	unsigned int byte_count = 0;
 	int i;
-	unsigned int data[9] = {0};
+	unsigned int data[9];
 
-	memset(data, 0x00, ARRAY_SIZE(data));
-	memset(info->cmd_wr_result, 0x00, ARRAY_SIZE(info->cmd_wr_result));
+	memset(data, 0x00, sizeof(data));
+	memset(pAddress, 0x00, sizeof(pAddress));
+	memset(info->cmd_wr_result, 0x00, CMD_RESULT_STR_LEN);
 	ret = sscanf(buf, "%x %x %x %x %x %x %x %x %x ",
 		(data + 8), (data), (data + 1), (data + 2), (data + 3),
 		(data + 4), (data + 5), (data + 6), (data + 7));
-	if (ret != 9)
-		return -EINVAL;
+
 	byte_count = data[8];
 
 	/**
@@ -132,12 +133,15 @@ ssize_t fts_i2c_wr_store(struct device *dev, struct device_attribute *attr,
 	 * return count;
 	 * }
 	 */
+
+	if (byte_count > sizeof(pAddress))
+		return -EINVAL;
 #ifdef SCRIPTLESS_DEBUG
-	pr_err("\n");
-	pr_err("%s: Input Data 1:", __func__);
+
+	pr_err("%s: Input Data 1:\n", __func__);
 
 	for (i = 0 ; i < byte_count; i++) {
-		pr_err(" %02X", data[i]);
+		pr_err(" %02X\n", data[i]);
 		pAddress[i] = (unsigned char)data[i];
 	}
 	pr_err("\n");
@@ -152,24 +156,24 @@ ssize_t fts_i2c_wr_store(struct device *dev, struct device_attribute *attr,
 	ret = fts_readCmd(&pAddress[3], (byte_count - 5),
 			info->cmd_wr_result, byte_count_read);
 #ifdef SCRIPTLESS_DEBUG
-	 pr_err("%s:DATA READ\n{", __func__);
+	 pr_err("%s:DATA READ {\n", __func__);
 	for (i = 0; i < (2 + byte_count_read); i++) {
 		char temp_byte_count_read;
 
 		if (i == 0) {
 			temp_byte_count_read = (byte_count_read >> 8) & 0xFF;
-			pr_err("%02X", (unsigned int)temp_byte_count_read);
+			pr_err("%02X\n", (unsigned int)temp_byte_count_read);
 		} else if (i == 1) {
 			temp_byte_count_read = (byte_count_read) & 0xFF;
-			pr_err("%02X", (unsigned int)temp_byte_count_read);
+			pr_err("%02X\n", (unsigned int)temp_byte_count_read);
 
 		} else {
-			pr_err("%02X",
+			pr_err("%02X\n",
 				(unsigned int)info->cmd_read_result[i - 2]);
 		}
 
 		if (i < (byte_count_read + 1))
-			pr_err(" ");
+			pr_err("\n");
 
 	}
 	pr_err("}\n");
@@ -179,30 +183,30 @@ ssize_t fts_i2c_wr_store(struct device *dev, struct device_attribute *attr,
 	return count;
 }
 
-ssize_t fts_i2c_read_show(struct device *dev, struct device_attribute *attr,
-	char *buf)
+ssize_t fts_i2c_read_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
 {
 	struct i2c_client *client = to_i2c_client(dev);
 	struct fts_ts_info *info = i2c_get_clientdata(client);
 	int i;
 	char buff[16];
 
-	memset(Out_buff, 0x00, ARRAY_SIZE(Out_buff));
+	memset(Out_buff, 0x00, sizeof(Out_buff));
 	if (byte_count_read == 0) {
 		snprintf(Out_buff, sizeof(Out_buff), "{FAILED}");
 		return snprintf(buf, TSP_BUF_SIZE, "%s\n", Out_buff);
 	}
 #ifdef SCRIPTLESS_DEBUG
-	pr_err("%s:DATA READ {", __func__);
+	pr_err("%s:DATA READ {\n", __func__);
 	for (i = 0; i < byte_count_read; i++) {
-		pr_err("%02X", (unsigned int)info->cmd_read_result[i]);
+		pr_err("%02X\n", (unsigned int)info->cmd_read_result[i]);
 		if (i < (byte_count_read - 1))
-			pr_err(" ");
+			pr_err("\n");
 	}
 	pr_err("}\n");
 #endif
 	snprintf(buff, sizeof(buff), "{");
-	strlcat(Out_buff, buff, ARRAY_SIZE(Out_buff));
+	strlcat(Out_buff, buff, sizeof(Out_buff));
 	for (i = 0; i < (byte_count_read + 2); i++) {
 		char temp_byte_count_read;
 
@@ -218,14 +222,14 @@ ssize_t fts_i2c_read_show(struct device *dev, struct device_attribute *attr,
 			snprintf(buff, sizeof(buff), "%02X",
 				info->cmd_read_result[i - 2]);
 		}
-		strlcat(Out_buff, buff, ARRAY_SIZE(Out_buff));
+		strlcat(Out_buff, buff, sizeof(Out_buff));
 		if (i < (byte_count_read + 1)) {
 			snprintf(buff, sizeof(buff), " ");
-			strlcat(Out_buff, buff, ARRAY_SIZE(Out_buff));
+			strlcat(Out_buff, buff, sizeof(Out_buff));
 		}
 	}
 	snprintf(buff, sizeof(buff), "}");
-	strlcat(Out_buff, buff, ARRAY_SIZE(Out_buff));
+	strlcat(Out_buff, buff, sizeof(Out_buff));
 
 	return snprintf(buf, TSP_BUF_SIZE, "%s\n", Out_buff);
 }
@@ -236,19 +240,19 @@ ssize_t fts_i2c_read_store(struct device *dev, struct device_attribute *attr,
 	int ret;
 	struct i2c_client *client = to_i2c_client(dev);
 	struct fts_ts_info *info = i2c_get_clientdata(client);
-	unsigned char pAddress[9] = {0};
+	unsigned char pAddress[9];
 	unsigned int byte_count = 0;
 	int i;
-	unsigned int data[9] = {0};
+	unsigned int data[9];
 
 	byte_count_read = 0;
-	memset(data, 0x00, ARRAY_SIZE(data));
-	memset(info->cmd_read_result, 0x00, ARRAY_SIZE(info->cmd_read_result));
+	memset(data, 0x00, sizeof(data));
+	memset(pAddress, 0x00, sizeof(pAddress));
+	memset(info->cmd_read_result, 0x00, CMD_RESULT_STR_LEN);
 	ret = sscanf(buf, "%x %x %x %x %x %x %x %x %x ",
 		(data + 8), (data), (data + 1), (data + 2), (data + 3),
 		(data + 4), (data + 5), (data + 6), (data + 7));
-	if (ret != 9)
-		return -EINVAL;
+
 	byte_count = data[8];
 
 	if (byte_count > 8) {
@@ -263,10 +267,9 @@ ssize_t fts_i2c_read_store(struct device *dev, struct device_attribute *attr,
 	/*	return count;*/
 	/*}*/
 #ifdef SCRIPTLESS_DEBUG
-	pr_err("\n");
-	pr_err("%s: Input Data 1:", __func__);
+	pr_err("%s: Input Data 1:\n", __func__);
 	for (i = 0 ; i < byte_count; i++) {
-		pr_err("%02X", data[i]);
+		pr_err("%02X\n", data[i]);
 		pAddress[i] = (unsigned char)data[i];
 	}
 	pr_err("\n");
@@ -279,25 +282,25 @@ ssize_t fts_i2c_read_store(struct device *dev, struct device_attribute *attr,
 	ret = fts_readCmd(pAddress, (byte_count - 2), info->cmd_read_result,
 		byte_count_read);
 #ifdef SCRIPTLESS_DEBUG
-	pr_err("%s:DATA READ\n{", __func__);
+	pr_err("%s:DATA READ\n{\n", __func__);
 	for (i = 0; i < (byte_count_read + 2); i++) {
 		char temp_byte_count_read;
 
 		if (i == 0) {
 			temp_byte_count_read = (byte_count_read >> 8) & 0xFF;
 
-			pr_err("%02X", (unsigned int)temp_byte_count_read);
+			pr_err("%02X\n", (unsigned int)temp_byte_count_read);
 		} else if (i == 1) {
 			temp_byte_count_read = (byte_count_read) & 0xFF;
 
-			pr_err("%02X", (unsigned int)temp_byte_count_read);
+			pr_err("%02X\n", (unsigned int)temp_byte_count_read);
 
 		} else {
-			pr_err("%02X",
+			pr_err("%02X\n",
 				(unsigned int)info->cmd_read_result[i - 2]);
 		}
 		if (i < (byte_count_read + 1))
-			pr_err(" ");
+			pr_err("\n");
 	}
 	pr_err("}\n");
 #endif
@@ -325,17 +328,17 @@ ssize_t fts_i2c_write_store(struct device *dev, struct device_attribute *attr,
 	struct fts_ts_info *info = i2c_get_clientdata(client);
 	unsigned int byte_count = 0;
 	int i;
+	unsigned int *data = &fts_data[0];
 
-	memset(data, 0x00, ARRAY_SIZE(data));
-	memset(pAddress_i2c, 0x00, ARRAY_SIZE(pAddress_i2c));
-	memset(info->cmd_write_result, 0x00,
-			ARRAY_SIZE(info->cmd_write_result));
+	memset(fts_data, 0x00, sizeof(fts_data));
+	memset(fts_pAddress_i2c, 0x00, sizeof(fts_pAddress_i2c));
+	memset(info->cmd_write_result, 0x00, sizeof(info->cmd_write_result));
 	ret = sscanf(buf, "%x %x", data, (data + 1));
 	if (ret != 2)
 		return -EINVAL;
 	byte_count = data[0] << 8 | data[1];
 
-	if (byte_count <= ARRAY_SIZE(pAddress_i2c)) {
+	if (byte_count <= sizeof(fts_pAddress_i2c)) {
 		for (i = 0; i < (byte_count); i++) {
 			ret = sscanf(&buf[3 * (i + 2)], "%x ", (data + i));
 			if (ret != 1)
@@ -348,33 +351,33 @@ ssize_t fts_i2c_write_store(struct device *dev, struct device_attribute *attr,
 #endif
 		snprintf(info->cmd_write_result, sizeof(info->cmd_write_result),
 			"{Write NOT OK}\n");
+		return -EINVAL;
 	}
 #ifdef SCRIPTLESS_DEBUG
 	pr_err("\n");
 	pr_err("%s:Byte_count = %02d|Count = %02d |size of buf:%02d\n",
 		__func__, byte_count, (int)count, (int)sizeof(buf));
-	pr_err("%s: Input Data 1:", __func__);
+	pr_err("%s: Input Data 1:\n", __func__);
 	for (i = 0 ; i < byte_count; i++) {
-		pr_err(" %02X", data[i]);
-		pAddress_i2c[i] = (unsigned char)data[i];
+		pr_err(" %02X\n", data[i]);
+		fts_pAddress_i2c[i] = (unsigned char)data[i];
 	}
 	pr_err("\n");
 #else
 	for (i = 0 ; i < byte_count; i++)
-		pAddress_i2c[i] = (unsigned char)data[i];
+		fts_pAddress_i2c[i] = (unsigned char)data[i];
 #endif
-	if ((pAddress_i2c[0] == 0xb3) && (pAddress_i2c[3] == 0xb1)) {
-		ret = fts_writeCmd(pAddress_i2c, 3);
+	if ((fts_pAddress_i2c[0] == 0xb3) && (fts_pAddress_i2c[3] == 0xb1)) {
+		ret = fts_writeCmd(fts_pAddress_i2c, 3);
 		msleep(20);
-		ret = fts_writeCmd(&pAddress_i2c[3], byte_count-3);
-	} else {
-		ret = fts_writeCmd(pAddress_i2c, byte_count);
-	}
+		ret = fts_writeCmd(&fts_pAddress_i2c[3], byte_count-3);
+	} else
+		ret = fts_writeCmd(fts_pAddress_i2c, byte_count);
 
 #ifdef SCRIPTLESS_DEBUG
-	pr_err("%s:DATA :", __func__);
+	pr_err("%s:DATA :\n", __func__);
 	for (i = 0; i < byte_count; i++)
-		pr_err(" %02X", (unsigned int)pAddress_i2c[i]);
+		pr_err(" %02X\n", (unsigned int)fts_pAddress_i2c[i]);
 	pr_err(" byte_count: %02X\n", byte_count);
 #endif
 	if (ret < 0) {
@@ -391,20 +394,14 @@ ssize_t fts_i2c_write_store(struct device *dev, struct device_attribute *attr,
 	return count;
 }
 
-static DEVICE_ATTR(iread, 0664, NULL, fts_i2c_read_store);
-static DEVICE_ATTR(iread_result, 0664, fts_i2c_read_show, NULL);
-static DEVICE_ATTR(iwr, 0664, NULL, fts_i2c_wr_store);
-static DEVICE_ATTR(iwr_result, 0664, fts_i2c_wr_show, NULL);
-static DEVICE_ATTR(iwrite, 0664, NULL, fts_i2c_write_store);
-static DEVICE_ATTR(iwrite_result, 0664, fts_i2c_write_show, NULL);
+static DEVICE_ATTR_RW(fts_i2c_read);
+static DEVICE_ATTR_RW(fts_i2c_wr);
+static DEVICE_ATTR_RW(fts_i2c_write);
 
 static struct attribute *i2c_cmd_attributes[] = {
-	&dev_attr_iread.attr,
-	&dev_attr_iread_result.attr,
-	&dev_attr_iwr.attr,
-	&dev_attr_iwr_result.attr,
-	&dev_attr_iwrite.attr,
-	&dev_attr_iwrite_result.attr,
+	&dev_attr_fts_i2c_read.attr,
+	&dev_attr_fts_i2c_wr.attr,
+	&dev_attr_fts_i2c_write.attr,
 	NULL,
 };
 

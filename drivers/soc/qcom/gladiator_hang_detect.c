@@ -1,13 +1,6 @@
-/* Copyright (c) 2015-2017, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2015-2017, 2019 The Linux Foundation. All rights reserved.
  */
 
 #include <linux/module.h>
@@ -54,11 +47,16 @@ struct gladiator_hang_attr {
 	struct gladiator_hang_attr hang_attr_##_name =	\
 			__ATTR(_name, _mode, _show, _store)
 
-#define to_gladiator_hang_dev(kobj) \
-	container_of(kobj, struct hang_detect, kobj)
+static inline struct hang_detect *to_gladiator_hang_dev(struct kobject *kobj)
+{
+	return container_of(kobj, struct hang_detect, kobj);
+}
 
-#define to_gladiator_attr(_attr) \
-	container_of(_attr, struct gladiator_hang_attr, attr)
+static inline struct gladiator_hang_attr *to_gladiator_attr(
+							struct attribute *attr)
+{
+	return container_of(attr, struct gladiator_hang_attr, attr);
+}
 
 static void set_threshold(int offset, struct hang_detect *hang_dev,
 		int32_t threshold_val)
@@ -147,7 +145,7 @@ static inline ssize_t generic_enable_show(struct kobject *kobj,
 	uint32_t reg_value;
 
 	get_enable(offset, hang_dev, &reg_value);
-	return snprintf(buf, MAX_LEN_SYSFS, "%u\n", reg_value);
+	return scnprintf(buf, MAX_LEN_SYSFS, "%u\n", reg_value);
 }
 
 static inline ssize_t generic_threshold_show(struct kobject *kobj,
@@ -157,7 +155,7 @@ static inline ssize_t generic_threshold_show(struct kobject *kobj,
 	uint32_t reg_value;
 
 	get_threshold(offset, hang_dev, &reg_value);
-	return snprintf(buf, MAX_LEN_SYSFS, "0x%x\n", reg_value);
+	return scnprintf(buf, MAX_LEN_SYSFS, "0x%x\n", reg_value);
 }
 
 static inline size_t generic_threshold_store(struct kobject *kobj,
@@ -175,7 +173,7 @@ static inline size_t generic_threshold_store(struct kobject *kobj,
 		return -EINVAL;
 	if (scm_io_write(hang_dev->threshold[offset],
 				threshold_val)){
-		pr_err("%s: Failed to set threshold for gladiator port",
+		pr_err("%s: Failed to set threshold for gladiator port\n",
 				__func__);
 		return -EIO;
 	}
@@ -449,7 +447,7 @@ static struct attribute *hang_attrs[] = {
 	&hang_attr_m1_enable.attr,
 	&hang_attr_m2_enable.attr,
 	&hang_attr_pcio_enable.attr,
-	NULL
+	NULL,
 };
 
 static struct attribute *hang_attrs_v2[] = {
@@ -457,13 +455,13 @@ static struct attribute *hang_attrs_v2[] = {
 	&hang_attr_io_threshold.attr,
 	&hang_attr_ace_enable.attr,
 	&hang_attr_io_enable.attr,
-	NULL
+	NULL,
 };
 
 static struct attribute *hang_attrs_v3[] = {
 	&hang_attr_ace_threshold.attr,
 	&hang_attr_ace_enable.attr,
-	NULL
+	NULL,
 };
 
 static struct attribute_group hang_attr_group = {
@@ -486,16 +484,11 @@ static int msm_gladiator_hang_detect_probe(struct platform_device *pdev)
 	u32 *treg;
 	u32 creg;
 
-	if (!pdev->dev.of_node)
-		return -ENODEV;
-
 	hang_det = devm_kzalloc(&pdev->dev,
-			sizeof(struct hang_detect), GFP_KERNEL);
+			sizeof(*hang_det), GFP_KERNEL);
 
-	if (!hang_det) {
-		pr_err("Can't allocate hang_detect memory\n");
+	if (!hang_det)
 		return -ENOMEM;
-	}
 
 	if (of_device_is_compatible(node, "qcom,gladiator-hang-detect")) {
 		hang_det->ACE_offset = 0;
@@ -517,15 +510,13 @@ static int msm_gladiator_hang_detect_probe(struct platform_device *pdev)
 		hang_attr_group.attrs = hang_attrs_v3;
 	}
 
-	hang_det->threshold = devm_kzalloc(&pdev->dev,
-			sizeof(phys_addr_t)*NR_GLA_REG, GFP_KERNEL);
+	hang_det->threshold = devm_kcalloc(&pdev->dev,
+			NR_GLA_REG, sizeof(phys_addr_t), GFP_KERNEL);
 
-	if (!hang_det->threshold) {
-		pr_err("Can't allocate hang_detect threshold memory\n");
+	if (!hang_det->threshold)
 		return -ENOMEM;
-	}
 
-	treg = devm_kzalloc(&pdev->dev, sizeof(u32)*NR_GLA_REG, GFP_KERNEL);
+	treg = devm_kcalloc(&pdev->dev, NR_GLA_REG, sizeof(u32), GFP_KERNEL);
 
 	if (!treg)
 		return -ENOMEM;
@@ -581,7 +572,6 @@ static int msm_gladiator_hang_detect_remove(struct platform_device *pdev)
 	sysfs_remove_group(&hang_det->kobj, &hang_attr_group);
 	kobject_del(&hang_det->kobj);
 	kobject_put(&hang_det->kobj);
-	mutex_destroy(&hang_det->lock);
 	return 0;
 }
 
@@ -590,7 +580,6 @@ static struct platform_driver msm_gladiator_hang_detect_driver = {
 	.remove = msm_gladiator_hang_detect_remove,
 	.driver = {
 		.name = MODULE_NAME,
-		.owner = THIS_MODULE,
 		.of_match_table = msm_gladiator_hang_detect_table,
 	},
 };
@@ -608,3 +597,4 @@ static void __exit exit_gladiator_hang_detect(void)
 module_exit(exit_gladiator_hang_detect);
 
 MODULE_DESCRIPTION("MSM Gladiator Hang Detect Driver");
+MODULE_LICENSE("GPL v2");

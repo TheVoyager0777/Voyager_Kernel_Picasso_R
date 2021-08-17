@@ -8,6 +8,8 @@
 
 #include <linux/types.h>
 #include <linux/bvec.h>
+#include <linux/ktime.h>
+#include <linux/android_kabi.h>
 
 struct bio_set;
 struct bio;
@@ -45,9 +47,97 @@ typedef u8 __bitwise blk_status_t;
 
 #define BLK_STS_AGAIN		((__force blk_status_t)12)
 
-struct blk_issue_stat {
-	u64 stat;
+/*
+ * BLK_STS_DEV_RESOURCE is returned from the driver to the block layer if
+ * device related resources are unavailable, but the driver can guarantee
+ * that the queue will be rerun in the future once resources become
+ * available again. This is typically the case for device specific
+ * resources that are consumed for IO. If the driver fails allocating these
+ * resources, we know that inflight (or pending) IO will free these
+ * resource upon completion.
+ *
+ * This is different from BLK_STS_RESOURCE in that it explicitly references
+ * a device specific resource. For resources of wider scope, allocation
+ * failure can happen without having pending IO. This means that we can't
+ * rely on request completions freeing these resources, as IO may not be in
+ * flight. Examples of that are kernel memory allocations, DMA mappings, or
+ * any other system wide resources.
+ */
+#define BLK_STS_DEV_RESOURCE	((__force blk_status_t)13)
+
+/**
+ * blk_path_error - returns true if error may be path related
+ * @error: status the request was completed with
+ *
+ * Description:
+ *     This classifies block error status into non-retryable errors and ones
+ *     that may be successful if retried on a failover path.
+ *
+ * Return:
+ *     %false - retrying failover path will not help
+ *     %true  - may succeed if retried
+ */
+static inline bool blk_path_error(blk_status_t error)
+{
+	switch (error) {
+	case BLK_STS_NOTSUPP:
+	case BLK_STS_NOSPC:
+	case BLK_STS_TARGET:
+	case BLK_STS_NEXUS:
+	case BLK_STS_MEDIUM:
+	case BLK_STS_PROTECTION:
+		return false;
+	}
+
+	/* Anything else could be a path failure, so should be retried */
+	return true;
+}
+
+/*
+ * From most significant bit:
+ * 1 bit: reserved for other usage, see below
+ * 12 bits: original size of bio
+ * 51 bits: issue time of bio
+ */
+#define BIO_ISSUE_RES_BITS      1
+#define BIO_ISSUE_SIZE_BITS     12
+#define BIO_ISSUE_RES_SHIFT     (64 - BIO_ISSUE_RES_BITS)
+#define BIO_ISSUE_SIZE_SHIFT    (BIO_ISSUE_RES_SHIFT - BIO_ISSUE_SIZE_BITS)
+#define BIO_ISSUE_TIME_MASK     ((1ULL << BIO_ISSUE_SIZE_SHIFT) - 1)
+#define BIO_ISSUE_SIZE_MASK     \
+	(((1ULL << BIO_ISSUE_SIZE_BITS) - 1) << BIO_ISSUE_SIZE_SHIFT)
+#define BIO_ISSUE_RES_MASK      (~((1ULL << BIO_ISSUE_RES_SHIFT) - 1))
+
+/* Reserved bit for blk-throtl */
+#define BIO_ISSUE_THROTL_SKIP_LATENCY (1ULL << 63)
+
+struct bio_issue {
+	u64 value;
 };
+
+static inline u64 __bio_issue_time(u64 time)
+{
+	return time & BIO_ISSUE_TIME_MASK;
+}
+
+static inline u64 bio_issue_time(struct bio_issue *issue)
+{
+	return __bio_issue_time(issue->value);
+}
+
+static inline sector_t bio_issue_size(struct bio_issue *issue)
+{
+	return ((issue->value & BIO_ISSUE_SIZE_MASK) >> BIO_ISSUE_SIZE_SHIFT);
+}
+
+static inline void bio_issue_init(struct bio_issue *issue,
+				       sector_t size)
+{
+	size &= (1ULL << BIO_ISSUE_SIZE_BITS) - 1;
+	issue->value = ((issue->value & BIO_ISSUE_RES_MASK) |
+			(ktime_get_ns() & BIO_ISSUE_TIME_MASK) |
+			((u64)size << BIO_ISSUE_SIZE_SHIFT));
+}
 
 /*
  * main unit of I/O for the block layer and lower layers (ie drivers and
@@ -91,10 +181,8 @@ struct bio {
 	 */
 	struct io_context	*bi_ioc;
 	struct cgroup_subsys_state *bi_css;
-#ifdef CONFIG_BLK_DEV_THROTTLING_LOW
-	void			*bi_cg_private;
-	struct blk_issue_stat	bi_issue_stat;
-#endif
+	struct blkcg_gq		*bi_blkg;
+	struct bio_issue	bi_issue;
 #endif
 
 #ifdef CONFIG_BLK_INLINE_ENCRYPTION
@@ -124,6 +212,11 @@ struct bio {
 
 	struct bio_set		*bi_pool;
 
+	ktime_t bi_alloc_ts;			/* for mm_event */
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
+
 	/*
 	 * We can inline a number of vecs at the end of the bio, to avoid
 	 * double allocations for a small number of bio_vecs. This member
@@ -150,7 +243,7 @@ struct bio {
 				 * throttling rules. Don't do it again. */
 #define BIO_TRACE_COMPLETION 11	/* bio_endio() should trace the final completion
 				 * of this bio. */
-#define BIO_QUEUE_ENTERED 11	/* can use blk_queue_enter_live() */
+#define BIO_QUEUE_ENTERED 12	/* can use blk_queue_enter_live() */
 
 /* See BVEC_POOL_OFFSET below before adding new flags */
 
@@ -178,6 +271,8 @@ struct bio {
  * only BVEC_POOL_IDX()
  */
 #define BIO_RESET_BITS	BVEC_POOL_OFFSET
+
+typedef __u32 __bitwise blk_mq_req_flags_t;
 
 /*
  * Operations and flags common to the bio and request structures.
@@ -241,18 +336,16 @@ enum req_flag_bits {
 	__REQ_PREFLUSH,		/* request for cache flush */
 	__REQ_RAHEAD,		/* read ahead, can fail anytime */
 	__REQ_BACKGROUND,	/* background IO */
+	__REQ_NOWAIT,           /* Don't wait if request will block */
 
 	__REQ_SORTED = __REQ_RAHEAD, /* elevator knows about this request */
+	__REQ_URGENT,		/* urgent request */
 	/* command specific flags for REQ_OP_WRITE_ZEROES: */
 	__REQ_NOUNMAP,		/* do not free blocks when zeroing */
 
-	__REQ_URGENT,		/* urgent request */
-	__REQ_NOWAIT,           /* Don't wait if request will block */
-	/*
-	 * set for "ide_preempt" requests and also for requests for which the
-	 * SCSI "quiesce" state must be ignored.
-	 */
-	__REQ_PREEMPT,
+	/* for driver use */
+	__REQ_DRV,
+	__REQ_SWAP,		/* swapping request. */
 	__REQ_NR_BITS,		/* stops here */
 };
 
@@ -270,16 +363,26 @@ enum req_flag_bits {
 #define REQ_PREFLUSH		(1ULL << __REQ_PREFLUSH)
 #define REQ_RAHEAD		(1ULL << __REQ_RAHEAD)
 #define REQ_BACKGROUND		(1ULL << __REQ_BACKGROUND)
+#define REQ_NOWAIT		(1ULL << __REQ_NOWAIT)
 
 #define REQ_NOUNMAP		(1ULL << __REQ_NOUNMAP)
-#define REQ_NOWAIT		(1ULL << __REQ_NOWAIT)
-#define REQ_PREEMPT		(1ULL << __REQ_PREEMPT)
+
+#define REQ_DRV			(1ULL << __REQ_DRV)
+#define REQ_SWAP		(1ULL << __REQ_SWAP)
 
 #define REQ_FAILFAST_MASK \
 	(REQ_FAILFAST_DEV | REQ_FAILFAST_TRANSPORT | REQ_FAILFAST_DRIVER)
 
 #define REQ_NOMERGE_FLAGS \
 	(REQ_NOMERGE | REQ_PREFLUSH | REQ_FUA)
+
+enum stat_group {
+	STAT_READ,
+	STAT_WRITE,
+	STAT_DISCARD,
+
+	NR_STAT_GROUPS
+};
 
 #define bio_op(bio) \
 	((bio)->bi_opf & REQ_OP_MASK)
@@ -316,6 +419,18 @@ static inline bool op_is_sync(unsigned int op)
 {
 	return (op & REQ_OP_MASK) == REQ_OP_READ ||
 		(op & (REQ_SYNC | REQ_FUA | REQ_PREFLUSH));
+}
+
+static inline bool op_is_discard(unsigned int op)
+{
+	return (op & REQ_OP_MASK) == REQ_OP_DISCARD;
+}
+
+static inline int op_stat_group(unsigned int op)
+{
+	if (op_is_discard(op))
+		return STAT_DISCARD;
+	return op_is_write(op);
 }
 
 typedef unsigned int blk_qc_t;
@@ -355,11 +470,10 @@ static inline bool blk_qc_t_is_internal(blk_qc_t cookie)
 }
 
 struct blk_rq_stat {
-	s64 mean;
+	u64 mean;
 	u64 min;
 	u64 max;
-	s32 nr_samples;
-	s32 nr_batch;
+	u32 nr_samples;
 	u64 batch;
 };
 

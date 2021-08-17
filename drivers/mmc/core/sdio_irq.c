@@ -104,9 +104,7 @@ void sdio_run_irqs(struct mmc_host *host)
 {
 	mmc_claim_host(host);
 	if (host->sdio_irqs) {
-		mmc_host_clk_hold(host);
 		process_sdio_pending_irqs(host);
-		mmc_host_clk_release(host);
 		if (host->ops->ack_sdio_irq)
 			host->ops->ack_sdio_irq(host);
 	}
@@ -166,7 +164,8 @@ static int sdio_irq_thread(void *_host)
 		 * holding of the host lock does not cover too much work
 		 * that doesn't require that lock to be held.
 		 */
-		ret = __mmc_claim_host(host, &host->sdio_irq_thread_abort);
+		ret = __mmc_claim_host(host, NULL,
+				       &host->sdio_irq_thread_abort);
 		if (ret)
 			break;
 		ws = false;
@@ -176,10 +175,11 @@ static int sdio_irq_thread(void *_host)
 		 * resume and attend to the card's request
 		 */
 		if ((host->dev_status == DEV_SUSPENDING) ||
-		    (host->dev_status == DEV_SUSPENDED)) {
+			(host->dev_status == DEV_SUSPENDED)) {
 			pm_wakeup_event(&host->card->dev, 100);
 			ws = true;
 		}
+
 		ret = process_sdio_pending_irqs(host);
 		mmc_release_host(host);
 
@@ -210,11 +210,8 @@ static int sdio_irq_thread(void *_host)
 		}
 
 		set_current_state(TASK_INTERRUPTIBLE);
-		if (host->caps & MMC_CAP_SDIO_IRQ) {
-			mmc_host_clk_hold(host);
+		if (host->caps & MMC_CAP_SDIO_IRQ)
 			host->ops->enable_sdio_irq(host, 1);
-			mmc_host_clk_release(host);
-		}
 		/*
 		 * function drivers would have processed the event from card
 		 * unless suspended, hence release wake source
@@ -226,11 +223,8 @@ static int sdio_irq_thread(void *_host)
 		set_current_state(TASK_RUNNING);
 	} while (!kthread_should_stop());
 
-	if (host->caps & MMC_CAP_SDIO_IRQ) {
-		mmc_host_clk_hold(host);
+	if (host->caps & MMC_CAP_SDIO_IRQ)
 		host->ops->enable_sdio_irq(host, 0);
-		mmc_host_clk_release(host);
-	}
 
 	pr_debug("%s: IRQ thread exiting with code %d\n",
 		 mmc_hostname(host), ret);
@@ -256,9 +250,7 @@ static int sdio_card_irq_get(struct mmc_card *card)
 				return err;
 			}
 		} else if (host->caps & MMC_CAP_SDIO_IRQ) {
-			mmc_host_clk_hold(host);
 			host->ops->enable_sdio_irq(host, 1);
-			mmc_host_clk_release(host);
 		}
 	}
 
@@ -279,9 +271,7 @@ static int sdio_card_irq_put(struct mmc_card *card)
 			atomic_set(&host->sdio_irq_thread_abort, 1);
 			kthread_stop(host->sdio_irq_thread);
 		} else if (host->caps & MMC_CAP_SDIO_IRQ) {
-			mmc_host_clk_hold(host);
 			host->ops->enable_sdio_irq(host, 0);
-			mmc_host_clk_release(host);
 		}
 	}
 
@@ -313,8 +303,8 @@ static void sdio_single_irq_set(struct mmc_card *card)
  *
  *	Claim and activate the IRQ for the given SDIO function. The provided
  *	handler will be called when that IRQ is asserted.  The host is always
- *	claimed already when the handler is called so the handler must not
- *	call sdio_claim_host() nor sdio_release_host().
+ *	claimed already when the handler is called so the handler should not
+ *	call sdio_claim_host() or sdio_release_host().
  */
 int sdio_claim_irq(struct sdio_func *func, sdio_irq_handler_t *handler)
 {

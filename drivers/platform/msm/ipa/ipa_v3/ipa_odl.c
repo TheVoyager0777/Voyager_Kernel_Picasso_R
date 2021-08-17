@@ -1,13 +1,6 @@
-/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  */
 
 #include "ipa_i.h"
@@ -119,9 +112,9 @@ static ssize_t ipa_odl_ctl_fops_read(struct file *filp, char __user *buf,
 	if (old_state != new_state) {
 		old_state = new_state;
 
-		if (new_state == true)
+		if (new_state)
 			data = 1;
-		else if (new_state == false)
+		else if (!new_state)
 			data = 0;
 
 		if (copy_to_user(buf, &data,
@@ -151,7 +144,7 @@ static unsigned int ipa_odl_ctl_fops_poll(struct file *file, poll_table *wait)
 
 	poll_wait(file, &odl_ctl_msg_wq, wait);
 
-	if (ipa3_odl_ctx->odl_ctl_msg_wq_flag == true) {
+	if (ipa3_odl_ctx->odl_ctl_msg_wq_flag) {
 		IPADBG("Sending read mask to odl control pipe\n");
 		mask |= POLLIN | POLLRDNORM;
 	}
@@ -242,7 +235,7 @@ int ipa3_send_adpl_msg(unsigned long skb_data)
 		return -ENOMEM;
 	}
 
-	data = kmalloc(skb->len, GFP_KERNEL);
+	data = kmemdup(skb->data, skb->len, GFP_KERNEL);
 	if (data == NULL) {
 		kfree(msg);
 		return -ENOMEM;
@@ -759,7 +752,6 @@ int ipa_odl_init(void)
 	if (result) {
 		IPAWANERR("ipa3_odl_register_pm failed, ret: %d\n",
 				result);
-		goto cdev1_add_fail;
 	}
 	return 0;
 cdev1_add_fail:

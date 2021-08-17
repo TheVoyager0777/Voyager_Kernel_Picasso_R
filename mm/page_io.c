@@ -39,6 +39,7 @@ static struct bio *get_swap_bio(gfp_t gfp_flags,
 
 		bio->bi_iter.bi_sector = map_swap_page(page, &bdev);
 		bio_set_dev(bio, bdev);
+		bio->bi_iter.bi_sector <<= PAGE_SHIFT - 9;
 		bio->bi_end_io = end_io;
 
 		for (i = 0; i < nr; i++)
@@ -50,9 +51,13 @@ static struct bio *get_swap_bio(gfp_t gfp_flags,
 
 void end_swap_bio_write(struct bio *bio)
 {
-	struct page *page = bio->bi_io_vec[0].bv_page;
+	struct page *page = bio_first_page_all(bio);
 
+#ifdef CONFIG_VBSWAP
+	if (likely(bio->bi_status)) {
+#else
 	if (bio->bi_status) {
+#endif
 		SetPageError(page);
 		/*
 		 * We failed to write the page out to swap-space.
@@ -63,10 +68,12 @@ void end_swap_bio_write(struct bio *bio)
 		 * Also clear PG_reclaim to avoid rotate_reclaimable_page()
 		 */
 		set_page_dirty(page);
+#ifndef CONFIG_VBSWAP
 		pr_alert_ratelimited("Write-error on swap-device (%u:%u:%llu)\n",
 			 MAJOR(bio_dev(bio)),
 			 MINOR(bio_dev(bio)),
 			 (unsigned long long)bio->bi_iter.bi_sector);
+#endif
 		ClearPageReclaim(page);
 	}
 	end_page_writeback(page);
@@ -124,7 +131,7 @@ static void swap_slot_free_notify(struct page *page)
 
 static void end_swap_bio_read(struct bio *bio)
 {
-	struct page *page = bio->bi_io_vec[0].bv_page;
+	struct page *page = bio_first_page_all(bio);
 	struct task_struct *waiter = bio->bi_private;
 
 	if (bio->bi_status) {
@@ -179,9 +186,8 @@ int generic_swapfile_activate(struct swap_info_struct *sis,
 
 		cond_resched();
 
-		first_block = probe_block;
-		ret = bmap(inode, &first_block);
-		if (ret || !first_block)
+		first_block = bmap(inode, probe_block);
+		if (first_block == 0)
 			goto bad_bmap;
 
 		/*
@@ -196,11 +202,9 @@ int generic_swapfile_activate(struct swap_info_struct *sis,
 					block_in_page++) {
 			sector_t block;
 
-			block = probe_block + block_in_page;
-			ret = bmap(inode, &block);
-			if (ret || !block)
+			block = bmap(inode, probe_block + block_in_page);
+			if (block == 0)
 				goto bad_bmap;
-
 			if (block != first_block + block_in_page) {
 				/* Discontiguity */
 				probe_block++;
@@ -261,9 +265,20 @@ int swap_writepage(struct page *page, struct writeback_control *wbc)
 		end_page_writeback(page);
 		goto out;
 	}
+#ifdef CONFIG_VBSWAP
+	set_page_dirty(page);
+	ClearPageReclaim(page);
+	unlock_page(page);
+#else
 	ret = __swap_writepage(page, wbc, end_swap_bio_write);
+#endif
 out:
 	return ret;
+}
+
+static sector_t swap_page_sector(struct page *page)
+{
+	return (sector_t)__page_file_index(page) << (PAGE_SHIFT - 9);
 }
 
 static inline void count_swpout_vm_event(struct page *page)
@@ -324,8 +339,7 @@ int __swap_writepage(struct page *page, struct writeback_control *wbc,
 		return ret;
 	}
 
-	ret = bdev_write_page(sis->bdev, map_swap_page(page, &sis->bdev),
-			      page, wbc);
+	ret = bdev_write_page(sis->bdev, swap_page_sector(page), page, wbc);
 	if (!ret) {
 		count_swpout_vm_event(page);
 		return 0;
@@ -339,7 +353,8 @@ int __swap_writepage(struct page *page, struct writeback_control *wbc,
 		ret = -ENOMEM;
 		goto out;
 	}
-	bio->bi_opf = REQ_OP_WRITE | wbc_to_write_flags(wbc);
+	bio->bi_opf = REQ_OP_WRITE | REQ_SWAP | wbc_to_write_flags(wbc);
+	bio_associate_blkcg_from_page(bio, page);
 	count_swpout_vm_event(page);
 	set_page_writeback(page);
 	unlock_page(page);
@@ -384,7 +399,7 @@ int swap_readpage(struct page *page, bool synchronous)
 		goto out;
 	}
 
-	ret = bdev_read_page(sis->bdev, map_swap_page(page, &sis->bdev), page);
+	ret = bdev_read_page(sis->bdev, swap_page_sector(page), page);
 	if (!ret) {
 		if (trylock_page(page)) {
 			swap_slot_free_notify(page);
@@ -418,7 +433,7 @@ int swap_readpage(struct page *page, bool synchronous)
 		if (!READ_ONCE(bio->bi_private))
 			break;
 
-		if (!blk_mq_poll(disk->queue, qc))
+		if (!blk_poll(disk->queue, qc))
 			break;
 	}
 	__set_current_state(TASK_RUNNING);

@@ -1,15 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+ * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "sysmon-qmi: %s: " fmt, __func__
@@ -42,11 +33,12 @@
 #define QMI_SSCTL_SUBSYS_EVENT_READY_IND_V02	0x0023
 
 #define QMI_SSCTL_ERROR_MSG_LENGTH		90
+#define QMI_SSCTL_EXT_ERROR_MSG_LENGTH_V02	256
 #define QMI_SSCTL_SUBSYS_NAME_LENGTH		15
 #define QMI_SSCTL_SUBSYS_EVENT_REQ_LENGTH	40
 #define QMI_SSCTL_RESP_MSG_LENGTH		7
 #define QMI_SSCTL_EMPTY_MSG_LENGTH		0
-#define QMI_SSCTL_MAX_MSG_LENGTH		90
+#define QMI_SSCTL_MAX_MSG_LENGTH		362
 
 #define SSCTL_SERVICE_ID			0x2B
 #define SSCTL_VER_2				2
@@ -58,7 +50,7 @@
 	.data_type = QMI_EOTI,	\
 	.elem_len  = 0,		\
 	.elem_size = 0,		\
-	.is_array  = NO_ARRAY,	\
+	.array_type  = NO_ARRAY,	\
 	.tlv_type  = 0x00,	\
 	.offset    = 0,		\
 	.ei_array  = NULL,	\
@@ -172,7 +164,7 @@ static struct qmi_elem_info qmi_ssctl_subsys_event_req_msg_ei[] = {
 		.data_type = QMI_DATA_LEN,
 		.elem_len  = 1,
 		.elem_size = sizeof(uint8_t),
-		.is_array  = NO_ARRAY,
+		.array_type  = NO_ARRAY,
 		.tlv_type  = 0x01,
 		.offset    = offsetof(struct qmi_ssctl_subsys_event_req_msg,
 				      subsys_name_len),
@@ -182,7 +174,7 @@ static struct qmi_elem_info qmi_ssctl_subsys_event_req_msg_ei[] = {
 		.data_type = QMI_UNSIGNED_1_BYTE,
 		.elem_len  = QMI_SSCTL_SUBSYS_NAME_LENGTH,
 		.elem_size = sizeof(char),
-		.is_array  = VAR_LEN_ARRAY,
+		.array_type  = VAR_LEN_ARRAY,
 		.tlv_type  = 0x01,
 		.offset    = offsetof(struct qmi_ssctl_subsys_event_req_msg,
 				      subsys_name),
@@ -192,7 +184,7 @@ static struct qmi_elem_info qmi_ssctl_subsys_event_req_msg_ei[] = {
 		.data_type = QMI_SIGNED_4_BYTE_ENUM,
 		.elem_len  = 1,
 		.elem_size = sizeof(uint32_t),
-		.is_array  = NO_ARRAY,
+		.array_type  = NO_ARRAY,
 		.tlv_type  = 0x02,
 		.offset    = offsetof(struct qmi_ssctl_subsys_event_req_msg,
 				      event),
@@ -202,7 +194,7 @@ static struct qmi_elem_info qmi_ssctl_subsys_event_req_msg_ei[] = {
 		.data_type = QMI_OPT_FLAG,
 		.elem_len  = 1,
 		.elem_size = sizeof(uint8_t),
-		.is_array  = NO_ARRAY,
+		.array_type  = NO_ARRAY,
 		.tlv_type  = 0x10,
 		.offset    = offsetof(struct qmi_ssctl_subsys_event_req_msg,
 				      evt_driven_valid),
@@ -212,7 +204,7 @@ static struct qmi_elem_info qmi_ssctl_subsys_event_req_msg_ei[] = {
 		.data_type = QMI_SIGNED_4_BYTE_ENUM,
 		.elem_len  = 1,
 		.elem_size = sizeof(uint32_t),
-		.is_array  = NO_ARRAY,
+		.array_type  = NO_ARRAY,
 		.tlv_type  = 0x10,
 		.offset    = offsetof(struct qmi_ssctl_subsys_event_req_msg,
 				      evt_driven),
@@ -226,7 +218,7 @@ static struct qmi_elem_info qmi_ssctl_subsys_event_resp_msg_ei[] = {
 		.data_type = QMI_STRUCT,
 		.elem_len  = 1,
 		.elem_size = sizeof(struct qmi_response_type_v01),
-		.is_array  = NO_ARRAY,
+		.array_type  = NO_ARRAY,
 		.tlv_type  = 0x02,
 		.offset    = offsetof(struct qmi_ssctl_subsys_event_resp_msg,
 				      resp),
@@ -353,7 +345,7 @@ static struct qmi_elem_info qmi_ssctl_shutdown_resp_msg_ei[] = {
 		.data_type = QMI_STRUCT,
 		.elem_len  = 1,
 		.elem_size = sizeof(struct qmi_response_type_v01),
-		.is_array  = NO_ARRAY,
+		.array_type  = NO_ARRAY,
 		.tlv_type  = 0x02,
 		.offset    = offsetof(struct qmi_ssctl_shutdown_resp_msg,
 				      resp),
@@ -470,6 +462,9 @@ struct qmi_ssctl_get_failure_reason_resp_msg {
 	uint8_t error_message_valid;
 	uint32_t error_message_len;
 	char error_message[QMI_SSCTL_ERROR_MSG_LENGTH];
+	uint8_t ext_error_message_valid;
+	uint32_t ext_error_message_len;
+	char ext_error_message[QMI_SSCTL_EXT_ERROR_MSG_LENGTH_V02];
 };
 
 static struct qmi_elem_info qmi_ssctl_get_failure_reason_req_msg_ei[] = {
@@ -481,7 +476,7 @@ static struct qmi_elem_info qmi_ssctl_get_failure_reason_resp_msg_ei[] = {
 		.data_type = QMI_STRUCT,
 		.elem_len  = 1,
 		.elem_size = sizeof(struct qmi_response_type_v01),
-		.is_array  = NO_ARRAY,
+		.array_type  = NO_ARRAY,
 		.tlv_type  = 0x02,
 		.offset    = offsetof(
 			struct qmi_ssctl_get_failure_reason_resp_msg,
@@ -492,7 +487,7 @@ static struct qmi_elem_info qmi_ssctl_get_failure_reason_resp_msg_ei[] = {
 		.data_type = QMI_OPT_FLAG,
 		.elem_len  = 1,
 		.elem_size = sizeof(uint8_t),
-		.is_array  = NO_ARRAY,
+		.array_type  = NO_ARRAY,
 		.tlv_type  = 0x10,
 		.offset    = offsetof(
 			struct qmi_ssctl_get_failure_reason_resp_msg,
@@ -503,7 +498,7 @@ static struct qmi_elem_info qmi_ssctl_get_failure_reason_resp_msg_ei[] = {
 		.data_type = QMI_DATA_LEN,
 		.elem_len  = 1,
 		.elem_size = sizeof(uint8_t),
-		.is_array  = NO_ARRAY,
+		.array_type  = NO_ARRAY,
 		.tlv_type  = 0x10,
 		.offset    = offsetof(
 			struct qmi_ssctl_get_failure_reason_resp_msg,
@@ -514,11 +509,44 @@ static struct qmi_elem_info qmi_ssctl_get_failure_reason_resp_msg_ei[] = {
 		.data_type = QMI_UNSIGNED_1_BYTE,
 		.elem_len  = QMI_SSCTL_ERROR_MSG_LENGTH,
 		.elem_size = sizeof(char),
-		.is_array  = VAR_LEN_ARRAY,
+		.array_type  = VAR_LEN_ARRAY,
 		.tlv_type  = 0x10,
 		.offset    = offsetof(
 			struct qmi_ssctl_get_failure_reason_resp_msg,
 						error_message),
+		.ei_array  = NULL,
+	},
+	{
+		.data_type = QMI_OPT_FLAG,
+		.elem_len  = 1,
+		.elem_size = sizeof(uint8_t),
+		.array_type  = NO_ARRAY,
+		.tlv_type  = 0x10,
+		.offset    = offsetof(
+			struct qmi_ssctl_get_failure_reason_resp_msg,
+						ext_error_message_valid),
+		.ei_array  = NULL,
+	},
+	{
+		.data_type = QMI_DATA_LEN,
+		.elem_len  = 1,
+		.elem_size = sizeof(uint16_t),
+		.array_type  = NO_ARRAY,
+		.tlv_type  = 0x10,
+		.offset    = offsetof(
+			struct qmi_ssctl_get_failure_reason_resp_msg,
+						ext_error_message_len),
+		.ei_array  = NULL,
+	},
+	{
+		.data_type = QMI_UNSIGNED_1_BYTE,
+		.elem_len  = QMI_SSCTL_EXT_ERROR_MSG_LENGTH_V02,
+		.elem_size = sizeof(char),
+		.array_type  = VAR_LEN_ARRAY,
+		.tlv_type  = 0x10,
+		.offset    = offsetof(
+			struct qmi_ssctl_get_failure_reason_resp_msg,
+						ext_error_message),
 		.ei_array  = NULL,
 	},
 	QMI_EOTI_DATA_TYPE
@@ -655,7 +683,6 @@ int sysmon_notifier_register(struct subsys_desc *desc)
 		kfree(data);
 		return rc;
 	}
-	qmi_set_sndtimeo(&data->clnt_handle, HZ);
 
 	qmi_add_lookup(&data->clnt_handle, SSCTL_SERVICE_ID,
 			SSCTL_VER_2, data->instance_id);

@@ -1,3 +1,5 @@
+# SPDX-License-Identifier: GPL-2.0-only
+
 comment "Qualcomm Technologies, Inc. Demux device config"
 menuconfig DVB_MPQ_DEMUX
 	tristate "DVB Demux Device"

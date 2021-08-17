@@ -1,13 +1,7 @@
-/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2015-2018, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/bitops.h>
@@ -85,7 +79,7 @@ struct wcd9xxx_spmi_map {
 	int linuxirq[MAX_NUM_IRQS];
 	irq_handler_t handler[MAX_NUM_IRQS];
 	struct platform_device *spmi[NUM_IRQ_REGS];
-	struct snd_soc_codec *codec;
+	struct snd_soc_component *component;
 
 	enum wcd9xxx_spmi_pm_state pm_state;
 	struct mutex pm_lock;
@@ -200,7 +194,7 @@ static irqreturn_t wcd9xxx_spmi_irq_handler(int linux_irq, void *data)
 
 	status[BIT_BYTE(irq)] |= BYTE_BIT_MASK(irq);
 	for (i = 0; i < NUM_IRQ_REGS; i++) {
-		status[i] |= snd_soc_read(map.codec,
+		status[i] |= snd_soc_component_read32(map.component,
 				BIT_BYTE(irq) * 0x100 +
 			MSM89XX_PMIC_DIGITAL_INT_LATCHED_STS);
 		status[i] &= ~map.mask[i];
@@ -381,9 +375,9 @@ void wcd9xxx_spmi_unlock_sleep(void)
 }
 EXPORT_SYMBOL(wcd9xxx_spmi_unlock_sleep);
 
-void wcd9xxx_spmi_set_codec(struct snd_soc_codec *codec)
+void wcd9xxx_spmi_set_codec(struct snd_soc_component *component)
 {
-	map.codec = codec;
+	map.component = component;
 }
 
 void wcd9xxx_spmi_set_dev(struct platform_device *spmi, int i)

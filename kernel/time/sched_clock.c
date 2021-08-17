@@ -74,6 +74,7 @@ static int irqtime = -1;
 static u64 suspend_ns;
 static u64 suspend_cycles;
 static u64 resume_cycles;
+
 core_param(irqtime, irqtime, int, 0400);
 
 static u64 notrace jiffy_sched_clock_read(void)
@@ -239,7 +240,7 @@ sched_clock_register(u64 (*read)(void), int bits, unsigned long rate)
 	pr_debug("Registered %pF as sched_clock source\n", read);
 }
 
-void __init sched_clock_postinit(void)
+void __init generic_sched_clock_init(void)
 {
 	/*
 	 * If no sched_clock() function has been provided at that point,

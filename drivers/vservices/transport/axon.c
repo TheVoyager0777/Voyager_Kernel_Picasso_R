@@ -2762,9 +2762,10 @@ out_unlock:
 	spin_unlock_irq(&transport->readiness_lock);
 }
 
-static void transport_rx_retry_timer(unsigned long data)
+static void transport_rx_retry_timer(struct timer_list *t)
 {
-	struct vs_transport_axon *transport = (struct vs_transport_axon *)data;
+	struct vs_transport_axon *transport = from_timer(transport, t,
+                                                rx_retry_timer);
 
 	/* Try to receive again; hopefully we have memory now */
 	tasklet_schedule(&transport->rx_tasklet);
@@ -2851,7 +2852,7 @@ static int transport_axon_probe_virqs(struct vs_transport_axon *transport)
 	/* Find all outgoing virq lines */
 	irqlines = of_find_property(vs_node, "okl,interrupt-lines", NULL);
 	if (!irqlines || irqlines->length < sizeof(u32)) {
-		dev_err(device, "No VIRQ sources found");
+		dev_err(device, "No VIRQ sources found\n");
 		return -ENODEV;
 	}
 	num_virq_lines = irqlines->length / sizeof(u32);
@@ -3239,8 +3240,7 @@ static int transport_axon_probe(struct platform_device *dev)
 	priv->rx_alloc_extra = 0;
 	INIT_LIST_HEAD(&priv->rx_freelist);
 
-	setup_timer(&priv->rx_retry_timer, transport_rx_retry_timer,
-			(unsigned long)priv);
+	timer_setup(&priv->rx_retry_timer, transport_rx_retry_timer, 0);
 
 	/* Keep RX disabled until the core service is ready. */
 	tasklet_disable(&priv->rx_tasklet);
@@ -3398,7 +3398,6 @@ static struct platform_driver transport_axon_driver = {
 	.remove		= transport_axon_remove,
 	.driver = {
 		.name		= DRIVER_NAME,
-		.owner		= THIS_MODULE,
 		.bus		= &platform_bus_type,
 		.of_match_table = of_match_ptr(transport_axon_of_match),
 	},
@@ -3536,8 +3535,7 @@ static void __exit vs_transport_axon_exit(void)
 
 	rcu_barrier();
 
-	if (mbuf_cache)
-		kmem_cache_destroy(mbuf_cache);
+    kmem_cache_destroy(mbuf_cache);
 	mbuf_cache = NULL;
 
 	if (work_queue)

@@ -1,15 +1,8 @@
-/* Qti (or) Qualcomm Technologies Inc CE device driver.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Qti (or) Qualcomm Technologies Inc CE device driver.
  *
- * Copyright (c) 2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _DRIVERS_CRYPTO_PARSE_H_
@@ -80,6 +73,7 @@ int qcedev_check_and_map_buffer(void *qce_hndl,
 		int fd, unsigned int offset, unsigned int fd_size,
 		unsigned long long *vaddr);
 int qcedev_check_and_unmap_buffer(void *handle, int fd);
+int qcedev_unmap_all_buffers(void *handle);
 
 extern struct qcedev_reg_buf_info *global_binfo_in;
 extern struct qcedev_reg_buf_info *global_binfo_out;

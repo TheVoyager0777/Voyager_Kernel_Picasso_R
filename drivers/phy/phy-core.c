@@ -153,6 +153,9 @@ int phy_pm_runtime_get(struct phy *phy)
 {
 	int ret;
 
+	if (!phy)
+		return 0;
+
 	if (!pm_runtime_enabled(&phy->dev))
 		return -ENOTSUPP;
 
@@ -168,6 +171,9 @@ int phy_pm_runtime_get_sync(struct phy *phy)
 {
 	int ret;
 
+	if (!phy)
+		return 0;
+
 	if (!pm_runtime_enabled(&phy->dev))
 		return -ENOTSUPP;
 
@@ -181,6 +187,9 @@ EXPORT_SYMBOL_GPL(phy_pm_runtime_get_sync);
 
 int phy_pm_runtime_put(struct phy *phy)
 {
+	if (!phy)
+		return 0;
+
 	if (!pm_runtime_enabled(&phy->dev))
 		return -ENOTSUPP;
 
@@ -190,6 +199,9 @@ EXPORT_SYMBOL_GPL(phy_pm_runtime_put);
 
 int phy_pm_runtime_put_sync(struct phy *phy)
 {
+	if (!phy)
+		return 0;
+
 	if (!pm_runtime_enabled(&phy->dev))
 		return -ENOTSUPP;
 
@@ -199,6 +211,9 @@ EXPORT_SYMBOL_GPL(phy_pm_runtime_put_sync);
 
 void phy_pm_runtime_allow(struct phy *phy)
 {
+	if (!phy)
+		return;
+
 	if (!pm_runtime_enabled(&phy->dev))
 		return;
 
@@ -208,6 +223,9 @@ EXPORT_SYMBOL_GPL(phy_pm_runtime_allow);
 
 void phy_pm_runtime_forbid(struct phy *phy)
 {
+	if (!phy)
+		return;
+
 	if (!pm_runtime_enabled(&phy->dev))
 		return;
 
@@ -299,10 +317,8 @@ int phy_power_on(struct phy *phy)
 			dev_err(&phy->dev, "phy poweron failed --> %d\n", ret);
 			goto err_pwr_on;
 		}
-		++phy->power_count;
-	} else if (!phy->is_binary_power_count) {
-		++phy->power_count;
 	}
+	++phy->power_count;
 	mutex_unlock(&phy->mutex);
 	return 0;
 
@@ -332,10 +348,8 @@ int phy_power_off(struct phy *phy)
 			mutex_unlock(&phy->mutex);
 			return ret;
 		}
-		--phy->power_count;
-	} else if (!phy->is_binary_power_count) {
-		--phy->power_count;
 	}
+	--phy->power_count;
 	mutex_unlock(&phy->mutex);
 	phy_pm_runtime_put(phy);
 
@@ -355,6 +369,8 @@ int phy_set_mode(struct phy *phy, enum phy_mode mode)
 
 	mutex_lock(&phy->mutex);
 	ret = phy->ops->set_mode(phy, mode);
+	if (!ret)
+		phy->attrs.mode = mode;
 	mutex_unlock(&phy->mutex);
 
 	return ret;
@@ -375,6 +391,21 @@ int phy_reset(struct phy *phy)
 	return ret;
 }
 EXPORT_SYMBOL_GPL(phy_reset);
+
+int phy_calibrate(struct phy *phy)
+{
+	int ret;
+
+	if (!phy || !phy->ops->calibrate)
+		return 0;
+
+	mutex_lock(&phy->mutex);
+	ret = phy->ops->calibrate(phy);
+	mutex_unlock(&phy->mutex);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(phy_calibrate);
 
 /**
  * _of_phy_get() - lookup and obtain a reference to a phy by phandle

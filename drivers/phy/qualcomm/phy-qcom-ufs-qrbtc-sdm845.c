@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2016, Linux Foundation. All rights reserved.
  *
@@ -148,7 +149,6 @@ static struct platform_driver ufs_qcom_phy_qrbtc_sdm845_driver = {
 	.driver = {
 		.of_match_table = ufs_qcom_phy_qrbtc_sdm845_of_match,
 		.name = "ufs_qcom_phy_qrbtc_sdm845",
-		.owner = THIS_MODULE,
 	},
 };
 

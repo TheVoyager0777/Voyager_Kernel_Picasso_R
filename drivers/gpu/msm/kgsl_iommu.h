@@ -1,23 +1,11 @@
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
  */
 #ifndef __KGSL_IOMMU_H
 #define __KGSL_IOMMU_H
 
-#ifdef CONFIG_QCOM_IOMMU
-#include <linux/qcom_iommu.h>
-#endif
-#include <linux/of.h>
-#include "kgsl.h"
+#include "kgsl_mmu.h"
 
 /*
  * These defines control the address range for allocations that
@@ -33,8 +21,12 @@
 
 #define KGSL_IOMMU_SECURE_SIZE SZ_256M
 #define KGSL_IOMMU_SECURE_END(_mmu) KGSL_IOMMU_GLOBAL_MEM_BASE(_mmu)
+#define KGSL_IOMMU_SECURE_BASE(_mmu)	\
+	(KGSL_IOMMU_GLOBAL_MEM_BASE(_mmu) - KGSL_IOMMU_SECURE_SIZE)
 
-#define KGSL_IOMMU_SVM_BASE32		0x300000
+#define KGSL_IOMMU_SVM_BASE32(__mmu)	\
+	(ADRENO_DEVICE(KGSL_MMU_DEVICE(__mmu))->uche_gmem_base + \
+		ADRENO_DEVICE(KGSL_MMU_DEVICE(__mmu))->gpucore->gmem_size)
 #define KGSL_IOMMU_SVM_END32		(0xC0000000 - SZ_16M)
 
 #define KGSL_IOMMU_VA_BASE64		0x500000000ULL
@@ -51,10 +43,6 @@
 #define CP_SMMU_APERTURE_ID		0x1B
 /* TLBSTATUS register fields */
 #define KGSL_IOMMU_CTX_TLBSTATUS_SACTIVE BIT(0)
-
-/* IMPLDEF_MICRO_MMU_CTRL register fields */
-#define KGSL_IOMMU_IMPLDEF_MICRO_MMU_CTRL_HALT  0x00000004
-#define KGSL_IOMMU_IMPLDEF_MICRO_MMU_CTRL_IDLE  0x00000008
 
 /* SCTLR fields */
 #define KGSL_IOMMU_SCTLR_HUPCF_SHIFT		8
@@ -102,7 +90,6 @@ enum kgsl_iommu_context_id {
  * @kgsldev: The kgsl device that uses this context.
  * @stalled_on_fault: Flag when set indicates that this iommu device is stalled
  * on a page fault
- * @gpu_offset: Offset of this context bank in the GPU register space
  * @default_pt: The default pagetable for this context,
  *		it may be changed by self programming.
  */
@@ -114,7 +101,6 @@ struct kgsl_iommu_context {
 	struct kgsl_device *kgsldev;
 	bool stalled_on_fault;
 	void __iomem *regbase;
-	unsigned int gpu_offset;
 	struct kgsl_pagetable *default_pt;
 };
 
@@ -127,12 +113,7 @@ struct kgsl_iommu_context {
  * @setstate: Scratch GPU memory for IOMMU operations
  * @clk_enable_count: The ref count of clock enable calls
  * @clks: Array of pointers to IOMMU clocks
- * @vddcx_regulator: Handle to IOMMU regulator
- * @micro_mmu_ctrl: GPU register offset of this glob al register
  * @smmu_info: smmu info used in a5xx preemption
- * @protect: register protection settings for the iommu.
- * @pagefault_suppression_count: Total number of pagefaults
- *				 suppressed since boot.
  */
 struct kgsl_iommu {
 	struct kgsl_iommu_context ctx[KGSL_IOMMU_CONTEXT_MAX];
@@ -142,12 +123,7 @@ struct kgsl_iommu {
 	struct kgsl_memdesc setstate;
 	atomic_t clk_enable_count;
 	struct clk *clks[KGSL_IOMMU_MAX_CLKS];
-	struct regulator *vddcx_regulator;
-	unsigned int micro_mmu_ctrl;
 	struct kgsl_memdesc smmu_info;
-	unsigned int version;
-	struct kgsl_protected_registers protect;
-	u32 pagefault_suppression_count;
 };
 
 /*
@@ -200,9 +176,6 @@ kgsl_iommu_reg(struct kgsl_iommu_context *ctx, enum kgsl_iommu_reg_map reg)
 {
 	return ctx->regbase + kgsl_iommu_reg_list[reg];
 }
-
-/* Program aperture registers using SCM call */
-int kgsl_program_smmu_aperture(void);
 
 #define KGSL_IOMMU_SET_CTX_REG_Q(_ctx, REG, val) \
 		writeq_relaxed((val), \

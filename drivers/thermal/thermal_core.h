@@ -1,24 +1,9 @@
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  *  thermal_core.h
  *
  *  Copyright (C) 2012  Intel Corp
  *  Author: Durgadoss R <durgadoss.r@intel.com>
- *
- * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
- *  This program is free software; you can redistribute it and/or modify
- *  it under the terms of the GNU General Public License as published by
- *  the Free Software Foundation; version 2 of the License.
- *
- *  This program is distributed in the hope that it will be useful, but
- *  WITHOUT ANY WARRANTY; without even the implied warranty of
- *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- *  General Public License for more details.
- *
- *  You should have received a copy of the GNU General Public License along
- *  with this program; if not, write to the Free Software Foundation, Inc.,
- *  59 Temple Place, Suite 330, Boston, MA 02111-1307 USA.
- *
- * ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
  */
 
 #ifndef __THERMAL_CORE_H__
@@ -27,6 +12,9 @@
 #include <linux/device.h>
 #include <linux/thermal.h>
 
+#ifdef CONFIG_DRM
+#include <drm/drm_notifier_mi.h>
+#endif
 /* Initial state of a cooling device during binding */
 #define THERMAL_NO_TARGET -1UL
 
@@ -58,6 +46,11 @@ struct thermal_instance {
 	unsigned int weight; /* The weight of the cooling device */
 };
 
+struct msm_drm_notifier {
+	enum msm_drm_display_id id;
+	void *data;
+};
+
 #define to_thermal_zone(_dev) \
 	container_of(_dev, struct thermal_zone_device, device)
 
@@ -77,32 +70,31 @@ int thermal_build_list_of_policies(char *buf);
 int thermal_zone_create_device_groups(struct thermal_zone_device *, int);
 void thermal_zone_destroy_device_groups(struct thermal_zone_device *);
 void thermal_cooling_device_setup_sysfs(struct thermal_cooling_device *);
+void thermal_cooling_device_destroy_sysfs(struct thermal_cooling_device *cdev);
 /* used only at binding time */
-ssize_t
-thermal_cooling_device_trip_point_show(struct device *,
-				       struct device_attribute *, char *);
-ssize_t thermal_cooling_device_weight_show(struct device *,
-					   struct device_attribute *, char *);
-ssize_t
-thermal_cooling_device_lower_limit_show(struct device *dev,
-				       struct device_attribute *attr,
-				       char *buf);
-ssize_t
-thermal_cooling_device_upper_limit_show(struct device *dev,
-				       struct device_attribute *attr,
-				       char *buf);
+ssize_t trip_point_show(struct device *, struct device_attribute *, char *);
+ssize_t trip_point_store(struct device *, struct device_attribute *,
+			 const char *, size_t);
+ssize_t weight_show(struct device *, struct device_attribute *, char *);
+ssize_t lower_limit_show(struct device *dev, struct device_attribute *attr,
+			char *buf);
+ssize_t upper_limit_show(struct device *dev, struct device_attribute *attr,
+			char *buf);
+ssize_t weight_store(struct device *, struct device_attribute *, const char *,
+		     size_t);
+ssize_t lower_limit_store(struct device *dev, struct device_attribute *attr,
+			const char *buf, size_t count);
+ssize_t upper_limit_store(struct device *dev, struct device_attribute *attr,
+			const char *buf, size_t count);
 
-ssize_t thermal_cooling_device_weight_store(struct device *,
-					    struct device_attribute *,
-					    const char *, size_t);
-ssize_t
-thermal_cooling_device_lower_limit_store(struct device *dev,
-				    struct device_attribute *attr,
-				    const char *buf, size_t count);
-ssize_t
-thermal_cooling_device_upper_limit_store(struct device *dev,
-				    struct device_attribute *attr,
-				    const char *buf, size_t count);
+#ifdef CONFIG_THERMAL_STATISTICS
+void thermal_cooling_device_stats_update(struct thermal_cooling_device *cdev,
+					 unsigned long new_state);
+#else
+static inline void
+thermal_cooling_device_stats_update(struct thermal_cooling_device *cdev,
+				    unsigned long new_state) {}
+#endif /* CONFIG_THERMAL_STATISTICS */
 
 #ifdef CONFIG_THERMAL_GOV_STEP_WISE
 int thermal_gov_step_wise_register(void);

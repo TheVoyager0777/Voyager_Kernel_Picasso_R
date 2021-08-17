@@ -222,12 +222,22 @@ enum dmx_video_codec {
 #define DMX_IDX_H264_ACCESS_UNIT_DEL        0x04000000
 #define DMX_IDX_H264_SEI                    0x08000000
 
+/**
+ * struct dmx_pes_filter_params - Specifies Packetized Elementary Stream (PES)
+ *	filter parameters.
+ *
+ * @pid:	PID to be filtered.
+ * @input:	Demux input, as specified by &enum dmx_input.
+ * @output:	Demux output, as specified by &enum dmx_output.
+ * @pes_type:	Type of the pes filter, as specified by &enum dmx_pes_type.
+ * @flags:	Demux PES flags.
+ */
 struct dmx_pes_filter_params {
-	__u16          pid;
-	enum dmx_input input;
+	__u16           pid;
+	enum dmx_input  input;
 	enum dmx_output output;
 	enum dmx_ts_pes pes_type;
-	__u32          flags;
+	__u32           flags;
 
 	/*
 	 * The following configures when the event
@@ -581,7 +591,7 @@ struct dmx_oob_command {
 	} params;
 };
 
-typedef struct dmx_caps {
+struct dmx_caps {
 	__u32 caps;
 
 /* Indicates whether demux support playback from memory in pull mode */
@@ -657,7 +667,7 @@ typedef struct dmx_caps {
 	 * For indexing support (DMX_CAP_VIDEO_INDEXING capability) this is
 	 * the max number of video pids that can be indexed for a single
 	 * recording filter. If 0, means there is not limitation.
- */
+	 */
 	int recording_max_video_pids_indexed;
 
 	struct dmx_buffer_requirement section;
@@ -679,9 +689,9 @@ typedef struct dmx_caps {
 
 	/* DVR input buffer for playback of 192 bytes packets */
 	struct dmx_buffer_requirement playback_192_tsp;
-} dmx_caps_t;
+};
 
-typedef enum dmx_source {
+enum dmx_source_t {
 	DMX_SOURCE_FRONT0 = 0,
 	DMX_SOURCE_FRONT1,
 	DMX_SOURCE_FRONT2,
@@ -690,7 +700,7 @@ typedef enum dmx_source {
 	DMX_SOURCE_DVR1,
 	DMX_SOURCE_DVR2,
 	DMX_SOURCE_DVR3
-} dmx_source_t;
+};
 
 enum dmx_tsp_format_t {
 	DMX_TSP_FORMAT_188 = 0,
@@ -719,11 +729,17 @@ enum dmx_playback_mode_t {
 	 */
 	DMX_PB_MODE_PULL,
 };
-
+/**
+ * struct dmx_stc - Stores System Time Counter (STC) information.
+ *
+ * @num: input data: number of the STC, from 0 to N.
+ * @base: output: divisor for STC to get 90 kHz clock.
+ * @stc: output: stc in @base * 90 kHz units.
+ */
 struct dmx_stc {
-	unsigned int num;     /* input : which STC? 0..N */
-	unsigned int base;    /* output: divisor for stc to get 90 kHz clock */
-	__u64 stc;            /* output: stc in 'base'*90 kHz units */
+	unsigned int num;
+	unsigned int base;
+	__u64 stc;
 };
 
 enum dmx_buffer_mode {
@@ -742,20 +758,6 @@ enum dmx_buffer_mode {
 	 * mmap are prohibited.
 	 */
 	DMX_BUFFER_MODE_EXTERNAL,
-};
-
-struct dmx_buffer {
-	unsigned int size;
-	int handle;
-
-	/*
-	 * The following indication is relevant only when setting
-	 * DVR input buffer. It indicates whether the input buffer
-	 * being set is secured one or not. Secured (locked) buffers
-	 * are required for playback from secured input. In such case
-	 * write() syscall is not allowed.
-	 */
-	int is_protected;
 };
 
 struct dmx_decoder_buffers {
@@ -915,14 +917,116 @@ struct dmx_scrambling_bits {
 	__u8 value;
 };
 
+/**
+ * enum dmx_buffer_flags - DMX memory-mapped buffer flags
+ *
+ * @DMX_BUFFER_FLAG_HAD_CRC32_DISCARD:
+ *	Indicates that the Kernel discarded one or more frames due to wrong
+ *	CRC32 checksum.
+ * @DMX_BUFFER_FLAG_TEI:
+ *	Indicates that the Kernel has detected a Transport Error indicator
+ *	(TEI) on a filtered pid.
+ * @DMX_BUFFER_PKT_COUNTER_MISMATCH:
+ *	Indicates that the Kernel has detected a packet counter mismatch
+ *	on a filtered pid.
+ * @DMX_BUFFER_FLAG_DISCONTINUITY_DETECTED:
+ *	Indicates that the Kernel has detected one or more frame discontinuity.
+ * @DMX_BUFFER_FLAG_DISCONTINUITY_INDICATOR:
+ *	Received at least one packet with a frame discontinuity indicator.
+ */
+
+enum dmx_buffer_flags {
+	DMX_BUF_FLAG_HAD_CRC32_DISCARD		= 1 << 0,
+	DMX_BUF_FLAG_TEI			= 1 << 1,
+	DMX_BUF_PKT_COUNTER_MISMATCH		= 1 << 2,
+	DMX_BUF_FLAG_DISCONTINUITY_DETECTED	= 1 << 3,
+	DMX_BUF_FLAG_DISCONTINUITY_INDICATOR	= 1 << 4,
+};
+
+/**
+ * struct dmx_buffer - dmx buffer info
+ *
+ * @index:	id number of the buffer
+ * @bytesused:	number of bytes occupied by data in the buffer (payload);
+ * @offset:	for buffers with memory == DMX_MEMORY_MMAP;
+ *		offset from the start of the device memory for this plane,
+ *		(or a "cookie" that should be passed to mmap() as offset)
+ * @length:	size in bytes of the buffer
+ * @flags:	bit array of buffer flags as defined by &enum dmx_buffer_flags.
+ *		Filled only at &DMX_DQBUF.
+ * @count:	monotonic counter for filled buffers. Helps to identify
+ *		data stream loses. Filled only at &DMX_DQBUF.
+ *
+ * Contains data exchanged by application and driver using one of the streaming
+ * I/O methods.
+ *
+ * Please notice that, for &DMX_QBUF, only @index should be filled.
+ * On &DMX_DQBUF calls, all fields will be filled by the Kernel.
+ */
+struct dmx_buffer {
+	__u32			index;
+	__u32			bytesused;
+	__u32			offset;
+	__u32			length;
+	__u32			flags;
+	__u32			count;
+	unsigned int size;
+	int handle;
+
+	/*
+	 * The following indication is relevant only when setting
+	 * DVR input buffer. It indicates whether the input buffer
+	 * being set is secured one or not. Secured (locked) buffers
+	 * are required for playback from secured input. In such case
+	 * write() syscall is not allowed.
+	 */
+	int is_protected;
+
+};
+
+/**
+ * struct dmx_requestbuffers - request dmx buffer information
+ *
+ * @count:	number of requested buffers,
+ * @size:	size in bytes of the requested buffer
+ *
+ * Contains data used for requesting a dmx buffer.
+ * All reserved fields must be set to zero.
+ */
+struct dmx_requestbuffers {
+	__u32			count;
+	__u32			size;
+};
+
+/**
+ * struct dmx_exportbuffer - export of dmx buffer as DMABUF file descriptor
+ *
+ * @index:	id number of the buffer
+ * @flags:	flags for newly created file, currently only O_CLOEXEC is
+ *		supported, refer to manual of open syscall for more details
+ * @fd:		file descriptor associated with DMABUF (set by driver)
+ *
+ * Contains data used for exporting a dmx buffer as DMABUF file descriptor.
+ * The buffer is identified by a 'cookie' returned by DMX_QUERYBUF
+ * (identical to the cookie used to mmap() the buffer to userspace). All
+ * reserved fields must be set to zero. The field reserved0 is expected to
+ * become a structure 'type' allowing an alternative layout of the structure
+ * content. Therefore this field should not be used for any other extensions.
+ */
+struct dmx_exportbuffer {
+	__u32		index;
+	__u32		flags;
+	__s32		fd;
+};
+
 #define DMX_START                _IO('o', 41)
 #define DMX_STOP                 _IO('o', 42)
 #define DMX_SET_FILTER           _IOW('o', 43, struct dmx_sct_filter_params)
 #define DMX_SET_PES_FILTER       _IOW('o', 44, struct dmx_pes_filter_params)
 #define DMX_SET_BUFFER_SIZE      _IO('o', 45)
 #define DMX_GET_PES_PIDS         _IOR('o', 47, __u16[5])
-#define DMX_GET_CAPS             _IOR('o', 48, dmx_caps_t)
-#define DMX_SET_SOURCE           _IOW('o', 49, dmx_source_t)
+#define DMX_GET_CAPS             _IOR('o', 48, struct dmx_caps)
+#define DMX_SET_SOURCE           _IOW('o', 49, enum dmx_source_t)
 #define DMX_GET_STC              _IOWR('o', 50, struct dmx_stc)
 #define DMX_ADD_PID              _IOW('o', 51, __u16)
 #define DMX_REMOVE_PID           _IOW('o', 52, __u16)
@@ -933,22 +1037,21 @@ struct dmx_scrambling_bits {
 #define DMX_RELEASE_DATA		 _IO('o', 57)
 #define DMX_FEED_DATA			 _IO('o', 58)
 #define DMX_SET_PLAYBACK_MODE	 _IOW('o', 59, enum dmx_playback_mode_t)
-#define DMX_GET_EVENT		 _IOR('o', 60, struct dmx_filter_event)
-#define DMX_SET_BUFFER_MODE	 _IOW('o', 61, enum dmx_buffer_mode)
-#define DMX_SET_BUFFER		 _IOW('o', 62, struct dmx_buffer)
-#define DMX_SET_DECODER_BUFFER	 _IOW('o', 63, struct dmx_decoder_buffers)
-#define DMX_REUSE_DECODER_BUFFER _IO('o', 64)
-#define DMX_SET_SECURE_MODE	_IOW('o', 65, struct dmx_secure_mode)
-#define DMX_SET_EVENTS_MASK	_IOW('o', 66, struct dmx_events_mask)
-#define DMX_GET_EVENTS_MASK	_IOR('o', 67, struct dmx_events_mask)
-#define DMX_PUSH_OOB_COMMAND	_IOW('o', 68, struct dmx_oob_command)
-#define DMX_SET_INDEXING_PARAMS _IOW('o', 69, struct dmx_indexing_params)
-#define DMX_SET_TS_INSERTION _IOW('o', 70, struct dmx_set_ts_insertion)
-#define DMX_ABORT_TS_INSERTION _IOW('o', 71, struct dmx_abort_ts_insertion)
-#define DMX_GET_SCRAMBLING_BITS _IOWR('o', 72, struct dmx_scrambling_bits)
-#define DMX_SET_CIPHER _IOW('o', 73, struct dmx_cipher_operations)
-#define DMX_FLUSH_BUFFER _IO('o', 74)
-
+#define DMX_SET_SECURE_MODE	     _IOW('o', 65, struct dmx_secure_mode)
+#define DMX_SET_EVENTS_MASK	     _IOW('o', 66, struct dmx_events_mask)
+#define DMX_GET_EVENTS_MASK	     _IOR('o', 67, struct dmx_events_mask)
+#define DMX_PUSH_OOB_COMMAND	 _IOW('o', 68, struct dmx_oob_command)
+#define DMX_SET_INDEXING_PARAMS  _IOW('o', 69, struct dmx_indexing_params)
+#define DMX_SET_TS_INSERTION     _IOW('o', 70, struct dmx_set_ts_insertion)
+#define DMX_ABORT_TS_INSERTION   _IOW('o', 71, struct dmx_abort_ts_insertion)
+#define DMX_GET_SCRAMBLING_BITS  _IOWR('o', 72, struct dmx_scrambling_bits)
+#define DMX_SET_CIPHER           _IOW('o', 73, struct dmx_cipher_operations)
+#define DMX_FLUSH_BUFFER         _IO('o', 74)
+#define DMX_GET_EVENT		     _IOR('o', 75, struct dmx_filter_event)
+#define DMX_SET_BUFFER_MODE	     _IOW('o', 76, enum dmx_buffer_mode)
+#define DMX_SET_BUFFER		     _IOW('o', 77, struct dmx_buffer)
+#define DMX_SET_DECODER_BUFFER	 _IOW('o', 78, struct dmx_decoder_buffers)
+#define DMX_REUSE_DECODER_BUFFER _IO('o', 79)
 #if !defined(__KERNEL__)
 
 /* This is needed for legacy userspace support */
@@ -959,4 +1062,10 @@ typedef struct dmx_filter dmx_filter_t;
 
 #endif
 
-#endif /* _UAPI_DVBDMX_H_ */
+#define DMX_REQBUFS              _IOWR('o', 60, struct dmx_requestbuffers)
+#define DMX_QUERYBUF             _IOWR('o', 61, struct dmx_buffer)
+#define DMX_EXPBUF               _IOWR('o', 62, struct dmx_exportbuffer)
+#define DMX_QBUF                 _IOWR('o', 63, struct dmx_buffer)
+#define DMX_DQBUF                _IOWR('o', 64, struct dmx_buffer)
+
+#endif /* _DVBDMX_H_ */

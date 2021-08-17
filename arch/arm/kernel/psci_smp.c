@@ -47,19 +47,13 @@
  *
  */
 
-#ifdef CONFIG_THUMB2_KERNEL
-#define secondary_start secondary_startup_arm
-extern void secondary_startup_arm(void);
-#else
-#define secondary_start secondary_startup
 extern void secondary_startup(void);
-#endif
 
 static int psci_boot_secondary(unsigned int cpu, struct task_struct *idle)
 {
 	if (psci_ops.cpu_on)
 		return psci_ops.cpu_on(cpu_logical_map(cpu),
-					virt_to_idmap(&secondary_start));
+					virt_to_idmap(&secondary_startup));
 	return -ENODEV;
 }
 
@@ -104,12 +98,12 @@ int psci_cpu_kill(unsigned int cpu)
 	for (i = 0; i < 10; i++) {
 		err = psci_ops.affinity_info(cpu_logical_map(cpu), 0);
 		if (err == PSCI_0_2_AFFINITY_LEVEL_OFF) {
-			pr_debug("CPU%d killed.\n", cpu);
+			pr_info("CPU%d killed.\n", cpu);
 			return 1;
 		}
 
 		msleep(10);
-		pr_debug("Retrying again to check for CPU kill\n");
+		pr_info("Retrying again to check for CPU kill\n");
 	}
 
 	pr_warn("CPU%d may not have shut down cleanly (AFFINITY_INFO reports %d)\n",

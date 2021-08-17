@@ -2,6 +2,7 @@
  * MIPI DSI Bus
  *
  * Copyright (C) 2012-2013, Samsung Electronics, Co., Ltd.
+ * Copyright (C) 2021 XiaoMi, Inc.
  * Andrzej Hajda <a.hajda@samsung.com>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
@@ -393,8 +394,8 @@ bool mipi_dsi_packet_format_is_short(u8 type)
 	case MIPI_DSI_DCS_SHORT_WRITE:
 	case MIPI_DSI_DCS_SHORT_WRITE_PARAM:
 	case MIPI_DSI_DCS_READ:
+	case MIPI_DSI_DCS_COMPRESSION_MODE:
 	case MIPI_DSI_SET_MAXIMUM_RETURN_PACKET_SIZE:
-	case MIPI_DSI_COMPRESSION_MODE:
 		return true;
 	}
 
@@ -412,6 +413,7 @@ EXPORT_SYMBOL(mipi_dsi_packet_format_is_short);
 bool mipi_dsi_packet_format_is_long(u8 type)
 {
 	switch (type) {
+	case MIPI_DSI_PPS_LONG_WRITE:
 	case MIPI_DSI_NULL_PACKET:
 	case MIPI_DSI_BLANKING_PACKET:
 	case MIPI_DSI_GENERIC_LONG_WRITE:
@@ -426,7 +428,6 @@ bool mipi_dsi_packet_format_is_long(u8 type)
 	case MIPI_DSI_PACKED_PIXEL_STREAM_18:
 	case MIPI_DSI_PIXEL_STREAM_3BYTE_18:
 	case MIPI_DSI_PACKED_PIXEL_STREAM_24:
-	case MIPI_DSI_PPS:
 		return true;
 	}
 
@@ -501,8 +502,9 @@ int mipi_dsi_shutdown_peripheral(struct mipi_dsi_device *dsi)
 		.tx_buf = (u8 [2]) { 0, 0 },
 		.tx_len = 2,
 	};
+	int ret = mipi_dsi_device_transfer(dsi, &msg);
 
-	return mipi_dsi_device_transfer(dsi, &msg);
+	return (ret < 0) ? ret : 0;
 }
 EXPORT_SYMBOL(mipi_dsi_shutdown_peripheral);
 
@@ -520,8 +522,9 @@ int mipi_dsi_turn_on_peripheral(struct mipi_dsi_device *dsi)
 		.tx_buf = (u8 [2]) { 0, 0 },
 		.tx_len = 2,
 	};
+	int ret = mipi_dsi_device_transfer(dsi, &msg);
 
-	return mipi_dsi_device_transfer(dsi, &msg);
+	return (ret < 0) ? ret : 0;
 }
 EXPORT_SYMBOL(mipi_dsi_turn_on_peripheral);
 
@@ -544,8 +547,9 @@ int mipi_dsi_set_maximum_return_packet_size(struct mipi_dsi_device *dsi,
 		.tx_len = sizeof(tx),
 		.tx_buf = tx,
 	};
+	int ret = mipi_dsi_device_transfer(dsi, &msg);
 
-	return mipi_dsi_device_transfer(dsi, &msg);
+	return (ret < 0) ? ret : 0;
 }
 EXPORT_SYMBOL(mipi_dsi_set_maximum_return_packet_size);
 
@@ -1032,31 +1036,17 @@ EXPORT_SYMBOL(mipi_dsi_dcs_set_pixel_format);
  */
 int mipi_dsi_dcs_set_tear_scanline(struct mipi_dsi_device *dsi, u16 scanline)
 {
-	u8 payload[2] = { scanline >> 8, scanline & 0xff };
+	u8 payload[3] = { MIPI_DCS_SET_TEAR_SCANLINE, scanline >> 8,
+			  scanline & 0xff };
 	ssize_t err;
 
-	err = mipi_dsi_dcs_write(dsi, MIPI_DCS_SET_TEAR_SCANLINE, payload,
-				 sizeof(payload));
+	err = mipi_dsi_generic_write(dsi, payload, sizeof(payload));
 	if (err < 0)
 		return err;
 
 	return 0;
 }
 EXPORT_SYMBOL(mipi_dsi_dcs_set_tear_scanline);
-
-int mipi_dsi_dcs_set_display_brightness_ss(struct mipi_dsi_device *dsi,
-					u16 brightness)
-{
-	u8 payload[2] = { brightness >> 8, brightness & 0xff };
-	ssize_t err;
-
-	err = mipi_dsi_dcs_write(dsi, MIPI_DCS_SET_DISPLAY_BRIGHTNESS,
-				 payload, sizeof(payload));
-	if (err < 0)
-		return err;
-
-	return 0;
-}
 
 /**
  * mipi_dsi_dcs_set_display_brightness() - sets the brightness value of the
@@ -1080,6 +1070,29 @@ int mipi_dsi_dcs_set_display_brightness(struct mipi_dsi_device *dsi,
 	return 0;
 }
 EXPORT_SYMBOL(mipi_dsi_dcs_set_display_brightness);
+
+/**
+ * mipi_dsi_dcs_set_display_brightness_big_endian() - sets the brightness value of the
+ * display with big endian, high byte to 1st parameter, low byte to 2nd parameter
+ * @dsi: DSI peripheral device
+ * @brightness: brightness value
+ *
+ * Return: 0 on success or a negative error code on failure.
+ */
+int mipi_dsi_dcs_set_display_brightness_big_endian(struct mipi_dsi_device *dsi,
+					u16 brightness)
+{
+	u8 payload[2] = { brightness >> 8, brightness & 0xff};
+	ssize_t err;
+
+	err = mipi_dsi_dcs_write(dsi, MIPI_DCS_SET_DISPLAY_BRIGHTNESS,
+				 payload, sizeof(payload));
+	if (err < 0)
+		return err;
+
+	return 0;
+}
+EXPORT_SYMBOL(mipi_dsi_dcs_set_display_brightness_big_endian);
 
 /**
  * mipi_dsi_dcs_get_display_brightness() - gets the current brightness value

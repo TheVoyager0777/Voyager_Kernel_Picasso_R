@@ -1,13 +1,6 @@
-/* Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _NPU_COMMON_H
@@ -29,6 +22,9 @@
 #include <linux/types.h>
 #include <linux/uaccess.h>
 #include <linux/mailbox/qmp.h>
+#include <linux/msm-bus.h>
+#include <linux/mailbox_controller.h>
+#include <linux/reset.h>
 
 #include "npu_mgr.h"
 
@@ -36,7 +32,7 @@
  * Defines
  * -------------------------------------------------------------------------
  */
-#define NPU_MAX_MBOX_NUM	    2
+#define NPU_MAX_MBOX_NUM	    4
 #define NPU_MBOX_LOW_PRI	    0
 #define NPU_MBOX_HIGH_PRI	    1
 
@@ -44,12 +40,13 @@
 #define ROW_BYTES 16
 #define GROUP_BYTES 4
 
-#define NUM_MAX_CLK_NUM			24
+#define NUM_MAX_CLK_NUM			48
 #define NPU_MAX_REGULATOR_NUM	2
 #define NPU_MAX_DT_NAME_LEN	    21
 #define NPU_MAX_PWRLEVELS		8
 #define NPU_MAX_STATS_BUF_SIZE 16384
 #define NPU_MAX_PATCH_NUM		160
+#define NPU_MAX_BW_DEVS			4
 
 #define PERF_MODE_DEFAULT 0
 
@@ -64,6 +61,15 @@ enum npu_power_level {
 	NPU_PWRLEVEL_TURBO_L1,
 	NPU_PWRLEVEL_OFF = 0xFFFFFFFF,
 };
+
+#define NPU_ERR(fmt, args...)                            \
+	pr_err("NPU_ERR: %s: %d " fmt, __func__,  __LINE__, ##args)
+#define NPU_WARN(fmt, args...)                           \
+	pr_warn("NPU_WARN: %s: %d " fmt, __func__,  __LINE__, ##args)
+#define NPU_INFO(fmt, args...)                           \
+	pr_info("NPU_INFO: %s: %d " fmt, __func__,  __LINE__, ##args)
+#define NPU_DBG(fmt, args...)                           \
+	pr_debug("NPU_DBG: %s: %d " fmt, __func__,  __LINE__, ##args)
 
 /* -------------------------------------------------------------------------
  * Data Structures
@@ -91,6 +97,7 @@ struct npu_ion_buf {
 struct npu_clk {
 	struct clk *clk;
 	char clk_name[NPU_MAX_DT_NAME_LEN];
+	struct reset_control *reset;
 };
 
 struct npu_regulator {
@@ -121,6 +128,9 @@ struct npu_mbox {
 	struct mbox_chan *chan;
 	struct npu_device *npu_dev;
 	uint32_t id;
+	uint32_t client_id;
+	uint32_t signal_id;
+	bool send_data_pending;
 };
 
 /**
@@ -166,6 +176,7 @@ struct npu_reg {
  */
 struct npu_pwrctrl {
 	int32_t pwr_vote_num;
+	int32_t pwr_vote_num_sysfs;
 
 	struct npu_pwrlevel pwrlevels[NPU_MAX_PWRLEVELS];
 	uint32_t active_pwrlevel;
@@ -174,7 +185,8 @@ struct npu_pwrctrl {
 	uint32_t min_pwrlevel;
 	uint32_t num_pwrlevels;
 
-	struct device *devbw;
+	struct device *devbw[NPU_MAX_BW_DEVS];
+	uint32_t devbw_num;
 	uint32_t bwmon_enabled;
 	uint32_t uc_pwrlevel;
 	uint32_t cdsprm_pwrlevel;
@@ -196,17 +208,40 @@ struct npu_thermalctrl {
 	uint32_t pwr_level;
 };
 
-#define NPU_MAX_IRQ		3
+#define NPU_MAX_IRQ		8
 
 struct npu_irq {
 	char *name;
 	int irq;
 	int irq_type;
+	irq_handler_t handler;
 };
 
 struct npu_io_data {
 	size_t size;
+	phys_addr_t phy_addr;
 	void __iomem *base;
+};
+
+#define MAX_PATHS	2
+#define DBL_BUF	2
+#define MBYTE (1ULL << 20)
+
+struct npu_bwctrl {
+	struct msm_bus_vectors vectors[MAX_PATHS * DBL_BUF];
+	struct msm_bus_paths bw_levels[DBL_BUF];
+	struct msm_bus_scale_pdata bw_data;
+	uint32_t bus_client;
+	int cur_ab;
+	int cur_ib;
+	int cur_idx;
+	uint32_t num_paths;
+};
+
+struct mbox_bridge_data {
+	struct mbox_controller mbox;
+	struct mbox_chan *chans;
+	void *priv_data;
 };
 
 struct npu_device {
@@ -221,7 +256,9 @@ struct npu_device {
 
 	struct npu_io_data core_io;
 	struct npu_io_data tcm_io;
-	struct npu_io_data bwmon_io;
+	struct npu_io_data cc_io;
+	struct npu_io_data tcsr_io;
+	struct npu_io_data apss_shared_io;
 	struct npu_io_data qfprom_io;
 
 	uint32_t core_clk_num;
@@ -231,6 +268,7 @@ struct npu_device {
 	struct npu_regulator regulators[NPU_MAX_DT_NAME_LEN];
 
 	struct npu_irq irq[NPU_MAX_IRQ];
+	bool irq_enabled;
 
 	struct device *cb_device;
 
@@ -238,15 +276,19 @@ struct npu_device {
 	struct npu_smmu_ctx smmu_ctx;
 	struct npu_debugfs_ctx debugfs_ctx;
 
-	struct npu_mbox mbox_aop;
+	struct npu_mbox *mbox_aop;
+	struct npu_mbox mbox[NPU_MAX_MBOX_NUM];
+	struct mbox_bridge_data mbox_bridge_data;
 
 	struct thermal_cooling_device *tcdev;
 	struct npu_pwrctrl pwrctrl;
 	struct npu_thermalctrl thermalctrl;
+	struct npu_bwctrl bwctrl;
 
 	struct llcc_slice_desc *sys_cache;
 	uint32_t execute_v2_flag;
 	bool cxlimit_registered;
+	bool npu_dsp_sid_mapped;
 
 	uint32_t hw_version;
 };
@@ -266,6 +308,14 @@ struct npu_client {
 	struct list_head mapped_buffer_list;
 };
 
+struct ipcc_mbox_chan {
+	u16 client_id;
+	u16 signal_id;
+	struct mbox_chan *chan;
+	struct npu_mbox *npu_mbox;
+	struct npu_device *npu_dev;
+};
+
 /* -------------------------------------------------------------------------
  * Function Prototypes
  * -------------------------------------------------------------------------
@@ -278,13 +328,22 @@ void npu_disable_core_power(struct npu_device *npu_dev);
 int npu_enable_post_pil_clocks(struct npu_device *npu_dev);
 void npu_disable_post_pil_clocks(struct npu_device *npu_dev);
 
-irqreturn_t npu_intr_hdler(int irq, void *ptr);
+irqreturn_t npu_ipc_intr_hdlr(int irq, void *ptr);
+irqreturn_t npu_general_intr_hdlr(int irq, void *ptr);
+irqreturn_t npu_err_intr_hdlr(int irq, void *ptr);
+irqreturn_t npu_wdg_intr_hdlr(int irq, void *ptr);
 
 int npu_set_uc_power_level(struct npu_device *npu_dev,
 	uint32_t pwr_level);
+int npu_set_power_level(struct npu_device *npu_dev, bool notify_cxlimit);
 
-int fw_init(struct npu_device *npu_dev);
-void fw_deinit(struct npu_device *npu_dev, bool ssr, bool fw_alive);
+int enable_fw(struct npu_device *npu_dev);
+void disable_fw(struct npu_device *npu_dev);
+int load_fw(struct npu_device *npu_dev);
+int unload_fw(struct npu_device *npu_dev);
+int npu_set_bw(struct npu_device *npu_dev, int new_ib, int new_ab);
+int npu_process_kevent(struct npu_client *client, struct npu_kevent *kevt);
 int npu_notify_cdsprm_cxlimit_activity(struct npu_device *npu_dev, bool enable);
-
+int npu_bridge_mbox_send_data(struct npu_host_ctx *host_ctx,
+	struct npu_mbox *mbox, void *data);
 #endif /* _NPU_COMMON_H */

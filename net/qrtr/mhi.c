@@ -1,14 +1,5 @@
-/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved. */
 
 #include <linux/module.h>
 #include <linux/skbuff.h>
@@ -72,6 +63,11 @@ static void qcom_mhi_qrtr_ul_callback(struct mhi_device *mhi_dev,
 	unsigned long flags;
 
 	spin_lock_irqsave(&qdev->ul_lock, flags);
+	if (list_empty(&qdev->ul_pkts)) {
+		spin_unlock_irqrestore(&qdev->ul_lock, flags);
+		dev_err(qdev->dev, "ul_pkt list is empty\n");
+		return;
+	}
 	pkt = list_first_entry(&qdev->ul_pkts, struct qrtr_mhi_pkt, node);
 	list_del(&pkt->node);
 	complete_all(&pkt->done);
@@ -180,7 +176,7 @@ static int qcom_mhi_qrtr_probe(struct mhi_device *mhi_dev,
 	if (rc)
 		return rc;
 
-	dev_dbg(qdev->dev, "Qualcomm MHI QRTR driver probed\n");
+	dev_dbg(qdev->dev, "QTI MHI QRTR driver probed\n");
 
 	return 0;
 }
@@ -214,5 +210,5 @@ static struct mhi_driver qcom_mhi_qrtr_driver = {
 module_driver(qcom_mhi_qrtr_driver, mhi_driver_register,
 	      mhi_driver_unregister);
 
-MODULE_DESCRIPTION("Qualcomm IPC-Router MHI interface driver");
+MODULE_DESCRIPTION("QTI IPC-Router MHI interface driver");
 MODULE_LICENSE("GPL v2");

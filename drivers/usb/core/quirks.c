@@ -1,20 +1,165 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * USB device quirk handling logic and table
  *
  * Copyright (c) 2007 Oliver Neukum
  * Copyright (c) 2007 Greg Kroah-Hartman <gregkh@suse.de>
- *
- * This program is free software; you can redistribute it and/or modify it
- * under the terms of the GNU General Public License as published by the Free
- * Software Foundation, version 2.
- *
- *
  */
 
+#include <linux/moduleparam.h>
 #include <linux/usb.h>
 #include <linux/usb/quirks.h>
 #include <linux/usb/hcd.h>
 #include "usb.h"
+
+struct quirk_entry {
+	u16 vid;
+	u16 pid;
+	u32 flags;
+};
+
+static DEFINE_MUTEX(quirk_mutex);
+
+static struct quirk_entry *quirk_list;
+static unsigned int quirk_count;
+
+static char quirks_param[128];
+
+static int quirks_param_set(const char *val, const struct kernel_param *kp)
+{
+	char *p, *field;
+	u16 vid, pid;
+	u32 flags;
+	size_t i;
+	int err;
+
+	err = param_set_copystring(val, kp);
+	if (err)
+		return err;
+
+	mutex_lock(&quirk_mutex);
+
+	if (!*val) {
+		quirk_count = 0;
+		kfree(quirk_list);
+		quirk_list = NULL;
+		goto unlock;
+	}
+
+	for (quirk_count = 1, i = 0; val[i]; i++)
+		if (val[i] == ',')
+			quirk_count++;
+
+	if (quirk_list) {
+		kfree(quirk_list);
+		quirk_list = NULL;
+	}
+
+	quirk_list = kcalloc(quirk_count, sizeof(struct quirk_entry),
+			     GFP_KERNEL);
+	if (!quirk_list) {
+		quirk_count = 0;
+		mutex_unlock(&quirk_mutex);
+		return -ENOMEM;
+	}
+
+	for (i = 0, p = (char *)val; p && *p;) {
+		/* Each entry consists of VID:PID:flags */
+		field = strsep(&p, ":");
+		if (!field)
+			break;
+
+		if (kstrtou16(field, 16, &vid))
+			break;
+
+		field = strsep(&p, ":");
+		if (!field)
+			break;
+
+		if (kstrtou16(field, 16, &pid))
+			break;
+
+		field = strsep(&p, ",");
+		if (!field || !*field)
+			break;
+
+		/* Collect the flags */
+		for (flags = 0; *field; field++) {
+			switch (*field) {
+			case 'a':
+				flags |= USB_QUIRK_STRING_FETCH_255;
+				break;
+			case 'b':
+				flags |= USB_QUIRK_RESET_RESUME;
+				break;
+			case 'c':
+				flags |= USB_QUIRK_NO_SET_INTF;
+				break;
+			case 'd':
+				flags |= USB_QUIRK_CONFIG_INTF_STRINGS;
+				break;
+			case 'e':
+				flags |= USB_QUIRK_RESET;
+				break;
+			case 'f':
+				flags |= USB_QUIRK_HONOR_BNUMINTERFACES;
+				break;
+			case 'g':
+				flags |= USB_QUIRK_DELAY_INIT;
+				break;
+			case 'h':
+				flags |= USB_QUIRK_LINEAR_UFRAME_INTR_BINTERVAL;
+				break;
+			case 'i':
+				flags |= USB_QUIRK_DEVICE_QUALIFIER;
+				break;
+			case 'j':
+				flags |= USB_QUIRK_IGNORE_REMOTE_WAKEUP;
+				break;
+			case 'k':
+				flags |= USB_QUIRK_NO_LPM;
+				break;
+			case 'l':
+				flags |= USB_QUIRK_LINEAR_FRAME_INTR_BINTERVAL;
+				break;
+			case 'm':
+				flags |= USB_QUIRK_DISCONNECT_SUSPEND;
+				break;
+			case 'n':
+				flags |= USB_QUIRK_DELAY_CTRL_MSG;
+				break;
+			case 'o':
+				flags |= USB_QUIRK_HUB_SLOW_RESET;
+				break;
+			/* Ignore unrecognized flag characters */
+			}
+		}
+
+		quirk_list[i++] = (struct quirk_entry)
+			{ .vid = vid, .pid = pid, .flags = flags };
+	}
+
+	if (i < quirk_count)
+		quirk_count = i;
+
+unlock:
+	mutex_unlock(&quirk_mutex);
+
+	return 0;
+}
+
+static const struct kernel_param_ops quirks_param_ops = {
+	.set = quirks_param_set,
+	.get = param_get_string,
+};
+
+static struct kparam_string quirks_param_string = {
+	.maxlen = sizeof(quirks_param),
+	.string = quirks_param,
+};
+
+device_param_cb(quirks, &quirks_param_ops, &quirks_param_string, 0644);
+MODULE_PARM_DESC(quirks, "Add/modify USB quirks by specifying quirks=vendorID:productID:quirks");
 
 /* Lists of quirky USB devices, split in device quirks and interface quirks.
  * Device quirks are applied at the very beginning of the enumeration process,
@@ -189,18 +334,11 @@ static const struct usb_device_id usb_quirk_list[] = {
 	{ USB_DEVICE(0x06a3, 0x0006), .driver_info =
 			USB_QUIRK_CONFIG_INTF_STRINGS },
 
-	/* Agfa SNAPSCAN 1212U */
-	{ USB_DEVICE(0x06bd, 0x0001), .driver_info = USB_QUIRK_RESET_RESUME },
-
 	/* Guillemot Webcam Hercules Dualpix Exchange (2nd ID) */
 	{ USB_DEVICE(0x06f8, 0x0804), .driver_info = USB_QUIRK_RESET_RESUME },
 
 	/* Guillemot Webcam Hercules Dualpix Exchange*/
 	{ USB_DEVICE(0x06f8, 0x3005), .driver_info = USB_QUIRK_RESET_RESUME },
-
-	/* Guillemot Hercules DJ Console audio card (BZ 208357) */
-	{ USB_DEVICE(0x06f8, 0xb000), .driver_info =
-			USB_QUIRK_ENDPOINT_BLACKLIST },
 
 	/* Midiman M-Audio Keystation 88es */
 	{ USB_DEVICE(0x0763, 0x0192), .driver_info = USB_QUIRK_RESET_RESUME },
@@ -220,6 +358,10 @@ static const struct usb_device_id usb_quirk_list[] = {
 	{ USB_DEVICE(0x0904, 0x6103), .driver_info =
 			USB_QUIRK_LINEAR_FRAME_INTR_BINTERVAL },
 
+	/* Sound Devices USBPre2 */
+	{ USB_DEVICE(0x0926, 0x0202), .driver_info =
+			USB_QUIRK_ENDPOINT_BLACKLIST },
+
 	/* Keytouch QWERTY Panel keyboard */
 	{ USB_DEVICE(0x0926, 0x3333), .driver_info =
 			USB_QUIRK_CONFIG_INTF_STRINGS },
@@ -229,9 +371,6 @@ static const struct usb_device_id usb_quirk_list[] = {
 
 	/* X-Rite/Gretag-Macbeth Eye-One Pro display colorimeter */
 	{ USB_DEVICE(0x0971, 0x2000), .driver_info = USB_QUIRK_NO_SET_INTF },
-
-	/* ELMO L-12F document camera */
-	{ USB_DEVICE(0x09a1, 0x0028), .driver_info = USB_QUIRK_DELAY_CTRL_MSG },
 
 	/* Broadcom BCM92035DGROM BT dongle */
 	{ USB_DEVICE(0x0a5c, 0x2021), .driver_info = USB_QUIRK_RESET_RESUME },
@@ -245,18 +384,19 @@ static const struct usb_device_id usb_quirk_list[] = {
 
 	/* Realtek hub in Dell WD19 (Type-C) */
 	{ USB_DEVICE(0x0bda, 0x0487), .driver_info = USB_QUIRK_NO_LPM },
-	{ USB_DEVICE(0x0bda, 0x5487), .driver_info = USB_QUIRK_RESET_RESUME },
 
 	/* Generic RTL8153 based ethernet adapters */
 	{ USB_DEVICE(0x0bda, 0x8153), .driver_info = USB_QUIRK_NO_LPM },
 
-	/* SONiX USB DEVICE Touchpad */
-	{ USB_DEVICE(0x0c45, 0x7056), .driver_info =
-			USB_QUIRK_IGNORE_REMOTE_WAKEUP },
-
 	/* Action Semiconductor flash disk */
 	{ USB_DEVICE(0x10d6, 0x2200), .driver_info =
 			USB_QUIRK_STRING_FETCH_255 },
+
+	/* Huawei 4G LTE module */
+	{ USB_DEVICE(0x12d1, 0x15bb), .driver_info =
+			USB_QUIRK_DISCONNECT_SUSPEND },
+	{ USB_DEVICE(0x12d1, 0x15c3), .driver_info =
+			USB_QUIRK_DISCONNECT_SUSPEND },
 
 	/* SKYMEDI USB_DRIVE */
 	{ USB_DEVICE(0x1516, 0x8628), .driver_info = USB_QUIRK_RESET_RESUME },
@@ -265,9 +405,6 @@ static const struct usb_device_id usb_quirk_list[] = {
 	{ USB_DEVICE(0x1532, 0x0116), .driver_info =
 			USB_QUIRK_LINEAR_UFRAME_INTR_BINTERVAL },
 
-	/* Lenovo ThinkPad USB-C Dock Gen2 Ethernet (RTL8153 GigE) */
-	{ USB_DEVICE(0x17ef, 0xa387), .driver_info = USB_QUIRK_NO_LPM },
-
 	/* BUILDWIN Photo Frame */
 	{ USB_DEVICE(0x1908, 0x1315), .driver_info =
 			USB_QUIRK_HONOR_BNUMINTERFACES },
@@ -275,6 +412,9 @@ static const struct usb_device_id usb_quirk_list[] = {
 	/* Protocol and OTG Electrical Test Device */
 	{ USB_DEVICE(0x1a0a, 0x0200), .driver_info =
 			USB_QUIRK_LINEAR_UFRAME_INTR_BINTERVAL },
+
+	/* Terminus Technology Inc. Hub */
+	{ USB_DEVICE(0x1a40, 0x0101), .driver_info = USB_QUIRK_HUB_SLOW_RESET },
 
 	/* Corsair K70 RGB */
 	{ USB_DEVICE(0x1b1c, 0x1b13), .driver_info = USB_QUIRK_DELAY_INIT |
@@ -320,19 +460,8 @@ static const struct usb_device_id usb_quirk_list[] = {
 
 	{ USB_DEVICE(0x2386, 0x3119), .driver_info = USB_QUIRK_NO_LPM },
 
-	{ USB_DEVICE(0x2386, 0x350e), .driver_info = USB_QUIRK_NO_LPM },
-
 	/* DJI CineSSD */
 	{ USB_DEVICE(0x2ca3, 0x0031), .driver_info = USB_QUIRK_NO_LPM },
-
-	/* Kingston DataTraveler 3.0 */
-	{ USB_DEVICE(0x0951, 0x1666), .driver_info = USB_QUIRK_NO_LPM },
-
-	/* Galaxy series, misc. (MTP mode) */
-	{ USB_DEVICE(0x04e8, 0x6860), .driver_info = USB_QUIRK_NO_LPM },
-
-	/* Fibocom L850-GL LTE Modem */
-	{ USB_DEVICE(0x2cb7, 0x0007), .driver_info = USB_QUIRK_IGNORE_REMOTE_WAKEUP },
 
 	/* INTEL VALUE SSD */
 	{ USB_DEVICE(0x8086, 0xf1a5), .driver_info = USB_QUIRK_RESET_RESUME },
@@ -374,8 +503,7 @@ static const struct usb_device_id usb_amd_resume_quirk_list[] = {
  * Matched for devices with USB_QUIRK_ENDPOINT_BLACKLIST.
  */
 static const struct usb_device_id usb_endpoint_blacklist[] = {
-	{ USB_DEVICE_INTERFACE_NUMBER(0x06f8, 0xb000, 5), .driver_info = 0x01 },
-	{ USB_DEVICE_INTERFACE_NUMBER(0x06f8, 0xb000, 5), .driver_info = 0x81 },
+	{ USB_DEVICE_INTERFACE_NUMBER(0x0926, 0x0202, 1), .driver_info = 0x85 },
 	{ }
 };
 
@@ -439,8 +567,8 @@ static int usb_amd_resume_quirk(struct usb_device *udev)
 	return 0;
 }
 
-static u32 __usb_detect_quirks(struct usb_device *udev,
-			       const struct usb_device_id *id)
+static u32 usb_detect_static_quirks(struct usb_device *udev,
+				    const struct usb_device_id *id)
 {
 	u32 quirks = 0;
 
@@ -458,20 +586,42 @@ static u32 __usb_detect_quirks(struct usb_device *udev,
 	return quirks;
 }
 
+static u32 usb_detect_dynamic_quirks(struct usb_device *udev)
+{
+	u16 vid = le16_to_cpu(udev->descriptor.idVendor);
+	u16 pid = le16_to_cpu(udev->descriptor.idProduct);
+	int i, flags = 0;
+
+	mutex_lock(&quirk_mutex);
+
+	for (i = 0; i < quirk_count; i++) {
+		if (vid == quirk_list[i].vid && pid == quirk_list[i].pid) {
+			flags = quirk_list[i].flags;
+			break;
+		}
+	}
+
+	mutex_unlock(&quirk_mutex);
+
+	return flags;
+}
+
 /*
  * Detect any quirks the device has, and do any housekeeping for it if needed.
  */
 void usb_detect_quirks(struct usb_device *udev)
 {
-	udev->quirks = __usb_detect_quirks(udev, usb_quirk_list);
+	udev->quirks = usb_detect_static_quirks(udev, usb_quirk_list);
 
 	/*
 	 * Pixart-based mice would trigger remote wakeup issue on AMD
 	 * Yangtze chipset, so set them as RESET_RESUME flag.
 	 */
 	if (usb_amd_resume_quirk(udev))
-		udev->quirks |= __usb_detect_quirks(udev,
+		udev->quirks |= usb_detect_static_quirks(udev,
 				usb_amd_resume_quirk_list);
+
+	udev->quirks ^= usb_detect_dynamic_quirks(udev);
 
 	if (udev->quirks)
 		dev_dbg(&udev->dev, "USB quirks for this device: %x\n",
@@ -491,11 +641,19 @@ void usb_detect_interface_quirks(struct usb_device *udev)
 {
 	u32 quirks;
 
-	quirks = __usb_detect_quirks(udev, usb_interface_quirk_list);
+	quirks = usb_detect_static_quirks(udev, usb_interface_quirk_list);
 	if (quirks == 0)
 		return;
 
 	dev_dbg(&udev->dev, "USB interface quirks for this device: %x\n",
 		quirks);
 	udev->quirks |= quirks;
+}
+
+void usb_release_quirk_list(void)
+{
+	mutex_lock(&quirk_mutex);
+	kfree(quirk_list);
+	quirk_list = NULL;
+	mutex_unlock(&quirk_mutex);
 }

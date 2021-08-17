@@ -91,7 +91,7 @@ int fts_system_reset(void)
 	u8 data[1] = { SYSTEM_RESET_VALUE };
 	event_to_search = (int)EVT_ID_CONTROLLER_READY;
 
-	logError(1, "%s %s: system reset enter\n", VENDOR_TAG, __func__);
+	logError(1, "%s System resetting...\n", tag);
 	if (fts_info) {
 		reinit_completion(&fts_info->tp_reset_completion);
 		atomic_set(&fts_info->system_is_resetting, 1);
@@ -103,7 +103,8 @@ int fts_system_reset(void)
 		if (reset_gpio == GPIO_NOT_DEFINED) {
 			res =
 			    fts_writeU8UX(FTS_CMD_HW_REG_W, ADDR_SIZE_HW_REG,
-					  ADDR_SYSTEM_RESET, data, ARRAY_SIZE(data));
+					  ADDR_SYSTEM_RESET, data,
+					  ARRAY_SIZE(data));
 		} else {
 			gpio_set_value(reset_gpio, 0);
 			mdelay(10);
@@ -111,15 +112,15 @@ int fts_system_reset(void)
 			res = OK;
 		}
 		if (res < OK) {
-			logError(1, "%s %s: fts_system_reset: ERROR %08X\n", tag,
-				 __func__, ERROR_BUS_W);
+			logError(1, "%s fts_system_reset: ERROR %08X\n", tag,
+				 ERROR_BUS_W);
 		} else {
 			res =
 			    pollForEvent(&event_to_search, 1, readData,
 					 GENERAL_TIMEOUT);
 			if (res < OK) {
-				logError(1, "%s %s: fts_system_reset: ERROR %08X\n",
-					 tag, __func__, res);
+				logError(1, "%s fts_system_reset: ERROR %08X\n",
+					 tag, res);
 			}
 		}
 	}
@@ -129,11 +130,11 @@ int fts_system_reset(void)
 	}
 	if (res < OK) {
 		logError(1,
-			 "%s %s: fts_system_reset...failed after 3 attempts: ERROR %08X\n",
-			 tag, __func__, (res | ERROR_SYSTEM_RESET_FAIL));
+			 "%s fts_system_reset...failed after 3 attempts: ERROR %08X\n",
+			 tag, (res | ERROR_SYSTEM_RESET_FAIL));
 		return (res | ERROR_SYSTEM_RESET_FAIL);
 	} else {
-		logError(1, "%s %s: system reset exit\n", VENDOR_TAG, __func__);
+		logError(1, "%s System reset DONE!\n", tag);
 		system_reseted_down = 1;
 		system_reseted_up = 1;
 		return OK;
@@ -198,6 +199,7 @@ int pollForEvent(int *event_to_search, int event_bytes, u8 *readData,
 	StopWatch clock;
 
 	u8 cmd[1] = { FIFO_CMD_READONE };
+	char temp[128] = { 0 };
 
 	find = 0;
 	retry = 0;
@@ -210,28 +212,33 @@ int pollForEvent(int *event_to_search, int event_bytes, u8 *readData,
 				    DUMMY_FIFO) >= OK) {
 
 		if (readData[0] == EVT_ID_ERROR) {
-			logError(1, "%s %s: ERROR EVENT = %02X %02X %02X %02X %02X %02X %02X %02X\n",
-					tag, __func__, readData[0], readData[1], readData[2], readData[3],
-					readData[4], readData[5], readData[6], readData[7]);
+
+			logError(1, "%s %s\n", tag,
+				 printHex("ERROR EVENT = ", readData,
+					  FIFO_EVENT_SIZE, temp));
+			memset(temp, 0, 128);
 			count_err++;
 			err_handling = errorHandler(readData, FIFO_EVENT_SIZE);
-			if ((err_handling & 0xF0FF0000) == ERROR_HANDLER_STOP_PROC) {
-				logError(1,
-					 "%s %s: pollForEvent: forced to be stopped! ERROR %08X\n",
-					 tag, __func__, err_handling);
+			if ((err_handling & 0xF0FF0000) ==
+			    ERROR_HANDLER_STOP_PROC) {
+				logError(0,
+					 "%s pollForEvent: forced to be stopped! ERROR %08X\n",
+					 tag, err_handling);
 				return err_handling;
 			}
 		} else {
 			if (readData[0] != EVT_ID_NOEVENT) {
-				logError(1, "%s %s: READ EVENT = %02X %02X %02X %02X %02X %02X %02X %02X \n",
-					tag, __func__, readData[0], readData[1], readData[2], readData[3],
-					readData[4], readData[5], readData[6], readData[7]);
+				logError(0, "%s %s\n", tag,
+					 printHex("READ EVENT = ", readData,
+						  FIFO_EVENT_SIZE, temp));
+				memset(temp, 0, 128);
+
 			}
 			if (readData[0] == EVT_ID_CONTROLLER_READY
 			    && event_to_search[0] != EVT_ID_CONTROLLER_READY) {
-				logError(1,
-					 "%s %s: pollForEvent: Unmanned Controller Ready Event! Setting reset flags...\n",
-					 tag, __func__);
+				logError(0,
+					 "%s pollForEvent: Unmanned Controller Ready Event! Setting reset flags...\n",
+					 tag);
 				setSystemResetedUp(1);
 				setSystemResetedDown(1);
 			}
@@ -257,16 +264,16 @@ int pollForEvent(int *event_to_search, int event_bytes, u8 *readData,
 			 ERROR_TIMEOUT);
 		return ERROR_TIMEOUT;
 	} else if (find == 1) {
-		logError(1, "%s %s: FOUND EVENT = %02X %02X %02X %02X %02X %02X %02X %02X \n",
-				tag, __func__, readData[0], readData[1], readData[2], readData[3],
-				readData[4], readData[5], readData[6], readData[7]);
-		logError(1,
+		logError(0, "%s %s\n", tag,
+			 printHex("FOUND EVENT = ", readData, FIFO_EVENT_SIZE,
+				  temp));
+		memset(temp, 0, 128);
+		logError(0,
 			 "%s Event found in %d ms (%d iterations)! Number of errors found = %d \n",
 			 tag, elapsedMillisecond(&clock), retry, count_err);
 		return count_err;
 	} else {
-		logError(1, "%s %s: pollForEvent: ERROR %08X \n",
-			tag, __func__, ERROR_BUS_R);
+		logError(1, "%s pollForEvent: ERROR %08X \n", tag, ERROR_BUS_R);
 		return ERROR_BUS_R;
 	}
 }
@@ -361,9 +368,10 @@ int setScanMode(u8 mode, u8 settings)
 */
 int setFeatures(u8 feat, u8 *settings, int size)
 {
-	u8 cmd[2 + size];
+	u8 cmd[80];
 	int i = 0;
 	int ret;
+	
 	logError(0, "%s %s: Setting feature: feat = %02X !\n", tag, __func__,
 		 feat);
 	cmd[0] = FTS_CMD_FEATURE;
@@ -550,33 +558,33 @@ int readSysInfo(int request)
 	index += 2;
 	u8ToU16(&data[index], &systemInfo.u16_fwVer);
 	index += 2;
-	logError(1, "%s %s: FW VER = %04X \n", tag, __func__, systemInfo.u16_fwVer);
+	logError(1, "%s FW VER = %04X \n", tag, systemInfo.u16_fwVer);
 
 	u8ToU16(&data[index], &systemInfo.u16_svnRev);
 	index += 2;
-	logError(1, "%s %s: SVN REV = %04X \n", tag, __func__, systemInfo.u16_svnRev);
+	logError(1, "%s SVN REV = %04X \n", tag, systemInfo.u16_svnRev);
 	u8ToU16(&data[index], &systemInfo.u16_cfgVer);
 	index += 2;
-	logError(1, "%s %s: CONFIG VER = %04X \n", tag, __func__, systemInfo.u16_cfgVer);
+	logError(1, "%s CONFIG VER = %04X \n", tag, systemInfo.u16_cfgVer);
 	u8ToU16(&data[index], &systemInfo.u16_cfgProgectId);
 	index += 2;
-	logError(1, "%s %s: CONFIG PROJECT ID = %04X \n", tag,
-		 __func__, systemInfo.u16_cfgProgectId);
+	logError(1, "%s CONFIG PROJECT ID = %04X \n", tag,
+		 systemInfo.u16_cfgProgectId);
 	u8ToU16(&data[index], &systemInfo.u16_cxVer);
 	index += 2;
-	logError(1, "%s %s: CX VER = %04X \n", tag, __func__, systemInfo.u16_cxVer);
+	logError(1, "%s CX VER = %04X \n", tag, systemInfo.u16_cxVer);
 	u8ToU16(&data[index], &systemInfo.u16_cxProjectId);
 	index += 2;
-	logError(1, "%s %s:CX PROJECT ID = %04X \n", tag,
-		 __func__, systemInfo.u16_cxProjectId);
+	logError(1, "%s CX PROJECT ID = %04X \n", tag,
+		 systemInfo.u16_cxProjectId);
 	systemInfo.u8_cfgAfeVer = data[index++];
 	systemInfo.u8_cxAfeVer = data[index++];
 	systemInfo.u8_panelCfgAfeVer = data[index++];
-	logError(1, "%s %s: AFE VER: CFG = %02X - CX = %02X - PANEL = %02X \n", tag,
-		 __func__, systemInfo.u8_cfgAfeVer, systemInfo.u8_cxAfeVer,
+	logError(1, "%s AFE VER: CFG = %02X - CX = %02X - PANEL = %02X \n", tag,
+		 systemInfo.u8_cfgAfeVer, systemInfo.u8_cxAfeVer,
 		 systemInfo.u8_panelCfgAfeVer);
 	systemInfo.u8_protocol = data[index++];
-	logError(0, "%s %s: Protocol = %02X \n", tag, __func__, systemInfo.u8_protocol);
+	logError(0, "%s Protocol = %02X \n", tag, systemInfo.u8_protocol);
 
 	for (i = 0; i < DIE_INFO_SIZE; i++) {
 		systemInfo.u8_dieInfo[i] = data[index++];
@@ -591,7 +599,7 @@ int readSysInfo(int request)
 		systemInfo.u8_releaseInfo[i] = data[index++];
 	}
 
-	logError(1, "%s %s: %s \n", tag, __func__,
+	logError(1, "%s %s \n", tag,
 		 printHex("Release Info =  ", systemInfo.u8_releaseInfo,
 			  RELEASE_INFO_SIZE, temp));
 	memset(temp, 0, 256);
@@ -762,18 +770,18 @@ int readConfig(u16 offset, u8 *outBuf, int len)
 int fts_disableInterrupt(void)
 {
 	if (getClient() != NULL) {
-		logError(1, "%s %s: Number of disable = %d \n",
-			VENDOR_TAG, __func__, disable_irq_count);
+		logError(0, "%s Number of disable = %d \n", tag,
+			 disable_irq_count);
 		if (disable_irq_count == 0) {
-			logError(1, "%s %s: Excecuting Disable... \n", VENDOR_TAG, __func__);
+			logError(0, "%s Excecuting Disable... \n", tag);
 			disable_irq(getClient()->irq);
 			disable_irq_count++;
-			logError(1, "%s %s: Interrupt Disabled!\n", VENDOR_TAG, __func__);
+			logError(1, "%s Interrupt Disabled!\n", tag);
 		}
 		return OK;
 	} else {
-		logError(1, "%s %s Impossible get client irq... ERROR %08X\n",
-			 VENDOR_TAG, __func__, ERROR_OP_NOT_ALLOW);
+		logError(1, "%s %s: Impossible get client irq... ERROR %08X\n",
+			 tag, __func__, ERROR_OP_NOT_ALLOW);
 		return ERROR_OP_NOT_ALLOW;
 	}
 
@@ -787,22 +795,20 @@ int fts_disableInterruptNoSync(void)
 {
 	if (getClient() != NULL) {
 		spin_lock_irq(&fts_int);
-		logError(1, "%s %s: Number of disable = %d \n",
-			VENDOR_TAG, __func__, disable_irq_count);
+		logError(0, "%s Number of disable = %d \n", tag,
+			 disable_irq_count);
 		if (disable_irq_count == 0) {
-			logError(1, "%s Executing Disable... \n", VENDOR_TAG);
+			logError(0, "%s Executing Disable... \n", tag);
 			disable_irq_nosync(getClient()->irq);
 			disable_irq_count++;
-			logError(1, "%s Interrupt Disabled NoSync\n", VENDOR_TAG);
 		}
 
 		spin_unlock_irq(&fts_int);
-		logError(1, "%s %s: Interrupt No Sync Disabled!\n",
-			VENDOR_TAG, __func__);
+		logError(0, "%s Interrupt No Sync Disabled!\n", tag);
 		return OK;
 	} else {
-		logError(1, "%s %s Impossible get client irq... ERROR %08X\n",
-			 VENDOR_TAG, __func__, ERROR_OP_NOT_ALLOW);
+		logError(1, "%s %s: Impossible get client irq... ERROR %08X\n",
+			 tag, __func__, ERROR_OP_NOT_ALLOW);
 		return ERROR_OP_NOT_ALLOW;
 	}
 }
@@ -831,7 +837,7 @@ int fts_enableInterrupt(void)
 			logError(0, "%s Excecuting Enable... \n", tag);
 			enable_irq(getClient()->irq);
 			disable_irq_count--;
-			logError(1, "%s %s: Interrupt Enabled!\n", VENDOR_TAG, __func__);
+			logError(1, "%s Interrupt Enabled!\n", tag);
 		}
 		return OK;
 	} else {
@@ -1134,7 +1140,7 @@ int writeLockDownInfo(u8 *data, int size, u8 lock_id)
 				 ret);
 			continue;
 		} else {
-			logError(1, "%s %s: Echo FOUND... OK!\n", tag, __func__, ret);
+			logError(1, "%s Echo FOUND... OK!\n", tag, ret);
 			ret = pollForErrorType(error_to_search, 4);
 			if (ret < OK) {
 				logError(1, "%s %s: No Error Found! \n", tag,
@@ -1206,7 +1212,7 @@ int readLockDownInfo(u8 *lockData, u8 lock_id, int size)
 				 ret);
 			continue;
 		} else {
-			logError(1, "%s %s: Echo FOUND... OK!\n", tag, __func__, ret);
+			logError(1, "%s Echo FOUND... OK!\n", tag, ret);
 		}
 		ret =
 		    fts_writeReadU8UX(LOCKDOWN_WRITEREAD_CMD, BITS_16,
@@ -1269,7 +1275,7 @@ int fts_get_lockdown_info(u8 *lockData, struct fts_ts_info *info)
 	if (info == NULL)
 		return ERROR_LOCKDOWN_CODE;
 	if (info->lockdown_is_ok) {
-		logError(1, "%s %s: aleady get,skip\n", tag, __func__);
+		logError(1, "%s %s aleady get,skip\n", tag, __func__);
 		return OK;
 	}
 	logError(0, "%s %s:enter", tag, __func__);
@@ -1280,8 +1286,7 @@ int fts_get_lockdown_info(u8 *lockData, struct fts_ts_info *info)
 
 	temp = (u8 *) kmalloc(1024 * sizeof(u8), GFP_KERNEL);
 	if (temp == NULL) {
-		logError(1, "%s %s: FTS temp alloc  memory failed \n",
-			tag, __func__);
+		logError(1, "FTS temp alloc  memory failed \n");
 		return -ENOMEM;
 	}
 	memset(temp, 0, 1024 * sizeof(u8));
@@ -1310,7 +1315,7 @@ int fts_get_lockdown_info(u8 *lockData, struct fts_ts_info *info)
 				 ret);
 			continue;
 		} else {
-			logError(1, "%s%s Echo FOUND... OK!\n", tag, __func__, ret);
+			logError(1, "%s Echo FOUND... OK!\n", tag, ret);
 		}
 		ret =
 		    fts_writeReadU8UX(LOCKDOWN_WRITEREAD_CMD, BITS_16,

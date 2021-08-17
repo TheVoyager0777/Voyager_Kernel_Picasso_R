@@ -324,7 +324,7 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 	int numberParam = 0;
 	struct fts_ts_info *info = dev_get_drvdata(getDev());
 	char *p = NULL;
-	char pbuf[count];
+	char *pbuf;
 	char path[100] = { 0 };
 	int res = -1, j, index = 0;
 	int size = 6;
@@ -333,7 +333,7 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 	u32 fileSize = 0;
 	u8 *readData = NULL;
 	u8 *cmd = NULL;
-	u32 funcToTest[((count + 1) / 3)];
+	u32 funcToTest[100];
 	u64 addr = 0;
 	MutualSenseFrame frameMS;
 	SelfSenseFrame frameSS;
@@ -354,6 +354,18 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 	mess.dummy = 0;
 	mess.action = 0;
 	mess.msg_size = 0;
+
+	if (((count + 1) / 3) > 100) {
+		logError(1, "%s funcToTest mem to low\n", tag);
+		res = ERROR_ALLOC;
+		goto END;
+	}
+
+	pbuf = (char *)kzalloc(sizeof(char) * count, GFP_KERNEL);
+	if (!pbuf) {
+		res = ERROR_ALLOC;
+		goto END;
+	}
 
 	cmd = (u8 *)kzalloc(sizeof(u8) * count, GFP_KERNEL);
 	if (!cmd) {
@@ -1420,31 +1432,20 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 			break;
 
 		case CMD_FLASHERASEPAGE:
-			if (numberParam == 2) {	/* need to pass: keep_cx */
-				logError(1, "%s Reading FW File...\n", tag);
-				res = readFwFile(info->board->default_fw_name, &fw,
-						 funcToTest[1]);
-				if (res < OK)
-					logError(1,
-						 "%s Error reading FW File ERROR %08X\n",
-						 tag, res);
-				else
-					logError(1,
-						 "%s Read FW File Finished!\n",
-						 tag);
-				logError(1,
+			if (numberParam == 2) {
+				logError(0,
 					 "%s Starting Flashing Page Erase... \n",
 					 tag);
-				res = flash_erase_page_by_page(cmd[1], &fw);
-				if (res < OK)
-					logError(1,
+				res = flash_erase_page_by_page(cmd[1]);
+				if (res < OK) {
+					logError(0,
 						 "%s Error during flash page erase... ERROR %08X\n",
 						 tag, res);
-				else
-					logError(1,
+				} else {
+					logError(0,
 						 "%s Flash Page Erase Finished! \n",
 						 tag);
-				kfree(fw.data);
+				}
 			} else {
 				logError(1, "%s Wrong number of parameters! \n",
 					 tag);
@@ -1713,7 +1714,7 @@ static ssize_t fts_driver_test_write(struct file *file, const char __user *buf,
 				index += j;
 				goto END_DIAGNOSTIC;
 			} else {
-				logError(1, "%s %s: Echo FOUND... OK!\n", tag, __func__, res);
+				logError(1, "%s Echo FOUND... OK!\n", tag, res);
 				j = snprintf(&driver_test_buff[index],
 					     fileSize - index,
 					     "Echo FOUND... OK!\n");
@@ -2398,6 +2399,8 @@ ERROR:
 		kfree(readData);
 	if (cmd)
 		kfree(cmd);
+	if (pbuf)
+		kfree(pbuf);
 	return count;
 }
 

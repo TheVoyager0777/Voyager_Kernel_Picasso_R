@@ -1,15 +1,5 @@
-/* Copyright (c) 2016-2017, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2016-2017, 2020, The Linux Foundation. All rights reserved. */
 
 #define pr_fmt(fmt) "%s: " fmt, __func__
 
@@ -255,7 +245,7 @@ find_optimal_index:
 	case 25:
 		found_hsclk_divsel = 14;
 		break;
-	};
+	}
 
 	pr_debug("found_vco_freq=%d\n", found_vco_freq);
 	pr_debug("found_hsclk_divsel=%d\n", found_hsclk_divsel);
@@ -276,7 +266,6 @@ static int hdmi_8998_config_phy(unsigned long rate,
 	u64 const high_freq_bit_clk_threshold = 3400000000UL;
 	u64 const dig_freq_bit_clk_threshold = 1500000000UL;
 	u64 const mid_freq_bit_clk_threshold = 750000000;
-	int rc = 0;
 	u64 fdata, tmds_clk;
 	u64 pll_div = 4 * HDMI_REF_CLOCK_HZ;
 	u64 bclk;
@@ -316,7 +305,7 @@ static int hdmi_8998_config_phy(unsigned long rate,
 	if (rem > (pll_div >> 1))
 		div_frac_start++;
 
-	if ((div_frac_start != 0) || (gen_ssc == true)) {
+	if ((div_frac_start != 0) || (gen_ssc)) {
 		cpctrl = 0x8;
 		rctrl = 0x16;
 		cctrl = 0x34;
@@ -329,7 +318,7 @@ static int hdmi_8998_config_phy(unsigned long rate,
 	digclk_divsel = (bclk > dig_freq_bit_clk_threshold) ? 0x1 : 0x2;
 
 	integloop_gain = ((div_frac_start != 0) ||
-			(gen_ssc == true)) ? 0x3F : 0xC4;
+			(gen_ssc) ? 0x3F : 0xC4;
 	integloop_gain <<= digclk_divsel;
 	integloop_gain = (integloop_gain <= 2046 ? integloop_gain : 0x7FE);
 
@@ -448,7 +437,7 @@ static int hdmi_8998_config_phy(unsigned long rate,
 		cfg->l3_pre_driver_2 = 0x0;
 	}
 
-	return rc;
+	return 0;
 }
 
 static int hdmi_8998_pll_set_clk_rate(struct clk *c, unsigned long rate)
@@ -461,7 +450,7 @@ static int hdmi_8998_pll_set_clk_rate(struct clk *c, unsigned long rate)
 
 	rc = hdmi_8998_config_phy(rate, &cfg);
 	if (rc) {
-		pr_err("rate calculation failed\n, rc=%d", rc);
+		pr_err("rate calculation failed\n, rc=%d\n", rc);
 		return rc;
 	}
 

@@ -1,13 +1,7 @@
-/* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/kernel.h>
@@ -32,6 +26,10 @@
 #include <linux/soc/qcom/smem.h>
 #include <linux/soc/qcom/smem_state.h>
 
+#include <linux/seq_file.h>
+#include <linux/proc_fs.h>
+#include <linux/slab.h>
+
 #include "peripheral-loader.h"
 
 #define XO_FREQ			19200000
@@ -45,6 +43,80 @@
 
 #define desc_to_data(d) container_of(d, struct pil_tz_data, desc)
 #define subsys_to_data(d) container_of(d, struct pil_tz_data, subsys_desc)
+
+#define STR_NV_SIGNATURE_DESTROYED "CRITICAL_DATA_CHECK_FAILED"
+static char last_modem_sfr_reason[MAX_SSR_REASON_LEN] = "none";
+static struct proc_dir_entry *last_modem_sfr_entry;
+
+
+static struct kobject *checknv_kobj;
+static struct kset *checknv_kset;
+
+static const struct sysfs_ops checknv_sysfs_ops = {
+};
+
+static void kobj_release(struct kobject *kobj)
+{
+	kfree(kobj);
+}
+
+static struct kobj_type checknv_ktype = {
+	.sysfs_ops = &checknv_sysfs_ops,
+	.release = kobj_release,
+};
+
+static void checknv_kobj_clean(struct work_struct *work)
+{
+	kobject_uevent(checknv_kobj, KOBJ_REMOVE);
+	kobject_put(checknv_kobj);
+	kset_unregister(checknv_kset);
+}
+
+static void checknv_kobj_create(struct work_struct *work)
+{
+	int ret;
+
+	if (checknv_kset != NULL) {
+		pr_err("checknv_kset is not NULL, should clean up.");
+		kobject_uevent(checknv_kobj, KOBJ_REMOVE);
+		kobject_put(checknv_kobj);
+	}
+
+	checknv_kobj = kzalloc(sizeof(struct kobject), GFP_KERNEL);
+	if (!checknv_kobj) {
+		pr_err("kobject alloc failed.");
+		return;
+	}
+
+	if (checknv_kset == NULL) {
+		checknv_kset = kset_create_and_add("checknv_errimei", NULL, NULL);
+		if (!checknv_kset) {
+			pr_err("kset creation failed.");
+			goto free_kobj;
+		}
+	}
+
+	checknv_kobj->kset = checknv_kset;
+
+	ret = kobject_init_and_add(checknv_kobj, &checknv_ktype, NULL, "%s", "errimei");
+	if (ret) {
+		pr_err("%s: Error in creation kobject", __func__);
+		goto del_kobj;
+	}
+
+	kobject_uevent(checknv_kobj, KOBJ_ADD);
+	return;
+
+del_kobj:
+	kobject_put(checknv_kobj);
+	kset_unregister(checknv_kset);
+
+free_kobj:
+	kfree(checknv_kobj);
+}
+
+static DECLARE_DELAYED_WORK(create_kobj_work, checknv_kobj_create);
+static DECLARE_WORK(clean_kobj_work, checknv_kobj_clean);
 
 /**
  * struct reg_info - regulator info
@@ -96,9 +168,7 @@ struct pil_tz_data {
 	int proxy_clk_count;
 	int smem_id;
 	void *ramdump_dev;
-#ifdef CONFIG_QCOM_MINIDUMP
 	void *minidump_dev;
-#endif
 	u32 pas_id;
 	u32 bus_client;
 	bool enable_bus_scaling;
@@ -360,6 +430,7 @@ static int of_read_regs(struct device *dev, struct reg_info **regs_ref,
 	return reg_count;
 }
 
+#if defined(CONFIG_QCOM_BUS_SCALING)
 static int of_read_bus_pdata(struct platform_device *pdev,
 			     struct pil_tz_data *d)
 {
@@ -376,6 +447,34 @@ static int of_read_bus_pdata(struct platform_device *pdev,
 
 	return 0;
 }
+static int do_bus_scaling_request(struct pil_desc *pil, int enable)
+{
+	int rc;
+	struct pil_tz_data *d = desc_to_data(pil);
+
+	if (d->bus_client) {
+		rc = msm_bus_scale_client_update_request(d->bus_client, enable);
+		if (rc) {
+			dev_err(pil->dev, "bandwidth request failed(rc:%d)\n",
+									rc);
+			return rc;
+		}
+	} else
+		WARN(d->enable_bus_scaling, "Bus scaling not set up for %s!\n",
+					d->subsys_desc.name);
+	return 0;
+}
+#else
+static int of_read_bus_pdata(struct platform_device *pdev,
+			     struct pil_tz_data *d)
+{
+	return 0;
+}
+static int do_bus_scaling_request(struct pil_desc *pil, int enable)
+{
+	return 0;
+}
+#endif
 
 static int piltz_resc_init(struct platform_device *pdev, struct pil_tz_data *d)
 {
@@ -422,12 +521,6 @@ static int piltz_resc_init(struct platform_device *pdev, struct pil_tz_data *d)
 	}
 
 	return 0;
-}
-
-static void piltz_resc_destroy(struct pil_tz_data *d)
-{
-	if (d->bus_client)
-		msm_bus_scale_unregister_client(d->bus_client);
 }
 
 static int enable_regulators(struct pil_tz_data *d, struct device *dev,
@@ -548,16 +641,9 @@ static int pil_make_proxy_vote(struct pil_desc *pil)
 	if (d->subsys_desc.no_auth)
 		return 0;
 
-	if (d->bus_client) {
-		rc = msm_bus_scale_client_update_request(d->bus_client, 1);
-		if (rc) {
-			dev_err(pil->dev, "bandwidth request failed(rc:%d)\n",
-									rc);
-			return rc;
-		}
-	} else
-		WARN(d->enable_bus_scaling, "Bus scaling not set up for %s!\n",
-					d->subsys_desc.name);
+	rc = do_bus_scaling_request(pil, 1);
+	if (rc)
+		return rc;
 
 	rc = enable_regulators(d, pil->dev, d->proxy_regs,
 					d->proxy_reg_count, false);
@@ -588,21 +674,13 @@ static void pil_remove_proxy_vote(struct pil_desc *pil)
 
 	disable_regulators(d, d->proxy_regs, d->proxy_reg_count, true);
 
-	if (d->bus_client)
-		msm_bus_scale_client_update_request(d->bus_client, 0);
-	else
-		WARN(d->enable_bus_scaling, "Bus scaling not set up for %s!\n",
-					d->subsys_desc.name);
+	do_bus_scaling_request(pil, 0);
 }
 
 static int pil_init_image_trusted(struct pil_desc *pil,
 		const u8 *metadata, size_t size)
 {
 	struct pil_tz_data *d = desc_to_data(pil);
-	struct pas_init_image_req {
-		u32	proc;
-		u32	image_addr;
-	} request;
 	u32 scm_ret = 0;
 	void *mdata_buf;
 	dma_addr_t mdata_phys;
@@ -631,19 +709,13 @@ static int pil_init_image_trusted(struct pil_desc *pil,
 	}
 
 	memcpy(mdata_buf, metadata, size);
-	if (!is_scm_armv8()) {
-		request.proc = d->pas_id;
-		request.image_addr = mdata_phys;
-		ret = scm_call(SCM_SVC_PIL, PAS_INIT_IMAGE_CMD, &request,
-			sizeof(request), &scm_ret, sizeof(scm_ret));
-	} else {
-		desc.args[0] = d->pas_id;
-		desc.args[1] = mdata_phys;
-		desc.arginfo = SCM_ARGS(2, SCM_VAL, SCM_RW);
-		ret = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL, PAS_INIT_IMAGE_CMD),
-				&desc);
-		scm_ret = desc.ret[0];
-	}
+
+	desc.args[0] = d->pas_id;
+	desc.args[1] = mdata_phys;
+	desc.arginfo = SCM_ARGS(2, SCM_VAL, SCM_RW);
+	ret = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL, PAS_INIT_IMAGE_CMD),
+			&desc);
+	scm_ret = desc.ret[0];
 
 	dma_free_attrs(&dev, size, mdata_buf, mdata_phys, attrs);
 	scm_pas_disable_bw();
@@ -656,11 +728,6 @@ static int pil_mem_setup_trusted(struct pil_desc *pil, phys_addr_t addr,
 			       size_t size)
 {
 	struct pil_tz_data *d = desc_to_data(pil);
-	struct pas_init_image_req {
-		u32	proc;
-		u32	start_addr;
-		u32	len;
-	} request;
 	u32 scm_ret = 0;
 	int ret;
 	struct scm_desc desc = {0};
@@ -668,21 +735,12 @@ static int pil_mem_setup_trusted(struct pil_desc *pil, phys_addr_t addr,
 	if (d->subsys_desc.no_auth)
 		return 0;
 
-	if (!is_scm_armv8()) {
-		request.proc = d->pas_id;
-		request.start_addr = addr;
-		request.len = size;
-		ret = scm_call(SCM_SVC_PIL, PAS_MEM_SETUP_CMD, &request,
-				sizeof(request), &scm_ret, sizeof(scm_ret));
-	} else {
-		desc.args[0] = d->pas_id;
-		desc.args[1] = addr;
-		desc.args[2] = size;
-		desc.arginfo = SCM_ARGS(3);
-		ret = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL, PAS_MEM_SETUP_CMD),
-				&desc);
-		scm_ret = desc.ret[0];
-	}
+	desc.args[0] = d->pas_id;
+	desc.args[1] = addr;
+	desc.args[2] = size + pil->extra_size;
+	desc.arginfo = SCM_ARGS(3);
+	ret = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL, PAS_MEM_SETUP_CMD),
+			&desc);
 	scm_ret = desc.ret[0];
 
 	if (ret)
@@ -715,15 +773,9 @@ static int pil_auth_and_reset(struct pil_desc *pil)
 	if (rc)
 		goto err_clks;
 
-
-	if (!is_scm_armv8()) {
-		rc = scm_call(SCM_SVC_PIL, PAS_AUTH_AND_RESET_CMD, &proc,
-				sizeof(proc), &scm_ret, sizeof(scm_ret));
-	} else {
-		rc = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL,
-				PAS_AUTH_AND_RESET_CMD), &desc);
-		scm_ret = desc.ret[0];
-	}
+	rc = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL,
+		       PAS_AUTH_AND_RESET_CMD), &desc);
+	scm_ret = desc.ret[0];
 
 	scm_pas_disable_bw();
 	if (rc)
@@ -751,16 +803,9 @@ static int pil_shutdown_trusted(struct pil_desc *pil)
 	desc.args[0] = proc = d->pas_id;
 	desc.arginfo = SCM_ARGS(1);
 
-	if (d->bus_client) {
-		rc = msm_bus_scale_client_update_request(d->bus_client, 1);
-		if (rc) {
-			dev_err(pil->dev, "bandwidth request failed(rc:%d)\n",
-									rc);
-			return rc;
-		}
-	} else
-		WARN(d->enable_bus_scaling, "Bus scaling not set up for %s!\n",
-					d->subsys_desc.name);
+	rc = do_bus_scaling_request(pil, 1);
+	if (rc)
+		return rc;
 
 	rc = enable_regulators(d, pil->dev, d->proxy_regs,
 					d->proxy_reg_count, true);
@@ -772,23 +817,14 @@ static int pil_shutdown_trusted(struct pil_desc *pil)
 	if (rc)
 		goto err_clks;
 
-
-	if (!is_scm_armv8()) {
-		rc = scm_call(SCM_SVC_PIL, PAS_SHUTDOWN_CMD, &proc,
-				sizeof(proc), &scm_ret, sizeof(scm_ret));
-	} else {
-		rc = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL, PAS_SHUTDOWN_CMD),
-			       &desc);
-		scm_ret = desc.ret[0];
-	}
+	rc = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL, PAS_SHUTDOWN_CMD),
+		       &desc);
+	scm_ret = desc.ret[0];
 
 	disable_unprepare_clocks(d->proxy_clks, d->proxy_clk_count);
 	disable_regulators(d, d->proxy_regs, d->proxy_reg_count, false);
-	if (d->bus_client)
-		msm_bus_scale_client_update_request(d->bus_client, 0);
-	else
-		WARN(d->enable_bus_scaling, "Bus scaling not set up for %s!\n",
-					d->subsys_desc.name);
+
+	do_bus_scaling_request(pil, 0);
 
 	if (rc)
 		return rc;
@@ -801,11 +837,8 @@ static int pil_shutdown_trusted(struct pil_desc *pil)
 err_clks:
 	disable_regulators(d, d->proxy_regs, d->proxy_reg_count, false);
 err_regulators:
-	if (d->bus_client)
-		msm_bus_scale_client_update_request(d->bus_client, 0);
-	else
-		WARN(d->enable_bus_scaling, "Bus scaling not set up for %s!\n",
-					d->subsys_desc.name);
+	do_bus_scaling_request(pil, 0);
+
 	return rc;
 }
 
@@ -822,14 +855,9 @@ static int pil_deinit_image_trusted(struct pil_desc *pil)
 	desc.args[0] = proc = d->pas_id;
 	desc.arginfo = SCM_ARGS(1);
 
-	if (!is_scm_armv8()) {
-		rc = scm_call(SCM_SVC_PIL, PAS_SHUTDOWN_CMD, &proc,
-			      sizeof(proc), &scm_ret, sizeof(scm_ret));
-	} else {
-		rc = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL, PAS_SHUTDOWN_CMD),
-				&desc);
-		scm_ret = desc.ret[0];
-	}
+	rc = scm_call2(SCM_SIP_FNID(SCM_SVC_PIL, PAS_SHUTDOWN_CMD),
+			       &desc);
+	scm_ret = desc.ret[0];
 
 	if (rc)
 		return rc;
@@ -849,7 +877,7 @@ static struct pil_reset_ops pil_ops_trusted = {
 static void log_failure_reason(const struct pil_tz_data *d)
 {
 	size_t size;
-	char *smem_reason, reason[MAX_SSR_REASON_LEN];
+	char *smem_reason;//xiaomi change, reason[MAX_SSR_REASON_LEN];
 	const char *name = d->subsys_desc.name;
 
 	if (d->smem_id == -1)
@@ -866,8 +894,16 @@ static void log_failure_reason(const struct pil_tz_data *d)
 		return;
 	}
 
-	strlcpy(reason, smem_reason, min(size, (size_t)MAX_SSR_REASON_LEN));
-	pr_err("%s subsystem failure reason: %s.\n", name, reason);
+    //Xiaomi changed
+	strlcpy(last_modem_sfr_reason, smem_reason, min(size, (size_t)MAX_SSR_REASON_LEN));
+	pr_err("%s subsystem failure reason: %s.\n", name, last_modem_sfr_reason);
+	
+    //Xiaomi added
+    //If the NV protected file (critical_info) is destroyed, restart to recovery to inform user
+	if (strnstr(last_modem_sfr_reason, STR_NV_SIGNATURE_DESTROYED, strlen(last_modem_sfr_reason))) {
+		pr_err("errimei_dev: the NV has been destroyed, should restart to recovery\n");
+		schedule_delayed_work(&create_kobj_work, msecs_to_jiffies(1*1000));
+	}
 }
 
 static int subsys_shutdown(const struct subsys_desc *subsys, bool force_stop)
@@ -914,11 +950,7 @@ static int subsys_ramdump(int enable, const struct subsys_desc *subsys)
 	if (!enable)
 		return 0;
 
-#ifdef CONFIG_QCOM_MINIDUMP
 	return pil_do_ramdump(&d->desc, d->ramdump_dev, d->minidump_dev);
-#else
-	return pil_do_ramdump(&d->desc, d->ramdump_dev, NULL);
-#endif
 }
 
 static void subsys_free_memory(const struct subsys_desc *subsys)
@@ -1009,11 +1041,13 @@ static void clear_pbl_done(struct pil_tz_data *d)
 	uint32_t err_value;
 
 	err_value =  __raw_readl(d->err_status);
-	pr_debug("PBL_DONE received from %s!\n", d->subsys_desc.name);
+
 	if (err_value) {
 		uint32_t rmb_err_spare0;
 		uint32_t rmb_err_spare1;
 		uint32_t rmb_err_spare2;
+
+		pr_debug("PBL_DONE received from %s!\n", d->subsys_desc.name);
 
 		rmb_err_spare2 =  __raw_readl(d->err_status_spare);
 		rmb_err_spare1 =  __raw_readl(d->err_status_spare-4);
@@ -1027,6 +1061,9 @@ static void clear_pbl_done(struct pil_tz_data *d)
 			rmb_err_spare1);
 		pr_err("PBL error status spare2 register: 0x%08x\n",
 			rmb_err_spare2);
+	} else {
+		pr_info("PBL_DONE - 1st phase loading [%s] completed ok\n",
+			d->subsys_desc.name);
 	}
 	__raw_writel(BIT(d->bits_arr[PBL_DONE]), d->irq_clear);
 }
@@ -1035,9 +1072,36 @@ static void clear_err_ready(struct pil_tz_data *d)
 {
 	pr_debug("Subsystem error services up received from %s\n",
 							d->subsys_desc.name);
+
+	pr_info("SW_INIT_DONE - 2nd phase loading [%s] completed ok\n",
+		d->subsys_desc.name);
+
 	__raw_writel(BIT(d->bits_arr[ERR_READY]), d->irq_clear);
 	complete_err_ready(d->subsys);
 }
+
+static void clear_sw_init_done_error(struct pil_tz_data *d, int err)
+{
+	uint32_t rmb_err_spare0;
+	uint32_t rmb_err_spare1;
+	uint32_t rmb_err_spare2;
+
+	pr_info("SW_INIT_DONE - ERROR [%s] [0x%x].\n",
+		d->subsys_desc.name, err);
+
+	rmb_err_spare2 =  __raw_readl(d->err_status_spare);
+	rmb_err_spare1 =  __raw_readl(d->err_status_spare-4);
+	rmb_err_spare0 =  __raw_readl(d->err_status_spare-8);
+
+	pr_err("spare0 register: 0x%08x\n", rmb_err_spare0);
+	pr_err("spare1 register: 0x%08x\n", rmb_err_spare1);
+	pr_err("spare2 register: 0x%08x\n", rmb_err_spare2);
+
+	/* Clear the interrupt source */
+	__raw_writel(BIT(d->bits_arr[ERR_READY]), d->irq_clear);
+}
+
+
 
 static void clear_wdog(struct pil_tz_data *d)
 {
@@ -1059,12 +1123,14 @@ static irqreturn_t subsys_generic_handler(int irq, void *dev_id)
 	err_value =  __raw_readl(d->err_status_spare);
 	status_val = __raw_readl(d->irq_status);
 
-	if ((status_val & BIT(d->bits_arr[ERR_READY])) && !err_value)
-		clear_err_ready(d);
-
-	if ((status_val & BIT(d->bits_arr[ERR_READY])) &&
-					err_value == 0x44554d50)
-		clear_wdog(d);
+	if (status_val & BIT(d->bits_arr[ERR_READY])) {
+		if (!err_value)
+			clear_err_ready(d);
+		else if (err_value == 0x44554d50)
+			clear_wdog(d);
+		else
+			clear_sw_init_done_error(d, err_value);
+	}
 
 	if (status_val & BIT(d->bits_arr[PBL_DONE]))
 		clear_pbl_done(d);
@@ -1088,9 +1154,7 @@ static int pil_tz_driver_probe(struct platform_device *pdev)
 	struct device_node *crypto_node;
 	u32 proxy_timeout, crypto_id;
 	int len, rc;
-#ifdef CONFIG_QCOM_MINIDUMP
 	char md_node[20];
-#endif
 
 	d = devm_kzalloc(&pdev->dev, sizeof(*d), GFP_KERNEL);
 	if (!d)
@@ -1143,7 +1207,7 @@ static int pil_tz_driver_probe(struct platform_device *pdev)
 		if (rc) {
 			dev_err(&pdev->dev, "Failed to find the pas_id(rc:%d)\n",
 									rc);
-			return rc;
+			goto err_deregister_bus;
 		}
 
 		crypto_id = MSM_BUS_MASTER_CRYPTO_CORE_0;
@@ -1159,7 +1223,7 @@ static int pil_tz_driver_probe(struct platform_device *pdev)
 
 	rc = pil_desc_init(&d->desc);
 	if (rc)
-		goto err_descinit;
+		goto err_deregister_bus;
 
 	init_completion(&d->stop_ack);
 
@@ -1230,6 +1294,10 @@ static int pil_tz_driver_probe(struct platform_device *pdev)
 		}
 		mask_scsr_irqs(d);
 
+		rc = of_property_read_u32(pdev->dev.of_node, "qcom,extra-size",
+						&d->desc.extra_size);
+		if (rc)
+			d->desc.extra_size = 0;
 	} else {
 		d->subsys_desc.err_fatal_handler =
 						subsys_err_fatal_intr_handler;
@@ -1256,6 +1324,9 @@ static int pil_tz_driver_probe(struct platform_device *pdev)
 		}
 	}
 
+	d->desc.sequential_loading = of_property_read_bool(pdev->dev.of_node,
+						"qcom,sequential-fw-load");
+
 	d->ramdump_dev = create_ramdump_device(d->subsys_desc.name,
 								&pdev->dev);
 	if (!d->ramdump_dev) {
@@ -1263,7 +1334,6 @@ static int pil_tz_driver_probe(struct platform_device *pdev)
 		goto err_ramdump;
 	}
 
-#ifdef CONFIG_QCOM_MINIDUMP
 	scnprintf(md_node, sizeof(md_node), "md_%s", d->subsys_desc.name);
 
 	d->minidump_dev = create_ramdump_device(md_node, &pdev->dev);
@@ -1273,7 +1343,7 @@ static int pil_tz_driver_probe(struct platform_device *pdev)
 		rc = -ENOMEM;
 		goto err_minidump;
 	}
-#endif
+
 	d->subsys = subsys_register(&d->subsys_desc);
 	if (IS_ERR(d->subsys)) {
 		rc = PTR_ERR(d->subsys);
@@ -1282,16 +1352,15 @@ static int pil_tz_driver_probe(struct platform_device *pdev)
 
 	return 0;
 err_subsys:
-#ifdef CONFIG_QCOM_MINIDUMP
 	destroy_ramdump_device(d->minidump_dev);
 err_minidump:
-#endif
 	destroy_ramdump_device(d->ramdump_dev);
 err_ramdump:
 	pil_desc_release(&d->desc);
 	platform_set_drvdata(pdev, NULL);
-err_descinit:
-	piltz_resc_destroy(d);
+err_deregister_bus:
+	if (d->bus_client)
+		msm_bus_scale_unregister_client(d->bus_client);
 
 	return rc;
 }
@@ -1302,9 +1371,7 @@ static int pil_tz_driver_exit(struct platform_device *pdev)
 
 	subsys_unregister(d->subsys);
 	destroy_ramdump_device(d->ramdump_dev);
-#ifdef CONFIG_QCOM_MINIDUMP
 	destroy_ramdump_device(d->minidump_dev);
-#endif
 	pil_desc_release(&d->desc);
 
 	return 0;
@@ -1325,14 +1392,44 @@ static struct platform_driver pil_tz_driver = {
 	},
 };
 
+static int last_modem_sfr_proc_show(struct seq_file *m, void *v)
+{
+	seq_printf(m, "%s\n", last_modem_sfr_reason);
+	return 0;
+}
+
+static int last_modem_sfr_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, last_modem_sfr_proc_show, NULL);
+}
+
+static const struct file_operations last_modem_sfr_file_ops = {
+	.owner   = THIS_MODULE,
+	.open    = last_modem_sfr_proc_open,
+	.read    = seq_read,
+	.llseek  = seq_lseek,
+	.release = single_release,
+};
+
 static int __init pil_tz_init(void)
 {
+	last_modem_sfr_entry = proc_create("last_mcrash", S_IFREG | S_IRUGO, NULL, &last_modem_sfr_file_ops);
+	if (!last_modem_sfr_entry) {
+		printk(KERN_ERR "pil: cannot create proc entry last_mcrash\n");
+	}
+	
 	return platform_driver_register(&pil_tz_driver);
 }
 module_init(pil_tz_init);
 
 static void __exit pil_tz_exit(void)
 {
+	schedule_work(&clean_kobj_work);
+	if (last_modem_sfr_entry) {
+		remove_proc_entry("last_mcrash", NULL);
+		last_modem_sfr_entry = NULL;
+	}
+	
 	platform_driver_unregister(&pil_tz_driver);
 }
 module_exit(pil_tz_exit);

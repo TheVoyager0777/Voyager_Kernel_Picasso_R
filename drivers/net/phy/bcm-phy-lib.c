@@ -198,7 +198,7 @@ EXPORT_SYMBOL_GPL(bcm_phy_enable_apd);
 
 int bcm_phy_set_eee(struct phy_device *phydev, bool enable)
 {
-	int val, mask = 0;
+	int val;
 
 	/* Enable EEE at PHY level */
 	val = phy_read_mmd(phydev, MDIO_MMD_AN, BRCM_CL45VEN_EEE_CONTROL);
@@ -217,15 +217,10 @@ int bcm_phy_set_eee(struct phy_device *phydev, bool enable)
 	if (val < 0)
 		return val;
 
-	if (phydev->supported & SUPPORTED_1000baseT_Full)
-		mask |= MDIO_EEE_1000T;
-	if (phydev->supported & SUPPORTED_100baseT_Full)
-		mask |= MDIO_EEE_100TX;
-
 	if (enable)
-		val |= mask;
+		val |= (MDIO_EEE_100TX | MDIO_EEE_1000T);
 	else
-		val &= ~mask;
+		val &= ~(MDIO_EEE_100TX | MDIO_EEE_1000T);
 
 	phy_write_mmd(phydev, MDIO_MMD_AN, BCM_CL45VEN_EEE_ADV, (u32)val);
 
@@ -351,10 +346,6 @@ void bcm_phy_get_strings(struct phy_device *phydev, u8 *data)
 }
 EXPORT_SYMBOL_GPL(bcm_phy_get_strings);
 
-#ifndef UINT64_MAX
-#define UINT64_MAX              (u64)(~((u64)0))
-#endif
-
 /* Caller is supposed to provide appropriate storage for the library code to
  * access the shadow copy
  */
@@ -367,7 +358,7 @@ static u64 bcm_phy_get_stat(struct phy_device *phydev, u64 *shadow,
 
 	val = phy_read(phydev, stat.reg);
 	if (val < 0) {
-		ret = UINT64_MAX;
+		ret = U64_MAX;
 	} else {
 		val >>= stat.shift;
 		val = val & ((1 << stat.bits) - 1);

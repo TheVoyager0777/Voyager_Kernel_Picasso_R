@@ -1,14 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 #ifndef __Q6LSM_H__
 #define __Q6LSM_H__
@@ -27,6 +20,8 @@
 #define LSM_V3P0_MAX_NUM_CHANNELS 9
 
 #define LSM_API_VERSION_V3 3
+
+#define MAX_LSM_SESSIONS 8
 
 typedef void (*lsm_app_cb)(uint32_t opcode, uint32_t token,
 		       uint32_t *payload, uint16_t client_size, void *priv);
@@ -110,6 +105,10 @@ struct lsm_client {
 	uint32_t	event_type;
 	uint32_t	num_stages;
 	struct lsm_stage_config	stage_cfg[LSM_MAX_STAGES_PER_SESSION];
+	uint64_t	fe_id;
+	uint16_t	unprocessed_data;
+	void		*get_param_payload;
+	size_t		param_size;
 };
 
 struct lsm_stream_cmd_open_tx {
@@ -157,6 +156,18 @@ struct lsm_session_cmd_set_params_v3 {
 	u32 param_data[0];
 } __packed;
 
+struct lsm_session_cmd_get_params_v2 {
+	struct apr_hdr apr_hdr;
+	struct mem_mapping_hdr mem_hdr;
+	struct param_hdr_v2 param_info;
+} __packed;
+
+struct lsm_session_cmd_get_params_v3 {
+	struct apr_hdr apr_hdr;
+	struct mem_mapping_hdr mem_hdr;
+	struct param_hdr_v3 param_info;
+} __packed;
+
 struct lsm_param_op_mode {
 	uint32_t	minor_version;
 	uint16_t	mode;
@@ -167,7 +178,7 @@ struct lsm_param_connect_to_port {
 	uint32_t	minor_version;
 	/* AFE port id that receives voice wake up data */
 	uint16_t	port_id;
-	uint16_t	reserved;
+	uint16_t	unprocessed_data;
 } __packed;
 
 struct lsm_param_poll_enable {
@@ -293,6 +304,9 @@ int q6lsm_lab_buffer_alloc(struct lsm_client *client, bool alloc);
 int q6lsm_set_one_param(struct lsm_client *client,
 			struct lsm_params_info_v2 *p_info, void *data,
 			uint32_t param_type);
+int q6lsm_get_one_param(struct lsm_client *client,
+			struct lsm_params_get_info *p_info,
+			uint32_t param_type);
 void q6lsm_sm_set_param_data(struct lsm_client *client,
 		struct lsm_params_info_v2 *p_info,
 		size_t *offset);
@@ -303,4 +317,6 @@ int q6lsm_set_media_fmt_v2_params(struct lsm_client *client);
 int q6lsm_lab_out_ch_cfg(struct lsm_client *client, u8 *ch_map,
 		struct lsm_params_info_v2 *p_info);
 bool q6lsm_adsp_supports_multi_stage_detection(void);
+int q6lsm_set_afe_data_format(uint64_t fe_id, uint16_t afe_data_format);
+void q6lsm_get_afe_data_format(uint64_t fe_id, uint16_t *afe_data_format);
 #endif /* __Q6LSM_H__ */

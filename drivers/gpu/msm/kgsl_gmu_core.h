@@ -1,14 +1,6 @@
-/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  */
 #ifndef __KGSL_GMU_CORE_H
 #define __KGSL_GMU_CORE_H
@@ -16,16 +8,6 @@
 /* GMU_DEVICE - Given an KGSL device return the GMU specific struct */
 #define GMU_DEVICE_OPS(_a) ((_a)->gmu_core.dev_ops)
 #define GMU_CORE_OPS(_a) ((_a)->gmu_core.core_ops)
-
-#define GMU_DEV_OP_VALID(_devops, _field) \
-	(((_devops) != NULL) && \
-	 ((_devops)->_field != NULL))
-
-#define GMU_VER_MAJOR(ver) (((ver) >> 28) & 0xF)
-#define GMU_VER_MINOR(ver) (((ver) >> 16) & 0xFFF)
-#define GMU_VER_STEP(ver) (((ver) >> 0) & 0xFFFF)
-#define GMU_VERSION(major, minor) \
-	((((major) & 0xF) << 28) | (((minor) & 0xFFF) << 16))
 
 #define NUM_BW_LEVELS		100
 #define MAX_GX_LEVELS		16
@@ -39,8 +21,7 @@
 #error "CNOC levels cannot exceed GX levels"
 #endif
 
-#define MAX_GMU_CLKS 6
-#define DEFAULT_GMU_FREQ_IDX 1
+#define MAX_GMU_CLKS 7
 
 /*
  * These are the different ways the GMU can boot. GMU_WARM_BOOT is waking up
@@ -125,8 +106,8 @@ enum gpu_idle_level {
 #define FENCE_STATUS_WRITEDROPPED0_MASK 0x1
 #define FENCE_STATUS_WRITEDROPPED1_MASK 0x2
 
+struct device_node;
 struct kgsl_device;
-struct adreno_device;
 struct kgsl_snapshot;
 
 struct gmu_core_ops {
@@ -134,40 +115,38 @@ struct gmu_core_ops {
 	void (*remove)(struct kgsl_device *device);
 	int (*dcvs_set)(struct kgsl_device *device,
 			unsigned int gpu_pwrlevel, unsigned int bus_level);
+	int (*init)(struct kgsl_device *device);
 	int (*start)(struct kgsl_device *device);
 	void (*stop)(struct kgsl_device *device);
 	void (*snapshot)(struct kgsl_device *device);
 	bool (*regulator_isenabled)(struct kgsl_device *device);
 	int (*suspend)(struct kgsl_device *device);
 	int (*acd_set)(struct kgsl_device *device, unsigned int val);
-	bool (*is_initialized)(struct kgsl_device *device);
 };
 
 struct gmu_dev_ops {
 	int (*load_firmware)(struct kgsl_device *device);
-	int (*oob_set)(struct adreno_device *adreno_dev,
-			enum oob_request req);
-	void (*oob_clear)(struct adreno_device *adreno_dev,
-			enum oob_request req);
-	void (*bcl_config)(struct adreno_device *adreno_dev, bool on);
+	int (*oob_set)(struct kgsl_device *device, enum oob_request req);
+	void (*oob_clear)(struct kgsl_device *device, enum oob_request req);
+	void (*bcl_config)(struct kgsl_device *device, bool on);
 	void (*irq_enable)(struct kgsl_device *device);
 	void (*irq_disable)(struct kgsl_device *device);
-	int (*hfi_start_msg)(struct adreno_device *adreno_dev);
+	int (*hfi_start_msg)(struct kgsl_device *device);
 	void (*enable_lm)(struct kgsl_device *device);
-	int (*rpmh_gpu_pwrctrl)(struct adreno_device *, unsigned int ops,
+	int (*rpmh_gpu_pwrctrl)(struct kgsl_device *device, unsigned int ops,
 			unsigned int arg1, unsigned int arg2);
-	int (*wait_for_lowest_idle)(struct adreno_device *);
-	int (*wait_for_gmu_idle)(struct adreno_device *);
-	bool (*gx_is_on)(struct adreno_device *);
-	void (*prepare_stop)(struct adreno_device *);
-	int (*ifpc_store)(struct adreno_device *adreno_dev,
-			unsigned int val);
-	unsigned int (*ifpc_show)(struct adreno_device *adreno_dev);
-	void (*snapshot)(struct adreno_device *, struct kgsl_snapshot *);
+	int (*wait_for_lowest_idle)(struct kgsl_device *device);
+	int (*wait_for_gmu_idle)(struct kgsl_device *device);
+	bool (*gx_is_on)(struct kgsl_device *device);
 	bool (*cx_is_on)(struct kgsl_device *device);
+	void (*prepare_stop)(struct kgsl_device *device);
+	int (*ifpc_store)(struct kgsl_device *device, unsigned int val);
+	unsigned int (*ifpc_show)(struct kgsl_device *device);
+	void (*snapshot)(struct kgsl_device *device,
+		struct kgsl_snapshot *shapshot);
+	void (*cooperative_reset)(struct kgsl_device *device);
 	void (*halt_execution)(struct kgsl_device *device);
-	int (*wait_for_active_transition)(struct adreno_device *adreno_dev);
-	bool (*is_initialized)(struct adreno_device *adreno_dev);
+	int (*wait_for_active_transition)(struct kgsl_device *device);
 	u64 (*read_ao_counter)(struct kgsl_device *device);
 	const unsigned int gmu2host_intr_mask;
 	const unsigned int gmu_ao_intr_mask;
@@ -202,6 +181,7 @@ extern struct gmu_core_ops rgmu_ops;
 /* GMU core functions */
 int gmu_core_probe(struct kgsl_device *device);
 void gmu_core_remove(struct kgsl_device *device);
+int gmu_core_init(struct kgsl_device *device);
 int gmu_core_start(struct kgsl_device *device);
 void gmu_core_stop(struct kgsl_device *device);
 int gmu_core_suspend(struct kgsl_device *device);
@@ -221,18 +201,36 @@ void gmu_core_regwrite(struct kgsl_device *device, unsigned int offsetwords,
 		unsigned int value);
 
 /**
- * gmu_core_blkwrite() - Do a bulk I/O write to GMU
+ * gmu_core_blkwrite - Do a bulk I/O write to GMU
  * @device: Pointer to the kgsl device
  * @offsetwords: Destination dword offset
  * @buffer: Pointer to the source buffer
  * @size: Number of bytes to copy
+ *
+ * Write a series of GMU registers quickly without bothering to spend time
+ * logging the register writes. The logging of these writes causes extra
+ * delays that could allow IRQs arrive and be serviced before finishing
+ * all the writes.
  */
 void gmu_core_blkwrite(struct kgsl_device *device, unsigned int offsetwords,
 		const void *buffer, size_t size);
 void gmu_core_regrmw(struct kgsl_device *device, unsigned int offsetwords,
 		unsigned int mask, unsigned int bits);
 const char *gmu_core_oob_type_str(enum oob_request req);
+int gmu_core_dev_oob_set(struct kgsl_device *device, enum oob_request req);
+void gmu_core_dev_oob_clear(struct kgsl_device *device, enum oob_request req);
+int gmu_core_dev_hfi_start_msg(struct kgsl_device *device);
+int gmu_core_dev_wait_for_lowest_idle(struct kgsl_device *device);
+void gmu_core_dev_enable_lm(struct kgsl_device *device);
+void gmu_core_dev_snapshot(struct kgsl_device *device,
+		struct kgsl_snapshot *snapshot);
+bool gmu_core_dev_gx_is_on(struct kgsl_device *device);
 bool gmu_core_dev_cx_is_on(struct kgsl_device *device);
-bool gmu_core_is_initialized(struct kgsl_device *device);
+int gmu_core_dev_ifpc_show(struct kgsl_device *device);
+int gmu_core_dev_ifpc_store(struct kgsl_device *device, unsigned int val);
+void gmu_core_dev_prepare_stop(struct kgsl_device *device);
+int gmu_core_dev_wait_for_active_transition(struct kgsl_device *device);
+void gmu_core_dev_cooperative_reset(struct kgsl_device *device);
 u64 gmu_core_dev_read_ao_counter(struct kgsl_device *device);
+
 #endif /* __KGSL_GMU_CORE_H */

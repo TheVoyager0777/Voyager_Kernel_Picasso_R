@@ -1,4 +1,5 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -85,7 +86,7 @@ static void msm_vb2_buf_queue(struct vb2_buffer *vb)
 
 	msm_vb2 = container_of(vbuf, struct msm_vb2_buffer, vb2_v4l2_buf);
 	if (!msm_vb2) {
-		pr_err("%s:%d] vb2_buf NULL", __func__, __LINE__);
+		pr_err("%s:%d] vb2_buf NULL\n", __func__, __LINE__);
 		return;
 	}
 
@@ -97,7 +98,7 @@ static void msm_vb2_buf_queue(struct vb2_buffer *vb)
 
 	stream = msm_get_stream_from_vb2q(vb->vb2_queue);
 	if (!stream) {
-		pr_err("%s:%d] NULL stream", __func__, __LINE__);
+		pr_err("%s:%d] NULL stream\n", __func__, __LINE__);
 		read_unlock_irqrestore(&session->stream_rwlock, rl_flags);
 		return;
 	}
@@ -119,7 +120,7 @@ static void msm_vb2_buf_finish(struct vb2_buffer *vb)
 
 	msm_vb2 = container_of(vbuf, struct msm_vb2_buffer, vb2_v4l2_buf);
 	if (!msm_vb2) {
-		pr_err("%s:%d] vb2_buf NULL", __func__, __LINE__);
+		pr_err("%s:%d] vb2_buf NULL\n", __func__, __LINE__);
 		return;
 	}
 
@@ -131,7 +132,7 @@ static void msm_vb2_buf_finish(struct vb2_buffer *vb)
 
 	stream = msm_get_stream_from_vb2q(vb->vb2_queue);
 	if (!stream) {
-		pr_err("%s:%d] NULL stream", __func__, __LINE__);
+		pr_err("%s:%d] NULL stream\n", __func__, __LINE__);
 		read_unlock_irqrestore(&session->stream_rwlock, rl_flags);
 		return;
 	}
@@ -164,7 +165,7 @@ static void msm_vb2_stop_stream(struct vb2_queue *q)
 
 	stream = msm_get_stream_from_vb2q(q);
 	if (!stream) {
-		pr_err_ratelimited("%s:%d] NULL stream", __func__, __LINE__);
+		pr_err_ratelimited("%s:%d] NULL stream\n", __func__, __LINE__);
 		read_unlock_irqrestore(&session->stream_rwlock, rl_flags);
 		return;
 	}
@@ -408,7 +409,6 @@ static int msm_vb2_put_buf(struct vb2_v4l2_buffer *vb, int session_id,
 static int msm_vb2_buf_done(struct vb2_v4l2_buffer *vb, int session_id,
 				unsigned int stream_id, uint32_t sequence,
 				struct timeval *ts, uint32_t buf_type)
-				enum vb2_buffer_state state)
 {
 	unsigned long flags, rl_flags;
 	struct msm_vb2_buffer *msm_vb2;
@@ -455,7 +455,7 @@ static int msm_vb2_buf_done(struct vb2_v4l2_buffer *vb, int session_id,
 				((u64)ts->tv_sec * 1000000 +
 				ts->tv_usec) * 1000;
 			vb2_buffer_done(&vb2_v4l2_buf->vb2_buf,
-				state);
+				VB2_BUF_STATE_DONE);
 			msm_vb2->in_freeq = 0;
 			rc = 0;
 		} else

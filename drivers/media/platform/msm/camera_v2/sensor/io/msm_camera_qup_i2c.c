@@ -1,4 +1,5 @@
-/* Copyright (c) 2011, 2013-2016, 2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2011, 2013-2016, 2018, 2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -472,8 +473,8 @@ int32_t msm_camera_qup_i2c_poll(struct msm_camera_i2c_client *client,
 		rc = msm_camera_qup_i2c_compare(client,
 			addr, data, data_type);
 		if (rc < 0) {
-			pr_err("%s:%d qup_i2c_compare failed rc = %d", __func__,
-				__LINE__, rc);
+			pr_err("%s:%d qup_i2c_compare failed rc = %d\n",
+				__func__, __LINE__, rc);
 			break;
 		}
 		if (rc == I2C_COMPARE_MISMATCH)
@@ -550,7 +551,7 @@ int32_t msm_camera_qup_i2c_write_conf_tbl(
 	int i;
 	int32_t rc = -EFAULT;
 
-	pr_err("%s, E. ", __func__);
+	pr_err("%s, E.\n", __func__);
 	for (i = 0; i < size; i++) {
 		enum msm_camera_i2c_data_type dt;
 

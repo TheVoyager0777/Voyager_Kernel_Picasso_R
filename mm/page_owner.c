@@ -22,12 +22,13 @@
 #define PAGE_OWNER_STACK_DEPTH (16)
 
 struct page_owner {
-	unsigned int order;
+	unsigned short order;
+	short last_migrate_reason;
 	gfp_t gfp_mask;
-	int last_migrate_reason;
 	depot_stack_handle_t handle;
 	int pid;
 	u64 ts_nsec;
+	u64 free_ts_nsec;
 };
 
 static bool page_owner_disabled =
@@ -40,7 +41,7 @@ static depot_stack_handle_t early_handle;
 
 static void init_early_allocated_pages(void);
 
-static int early_page_owner_param(char *buf)
+static int __init early_page_owner_param(char *buf)
 {
 	if (!buf)
 		return -EINVAL;
@@ -119,12 +120,15 @@ void __reset_page_owner(struct page *page, unsigned int order)
 {
 	int i;
 	struct page_ext *page_ext;
+	u64 free_ts_nsec = local_clock();
 
 	for (i = 0; i < (1 << order); i++) {
 		page_ext = lookup_page_ext(page + i);
 		if (unlikely(!page_ext))
 			continue;
+		get_page_owner(page_ext)->free_ts_nsec = free_ts_nsec;
 		__clear_bit(PAGE_EXT_OWNER, &page_ext->flags);
+		__set_bit(PAGE_EXT_PG_FREE, &page_ext->flags);
 	}
 }
 
@@ -189,8 +193,10 @@ static inline void __set_page_owner_handle(struct page_ext *page_ext,
 	page_owner->last_migrate_reason = -1;
 	page_owner->pid = current->pid;
 	page_owner->ts_nsec = local_clock();
+	page_owner->free_ts_nsec = 0;
 
 	__set_bit(PAGE_EXT_OWNER, &page_ext->flags);
+	__clear_bit(PAGE_EXT_PG_FREE, &page_ext->flags);
 }
 
 noinline void __set_page_owner(struct page *page, unsigned int order,
@@ -198,12 +204,24 @@ noinline void __set_page_owner(struct page *page, unsigned int order,
 {
 	struct page_ext *page_ext = lookup_page_ext(page);
 	depot_stack_handle_t handle;
+	int i;
 
 	if (unlikely(!page_ext))
 		return;
 
 	handle = save_stack(gfp_mask);
 	__set_page_owner_handle(page_ext, handle, order, gfp_mask);
+
+	/* set page owner for tail pages if any */
+	for (i = 1; i < (1 << order); i++) {
+		page_ext = lookup_page_ext(page + i);
+
+		if (unlikely(!page_ext))
+			continue;
+
+		/* mark tail pages as order 0 individual pages */
+		__set_page_owner_handle(page_ext, handle, 0, gfp_mask);
+	}
 }
 
 void __set_page_owner_migrate_reason(struct page *page, int reason)
@@ -251,6 +269,7 @@ void __copy_page_owner(struct page *oldpage, struct page *newpage)
 	new_page_owner->handle = old_page_owner->handle;
 	new_page_owner->pid = old_page_owner->pid;
 	new_page_owner->ts_nsec = old_page_owner->ts_nsec;
+	new_page_owner->free_ts_nsec = old_page_owner->ts_nsec;
 
 	/*
 	 * We don't clear the bit on the oldpage as it's going to be freed
@@ -543,14 +562,9 @@ read_page_owner(struct file *file, char __user *buf, size_t count, loff_t *ppos)
 
 static void init_pages_in_zone(pg_data_t *pgdat, struct zone *zone)
 {
-	struct page *page;
-	struct page_ext *page_ext;
-	unsigned long pfn = zone->zone_start_pfn, block_end_pfn;
-	unsigned long end_pfn = pfn + zone->spanned_pages;
+	unsigned long pfn = zone->zone_start_pfn;
+	unsigned long end_pfn = zone_end_pfn(zone);
 	unsigned long count = 0;
-
-	/* Scan block by block. First and last block may be incomplete */
-	pfn = zone->zone_start_pfn;
 
 	/*
 	 * Walk the zone in pageblock_nr_pages steps. If a page block spans
@@ -558,6 +572,8 @@ static void init_pages_in_zone(pg_data_t *pgdat, struct zone *zone)
 	 * not matter as the mixed block count will still be correct
 	 */
 	for (; pfn < end_pfn; ) {
+		unsigned long block_end_pfn;
+
 		if (!pfn_valid(pfn)) {
 			pfn = ALIGN(pfn + 1, MAX_ORDER_NR_PAGES);
 			continue;
@@ -566,9 +582,10 @@ static void init_pages_in_zone(pg_data_t *pgdat, struct zone *zone)
 		block_end_pfn = ALIGN(pfn + 1, pageblock_nr_pages);
 		block_end_pfn = min(block_end_pfn, end_pfn);
 
-		page = pfn_to_page(pfn);
-
 		for (; pfn < block_end_pfn; pfn++) {
+			struct page *page;
+			struct page_ext *page_ext;
+
 			if (!pfn_valid_within(pfn))
 				continue;
 
@@ -648,11 +665,9 @@ static int __init pageowner_init(void)
 		return 0;
 	}
 
-	dentry = debugfs_create_file("page_owner", S_IRUSR, NULL,
-			NULL, &proc_page_owner_operations);
-	if (IS_ERR(dentry))
-		return PTR_ERR(dentry);
+	dentry = debugfs_create_file("page_owner", 0400, NULL,
+				     NULL, &proc_page_owner_operations);
 
-	return 0;
+	return PTR_ERR_OR_ZERO(dentry);
 }
 late_initcall(pageowner_init)

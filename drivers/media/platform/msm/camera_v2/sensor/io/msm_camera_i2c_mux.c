@@ -1,4 +1,5 @@
-/* Copyright (c) 2011-2014, 2016, 2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2011-2014, 2016, 2018, 2020 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -165,7 +166,6 @@ static struct platform_driver i2c_mux_driver = {
 	.remove = i2c_mux_remove,
 	.driver = {
 		.name = MSM_I2C_MUX_DRV_NAME,
-		.owner = THIS_MODULE,
 	},
 };
 

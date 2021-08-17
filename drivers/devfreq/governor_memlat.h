@@ -1,14 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2015-2017, 2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #ifndef _GOVERNOR_MEMLAT_H
@@ -23,6 +15,9 @@
  * @mem_count:			Number of memory accesses made.
  * @freq:			Effective frequency of the device in the
  *				last interval.
+ * @wb_pct:			The ratio of writebacks to accesses. Used as an
+ *				indirect way to identify memory latency due to
+ *				snoop activity.
  */
 struct dev_stats {
 	int id;
@@ -30,6 +25,7 @@ struct dev_stats {
 	unsigned long mem_count;
 	unsigned long freq;
 	unsigned long stall_pct;
+	unsigned long wb_pct;
 };
 
 struct core_dev_map {
@@ -63,6 +59,8 @@ struct memlat_hwmon {
 	void (*stop_hwmon)(struct memlat_hwmon *hw);
 	unsigned long (*get_cnt)(struct memlat_hwmon *hw);
 	struct device_node *(*get_child_of_node)(struct device *dev);
+	void (*request_update_ms)(struct memlat_hwmon *hw,
+				  unsigned int update_ms);
 	struct device *dev;
 	struct device_node *of_node;
 
@@ -71,6 +69,7 @@ struct memlat_hwmon {
 
 	struct devfreq *df;
 	struct core_dev_map *freq_map;
+	bool should_ignore_df_monitor;
 };
 
 #ifdef CONFIG_DEVFREQ_GOV_MEMLAT

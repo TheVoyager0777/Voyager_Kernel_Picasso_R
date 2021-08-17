@@ -51,6 +51,7 @@
 #include <asm/virt.h>
 #include <asm/mach/arch.h>
 #include <asm/mpu.h>
+#include <soc/qcom/minidump.h>
 
 #include <soc/qcom/lpm_levels.h>
 
@@ -150,7 +151,7 @@ int __cpu_up(unsigned int cpu, struct task_struct *idle)
 	 */
 	secondary_data.stack = task_stack_page(idle) + THREAD_START_SP;
 #ifdef CONFIG_ARM_MPU
-	secondary_data.mpu_rgn_szr = mpu_rgn_info.rgns[MPU_RAM_REGION].drsr;
+	secondary_data.mpu_rgn_info = &mpu_rgn_info;
 #endif
 
 #ifdef CONFIG_MMU
@@ -272,8 +273,6 @@ int __cpu_disable(void)
 	flush_cache_louis();
 	local_flush_tlb_all();
 
-	clear_tasks_mm_cpumask(cpu);
-
 	return 0;
 }
 
@@ -291,6 +290,7 @@ void __cpu_die(unsigned int cpu)
 	}
 	pr_debug("CPU%u: shutdown\n", cpu);
 
+	clear_tasks_mm_cpumask(cpu);
 	/*
 	 * platform_cpu_kill() is generally expected to do the powering off
 	 * and/or cutting of clocks to the dying CPU.  Optionally, this may
@@ -417,6 +417,9 @@ asmlinkage void secondary_start_kernel(void)
 
 	cpu_init();
 
+#ifndef CONFIG_MMU
+	setup_vectors_base();
+#endif
 	pr_debug("CPU%u: Booted secondary processor\n", cpu);
 
 	preempt_disable();
@@ -516,6 +519,14 @@ void __init set_smp_cross_call(void (*fn)(const struct cpumask *, unsigned int))
 		__smp_cross_call = fn;
 }
 
+static void (*__smp_update_ipi_history_cb)(int cpu);
+
+void set_update_ipi_history_callback(void (*fn)(int))
+{
+	__smp_update_ipi_history_cb = fn;
+}
+EXPORT_SYMBOL_GPL(set_update_ipi_history_callback);
+
 static const char *ipi_types[NR_IPI] __tracepoint_string = {
 #define S(x,s)	[x] = s
 	S(IPI_WAKEUP, "CPU wakeup interrupts"),
@@ -607,16 +618,17 @@ static DEFINE_RAW_SPINLOCK(stop_lock);
 /*
  * ipi_cpu_stop - handle IPI from smp_send_stop()
  */
-static void ipi_cpu_stop(unsigned int cpu)
+static void ipi_cpu_stop(unsigned int cpu, struct pt_regs *regs)
 {
 	if (system_state <= SYSTEM_RUNNING) {
 		raw_spin_lock(&stop_lock);
 		pr_crit("CPU%u: stopping\n", cpu);
 		dump_stack();
+		dump_stack_minidump(regs->uregs[13]);
 		raw_spin_unlock(&stop_lock);
 	}
 
-	set_cpu_online(cpu, false);
+	set_cpu_active(cpu, false);
 
 	local_fiq_disable();
 	local_irq_disable();
@@ -682,7 +694,7 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 
 	case IPI_CPU_STOP:
 		irq_enter();
-		ipi_cpu_stop(cpu);
+		ipi_cpu_stop(cpu, regs);
 		irq_exit();
 		break;
 
@@ -723,7 +735,8 @@ void handle_IPI(int ipinr, struct pt_regs *regs)
 
 void smp_send_reschedule(int cpu)
 {
-	update_ipi_history(cpu);
+	if (__smp_update_ipi_history_cb)
+		__smp_update_ipi_history_cb(cpu);
 	smp_cross_call_common(cpumask_of(cpu), IPI_RESCHEDULE);
 }
 
@@ -739,10 +752,10 @@ void smp_send_stop(void)
 
 	/* Wait up to one second for other CPUs to stop */
 	timeout = USEC_PER_SEC;
-	while (num_online_cpus() > 1 && timeout--)
+	while (num_active_cpus() > 1 && timeout--)
 		udelay(1);
 
-	if (num_online_cpus() > 1)
+	if (num_active_cpus() > 1)
 		pr_warn("SMP: failed to stop secondary CPUs\n");
 }
 

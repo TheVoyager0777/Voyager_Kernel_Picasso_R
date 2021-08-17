@@ -1,14 +1,5 @@
-/* Copyright (c) 2016, 2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2016, 2018, 2020, The Linux Foundation. All rights reserved. */
 
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
@@ -381,8 +372,8 @@ static void hdmi_audio_reset(void *ctx)
 }
 
 /**
- * hdmi_audio_register() - audio registeration function
- * @data: registeration initialization data
+ * hdmi_audio_register() - audio registration function
+ * @data: registration initialization data
  *
  * This API configures audio module for client to use HDMI audio.
  * Provides audio functionalities which client can call.

@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -30,7 +31,7 @@ int ufs_qcom_phy_qmp_v3_660_phy_calibrate(struct ufs_qcom_phy *ufs_qcom_phy,
 	tbl_size_B = ARRAY_SIZE(phy_cal_table_rate_B);
 	tbl_B = phy_cal_table_rate_B;
 
-	if ((major == 0x3) && (minor == 0x001) && (step >= 0x001)) {
+	if ((major == 0x4) && (minor == 0x002) && (step >= 0x000)) {
 		tbl_A = phy_cal_table_rate_A_3_1_1;
 		tbl_size_A = ARRAY_SIZE(phy_cal_table_rate_A_3_1_1);
 	} else {
@@ -239,7 +240,6 @@ static struct platform_driver ufs_qcom_phy_qmp_v3_660_driver = {
 	.driver = {
 		.of_match_table = ufs_qcom_phy_qmp_v3_660_of_match,
 		.name = "ufs_qcom_phy_qmp_v3_660",
-		.owner = THIS_MODULE,
 	},
 };
 

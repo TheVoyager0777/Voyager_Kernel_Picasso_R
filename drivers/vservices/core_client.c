@@ -281,7 +281,7 @@ static void message_queue_work(struct work_struct *work)
 		/* Any other error is fatal */
 		if (err < 0) {
 			dev_err(&client->service->dev,
-					"Failed to send pending reset for %d (%d) - resetting session",
+					"Failed to send pending reset for %d (%d) - resetting session\n",
 					msg->service->id, err);
 			vs_service_reset_nosync(client->service);
 			break;

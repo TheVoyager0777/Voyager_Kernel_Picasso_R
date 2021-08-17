@@ -810,11 +810,14 @@ int __init dmar_dev_scope_init(void)
 				dmar_free_pci_notify_info(info);
 			}
 		}
-
-		bus_register_notifier(&pci_bus_type, &dmar_pci_bus_nb);
 	}
 
 	return dmar_dev_scope_status;
+}
+
+void __init dmar_register_bus_notifier(void)
+{
+	bus_register_notifier(&pci_bus_type, &dmar_pci_bus_nb);
 }
 
 
@@ -1026,8 +1029,8 @@ static int alloc_iommu(struct dmar_drhd_unit *drhd)
 {
 	struct intel_iommu *iommu;
 	u32 ver, sts;
-	int agaw = -1;
-	int msagaw = -1;
+	int agaw = 0;
+	int msagaw = 0;
 	int err;
 
 	if (!drhd->reg_base_addr) {
@@ -1052,28 +1055,17 @@ static int alloc_iommu(struct dmar_drhd_unit *drhd)
 	}
 
 	err = -EINVAL;
-	if (cap_sagaw(iommu->cap) == 0) {
-		pr_info("%s: No supported address widths. Not attempting DMA translation.\n",
-			iommu->name);
-		drhd->ignored = 1;
+	agaw = iommu_calculate_agaw(iommu);
+	if (agaw < 0) {
+		pr_err("Cannot get a valid agaw for iommu (seq_id = %d)\n",
+			iommu->seq_id);
+		goto err_unmap;
 	}
-
-	if (!drhd->ignored) {
-		agaw = iommu_calculate_agaw(iommu);
-		if (agaw < 0) {
-			pr_err("Cannot get a valid agaw for iommu (seq_id = %d)\n",
-			       iommu->seq_id);
-			drhd->ignored = 1;
-		}
-	}
-	if (!drhd->ignored) {
-		msagaw = iommu_calculate_max_sagaw(iommu);
-		if (msagaw < 0) {
-			pr_err("Cannot get a valid max agaw for iommu (seq_id = %d)\n",
-			       iommu->seq_id);
-			drhd->ignored = 1;
-			agaw = -1;
-		}
+	msagaw = iommu_calculate_max_sagaw(iommu);
+	if (msagaw < 0) {
+		pr_err("Cannot get a valid max agaw for iommu (seq_id = %d)\n",
+			iommu->seq_id);
+		goto err_unmap;
 	}
 	iommu->agaw = agaw;
 	iommu->msagaw = msagaw;
@@ -1100,12 +1092,7 @@ static int alloc_iommu(struct dmar_drhd_unit *drhd)
 
 	raw_spin_lock_init(&iommu->register_lock);
 
-	/*
-	 * This is only for hotplug; at boot time intel_iommu_enabled won't
-	 * be set yet. When intel_iommu_init() runs, it registers the units
-	 * present at boot time, then sets intel_iommu_enabled.
-	 */
-	if (intel_iommu_enabled && !drhd->ignored) {
+	if (intel_iommu_enabled) {
 		err = iommu_device_sysfs_add(&iommu->iommu, NULL,
 					     intel_iommu_groups,
 					     "%s", iommu->name);
@@ -1116,16 +1103,13 @@ static int alloc_iommu(struct dmar_drhd_unit *drhd)
 
 		err = iommu_device_register(&iommu->iommu);
 		if (err)
-			goto err_sysfs;
+			goto err_unmap;
 	}
 
 	drhd->iommu = iommu;
-	iommu->drhd = drhd;
 
 	return 0;
 
-err_sysfs:
-	iommu_device_sysfs_remove(&iommu->iommu);
 err_unmap:
 	unmap_iommu(iommu);
 error_free_seq_id:
@@ -1137,7 +1121,7 @@ error:
 
 static void free_iommu(struct intel_iommu *iommu)
 {
-	if (intel_iommu_enabled && !iommu->drhd->ignored) {
+	if (intel_iommu_enabled) {
 		iommu_device_unregister(&iommu->iommu);
 		iommu_device_sysfs_remove(&iommu->iommu);
 	}
@@ -1370,7 +1354,6 @@ void qi_flush_dev_iotlb(struct intel_iommu *iommu, u16 sid, u16 pfsid,
 	struct qi_desc desc;
 
 	if (mask) {
-		BUG_ON(addr & ((1ULL << (VTD_PAGE_SHIFT + mask)) - 1));
 		addr |= (1ULL << (VTD_PAGE_SHIFT + mask - 1)) - 1;
 		desc.high = QI_DEV_IOTLB_ADDR(addr) | QI_DEV_IOTLB_SIZE;
 	} else
@@ -1483,7 +1466,7 @@ int dmar_enable_qi(struct intel_iommu *iommu)
 
 	qi->desc = page_address(desc_page);
 
-	qi->desc_status = kzalloc(QI_LENGTH * sizeof(int), GFP_ATOMIC);
+	qi->desc_status = kcalloc(QI_LENGTH, sizeof(int), GFP_ATOMIC);
 	if (!qi->desc_status) {
 		free_page((unsigned long) qi->desc);
 		kfree(qi);
@@ -1643,17 +1626,13 @@ irqreturn_t dmar_fault(int irq, void *dev_id)
 	int reg, fault_index;
 	u32 fault_status;
 	unsigned long flag;
-	bool ratelimited;
 	static DEFINE_RATELIMIT_STATE(rs,
 				      DEFAULT_RATELIMIT_INTERVAL,
 				      DEFAULT_RATELIMIT_BURST);
 
-	/* Disable printing, simply clear the fault when ratelimited */
-	ratelimited = !__ratelimit(&rs);
-
 	raw_spin_lock_irqsave(&iommu->register_lock, flag);
 	fault_status = readl(iommu->reg + DMAR_FSTS_REG);
-	if (fault_status && !ratelimited)
+	if (fault_status && __ratelimit(&rs))
 		pr_err("DRHD: handling fault status reg %x\n", fault_status);
 
 	/* TBD: ignore advanced fault log currently */
@@ -1663,6 +1642,8 @@ irqreturn_t dmar_fault(int irq, void *dev_id)
 	fault_index = dma_fsts_fault_record_index(fault_status);
 	reg = cap_fault_reg_offset(iommu->cap);
 	while (1) {
+		/* Disable printing, simply clear the fault when ratelimited */
+		bool ratelimited = !__ratelimit(&rs);
 		u8 fault_reason;
 		u16 source_id;
 		u64 guest_addr;
@@ -1704,7 +1685,8 @@ irqreturn_t dmar_fault(int irq, void *dev_id)
 		raw_spin_lock_irqsave(&iommu->register_lock, flag);
 	}
 
-	writel(DMA_FSTS_PFO | DMA_FSTS_PPF, iommu->reg + DMAR_FSTS_REG);
+	writel(DMA_FSTS_PFO | DMA_FSTS_PPF | DMA_FSTS_PRO,
+	       iommu->reg + DMAR_FSTS_REG);
 
 unlock_exit:
 	raw_spin_unlock_irqrestore(&iommu->register_lock, flag);

@@ -45,6 +45,7 @@
 #include <linux/security.h>
 #include <linux/string.h>
 #include <linux/list.h>
+#include <linux/iversion.h>
 #include "multiuser.h"
 
 /* the file system name */
@@ -653,5 +654,7 @@ static inline bool qstr_case_eq(const struct qstr *q1, const struct qstr *q2)
 }
 
 #define QSTR_LITERAL(string) QSTR_INIT(string, sizeof(string)-1)
+
+extern struct kmem_cache *kmem_file_info_pool;
 
 #endif	/* not _SDCARDFS_H_ */

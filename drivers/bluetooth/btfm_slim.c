@@ -1,14 +1,8 @@
-/* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  */
+
 #include <linux/init.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -24,8 +18,12 @@
 #include <sound/soc-dapm.h>
 #include <sound/tlv.h>
 #include "btfm_slim.h"
-#include "btfm_slim_wcn3990.h"
+#include "btfm_slim_slave.h"
 #include <linux/bluetooth-power.h>
+
+#define DELAY_FOR_PORT_OPEN_MS (200)
+
+bool btfm_is_port_opening_delayed = true;
 
 int btfm_slim_write(struct btfmslim *btfmslim,
 		uint16_t reg, int bytes, void *src, uint8_t pgd)
@@ -116,6 +114,19 @@ int btfm_slim_read_inf(struct btfmslim *btfmslim,
 	return btfm_slim_read(btfmslim, reg, bytes, dest, IFD);
 }
 
+bool btfm_slim_is_sb_reset_needed(int chip_ver)
+{
+	switch (chip_ver) {
+	case QCA_APACHE_SOC_ID_0100:
+	case QCA_APACHE_SOC_ID_0110:
+	case QCA_APACHE_SOC_ID_0120:
+	case QCA_APACHE_SOC_ID_0121:
+		return true;
+	default:
+		return false;
+	}
+}
+
 int btfm_slim_enable_ch(struct btfmslim *btfmslim, struct btfmslim_ch *ch,
 	uint8_t rxport, uint32_t rates, uint8_t grp, uint8_t nchan)
 {
@@ -123,6 +134,7 @@ int btfm_slim_enable_ch(struct btfmslim *btfmslim, struct btfmslim_ch *ch,
 	struct slim_ch prop;
 	struct btfmslim_ch *chan = ch;
 	uint16_t ch_h[2];
+	int chipset_ver;
 
 	if (!btfmslim || !ch)
 		return -EINVAL;
@@ -134,11 +146,30 @@ int btfm_slim_enable_ch(struct btfmslim *btfmslim, struct btfmslim_ch *ch,
 			SLIM_PUSH : SLIM_AUTO_ISO;
 	prop.baser = ((rates == 44100) || (rates == 88200)) ?
 			SLIM_RATE_11025HZ : SLIM_RATE_4000HZ;
-	prop.dataf = ((rates == 48000) || (rates == 44100) ||
-		(rates == 88200) || (rates == 96000)) ?
-			SLIM_CH_DATAF_NOT_DEFINED : SLIM_CH_DATAF_LPCM_AUDIO;
+	prop.dataf = SLIM_CH_DATAF_NOT_DEFINED;
 
-	/* for feedback channel PCM bit should not be set */
+	chipset_ver = get_chipset_version();
+	BTFMSLIM_INFO("chipset soc version:%x", chipset_ver);
+
+	/* Delay port opening for few chipsets if:
+	 *	1. for 8k, feedback channel
+	 *	2. 44.1k, 88.2k rxports
+	 */
+	if (((rates == 8000 && btfm_feedback_ch_setting && rxport == 0) ||
+		(rxport == 1 && (rates == 44100 || rates == 88200))) &&
+		btfm_slim_is_sb_reset_needed(chipset_ver)) {
+
+		BTFMSLIM_INFO("btfm_is_port_opening_delayed %d",
+				btfm_is_port_opening_delayed);
+
+		if (!btfm_is_port_opening_delayed) {
+			BTFMSLIM_INFO("SB reset needed, sleeping");
+			btfm_is_port_opening_delayed = true;
+			msleep(DELAY_FOR_PORT_OPEN_MS);
+		}
+	}
+
+	/* for feedback channel, PCM bit should not be set */
 	if (btfm_feedback_ch_setting) {
 		BTFMSLIM_DBG("port open for feedback ch, not setting PCM bit");
 		prop.dataf = SLIM_CH_DATAF_NOT_DEFINED;
@@ -238,6 +269,8 @@ int btfm_slim_disable_ch(struct btfmslim *btfmslim, struct btfmslim_ch *ch,
 	BTFMSLIM_INFO("port:%d, grp: %d, ch->grph:0x%x, ch->ch_hdl:0x%x ",
 		ch->port, grp, ch->grph, ch->ch_hdl);
 
+	btfm_is_port_opening_delayed = false;
+
 	/* For 44.1/88.2 Khz A2DP Rx, disconnect the port first */
 	if (rxport &&
 		(btfmslim->sample_rate == 44100 ||
@@ -319,13 +352,13 @@ static int btfm_slim_alloc_port(struct btfmslim *btfmslim)
 
 	rx_chs = btfmslim->rx_chs;
 	tx_chs = btfmslim->tx_chs;
-	if ((chipset_ver >=  QCA_CHEROKEE_SOC_ID_0300) &&
-		chipset_ver <=  QCA_CHEROKEE_SOC_ID_0320) {
+	if ((chipset_ver >=  QCA_CHEROKEE_SOC_ID_0310) &&
+		(chipset_ver <=  QCA_CHEROKEE_SOC_ID_0320_UMC)) {
 		for (i = 0; (tx_chs->port != BTFM_SLIM_PGD_PORT_LAST) &&
 		(i < BTFM_SLIM_NUM_CODEC_DAIS); i++, tx_chs++) {
-			if (tx_chs->port == CHRK_SB_PGD_PORT_TX1_FM)
+			if (tx_chs->port == SLAVE_SB_PGD_PORT_TX1_FM)
 				tx_chs->port = CHRKVER3_SB_PGD_PORT_TX1_FM;
-			else if (tx_chs->port == CHRK_SB_PGD_PORT_TX2_FM)
+			else if (tx_chs->port == SLAVE_SB_PGD_PORT_TX2_FM)
 				tx_chs->port = CHRKVER3_SB_PGD_PORT_TX2_FM;
 			BTFMSLIM_INFO("Tx port:%d", tx_chs->port);
 		}
@@ -377,6 +410,9 @@ static int btfm_slim_alloc_port(struct btfmslim *btfmslim)
 int btfm_slim_hw_init(struct btfmslim *btfmslim)
 {
 	int ret;
+	int chipset_ver;
+	struct slim_device *slim;
+	struct slim_device *slim_ifd;
 
 	BTFMSLIM_DBG("");
 	if (!btfmslim)
@@ -386,7 +422,66 @@ int btfm_slim_hw_init(struct btfmslim *btfmslim)
 		BTFMSLIM_DBG("Already enabled");
 		return 0;
 	}
+
+	slim = btfmslim->slim_pgd;
+	slim_ifd = &btfmslim->slim_ifd;
+
 	mutex_lock(&btfmslim->io_lock);
+		BTFMSLIM_INFO(
+			"PGD Enum Addr: %.02x:%.02x:%.02x:%.02x:%.02x: %.02x",
+			slim->e_addr[0], slim->e_addr[1], slim->e_addr[2],
+			slim->e_addr[3], slim->e_addr[4], slim->e_addr[5]);
+		BTFMSLIM_INFO(
+			"IFD Enum Addr: %.02x:%.02x:%.02x:%.02x:%.02x: %.02x",
+			slim_ifd->e_addr[0], slim_ifd->e_addr[1],
+			slim_ifd->e_addr[2], slim_ifd->e_addr[3],
+			slim_ifd->e_addr[4], slim_ifd->e_addr[5]);
+
+	chipset_ver = get_chipset_version();
+	BTFMSLIM_INFO("chipset soc version:%x", chipset_ver);
+
+	if (chipset_ver == QCA_HSP_SOC_ID_0100 ||
+		chipset_ver == QCA_HSP_SOC_ID_0110 ||
+		chipset_ver == QCA_HSP_SOC_ID_0200) {
+		BTFMSLIM_INFO("chipset is hastings prime, overwriting EA");
+		slim->e_addr[0] = 0x00;
+		slim->e_addr[1] = 0x01;
+		slim->e_addr[2] = 0x21;
+		slim->e_addr[3] = 0x02;
+		slim->e_addr[4] = 0x17;
+		slim->e_addr[5] = 0x02;
+
+		slim_ifd->e_addr[0] = 0x00;
+		slim_ifd->e_addr[1] = 0x00;
+		slim_ifd->e_addr[2] = 0x21;
+		slim_ifd->e_addr[3] = 0x02;
+		slim_ifd->e_addr[4] = 0x17;
+		slim_ifd->e_addr[5] = 0x02;
+	} else if (chipset_ver == QCA_HASTINGS_SOC_ID_0200) {
+		BTFMSLIM_INFO("chipset is hastings 2.0, overwriting EA");
+		slim->e_addr[0] = 0x00;
+		slim->e_addr[1] = 0x01;
+		slim->e_addr[2] = 0x20;
+		slim->e_addr[3] = 0x02;
+		slim->e_addr[4] = 0x17;
+		slim->e_addr[5] = 0x02;
+
+		slim_ifd->e_addr[0] = 0x00;
+		slim_ifd->e_addr[1] = 0x00;
+		slim_ifd->e_addr[2] = 0x20;
+		slim_ifd->e_addr[3] = 0x02;
+		slim_ifd->e_addr[4] = 0x17;
+		slim_ifd->e_addr[5] = 0x02;
+	}
+		BTFMSLIM_INFO(
+			"PGD Enum Addr: %.02x:%.02x:%.02x:%.02x:%.02x: %.02x",
+			slim->e_addr[0], slim->e_addr[1], slim->e_addr[2],
+			slim->e_addr[3], slim->e_addr[4], slim->e_addr[5]);
+		BTFMSLIM_INFO(
+			"IFD Enum Addr: %.02x:%.02x:%.02x:%.02x:%.02x: %.02x",
+			slim_ifd->e_addr[0], slim_ifd->e_addr[1],
+			slim_ifd->e_addr[2], slim_ifd->e_addr[3],
+			slim_ifd->e_addr[4], slim_ifd->e_addr[5]);
 
 	/* Assign Logical Address for PGD (Ported Generic Device)
 	 * enumeration address
@@ -570,7 +665,7 @@ static int btfm_slim_remove(struct slim_device *slim)
 	BTFMSLIM_DBG("");
 	mutex_destroy(&btfm_slim->io_lock);
 	mutex_destroy(&btfm_slim->xfer_lock);
-	snd_soc_unregister_codec(&slim->dev);
+	snd_soc_unregister_component(&slim->dev);
 
 	BTFMSLIM_DBG("slim_remove_device() - btfm_slim->slim_ifd");
 	slim_remove_device(&btfm_slim->slim_ifd);

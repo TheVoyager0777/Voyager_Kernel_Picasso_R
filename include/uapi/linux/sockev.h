@@ -1,3 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
+
 #ifndef _SOCKEV_H_
 #define _SOCKEV_H_
 

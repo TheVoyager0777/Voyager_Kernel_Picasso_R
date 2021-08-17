@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2015 Google, Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This software is licensed under the terms of the GNU General Public
  * License version 2, as published by the Free Software Foundation, and
@@ -120,9 +119,14 @@ extern int dm_linear_prepare_ioctl(struct dm_target *ti, struct block_device **b
 extern int dm_linear_iterate_devices(struct dm_target *ti,
 			iterate_devices_callout_fn fn, void *data);
 extern int dm_linear_ctr(struct dm_target *ti, unsigned int argc, char **argv);
+#if IS_ENABLED(CONFIG_DAX_DRIVER)
 extern long dm_linear_dax_direct_access(struct dm_target *ti, pgoff_t pgoff,
-					long nr_pages, void **kaddr,
-					pfn_t *pfn);
+				       long nr_pages, void **kaddr,
+				       pfn_t *pfn);
 extern size_t dm_linear_dax_copy_from_iter(struct dm_target *ti, pgoff_t pgoff,
 		void *addr, size_t bytes, struct iov_iter *i);
+#else
+#define dm_linear_dax_direct_access NULL
+#define dm_linear_dax_copy_from_iter NULL
+#endif
 #endif /* DM_ANDROID_VERITY_H */

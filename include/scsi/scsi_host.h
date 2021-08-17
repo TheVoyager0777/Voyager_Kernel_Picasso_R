@@ -10,6 +10,7 @@
 #include <linux/seq_file.h>
 #include <linux/blk-mq.h>
 #include <scsi/scsi.h>
+#include <linux/android_kabi.h>
 
 struct request_queue;
 struct block_device;
@@ -50,21 +51,6 @@ struct blk_queue_tags;
 struct scsi_host_template {
 	struct module *module;
 	const char *name;
-
-	/*
-	 * Used to initialize old-style drivers.  For new-style drivers
-	 * just perform all work in your module initialization function.
-	 *
-	 * Status:  OBSOLETE
-	 */
-	int (* detect)(struct scsi_host_template *);
-
-	/*
-	 * Used as unload callback for hosts with old-style drivers.
-	 *
-	 * Status: OBSOLETE
-	 */
-	int (* release)(struct Scsi_Host *);
 
 	/*
 	 * The info function will return whatever useful information the
@@ -322,7 +308,7 @@ struct scsi_host_template {
 	 * EH_HANDLED:		I fixed the error, please complete the command
 	 * EH_RESET_TIMER:	I need more time, reset the timer and
 	 *			begin counting again
-	 * EH_NOT_HANDLED	Begin normal error recovery
+	 * EH_DONE:		Begin normal error recovery
 	 *
 	 * Status: OPTIONAL
 	 */
@@ -480,13 +466,10 @@ struct scsi_host_template {
 	struct device_attribute **sdev_attrs;
 
 	/*
-	 * List of hosts per template.
-	 *
-	 * This is only for use by scsi_module.c for legacy templates.
-	 * For these access to it is synchronized implicitly by
-	 * module_init/module_exit.
+	 * Pointer to the SCSI device attribute groups for this host,
+	 * NULL terminated.
 	 */
-	struct list_head legacy_hosts;
+	const struct attribute_group **sdev_groups;
 
 	/*
 	 * Vendor Identifier associated with the host
@@ -502,6 +485,14 @@ struct scsi_host_template {
 	 */
 	unsigned int cmd_size;
 	struct scsi_host_cmd_pool *cmd_pool;
+
+	/* Delay for runtime autosuspend */
+	int rpm_autosuspend_delay;
+
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
+	ANDROID_KABI_RESERVE(3);
+	ANDROID_KABI_RESERVE(4);
 };
 
 /*
@@ -715,15 +706,6 @@ struct Scsi_Host {
 	struct device		shost_gendev, shost_dev;
 
 	/*
-	 * List of hosts per template.
-	 *
-	 * This is only for use by scsi_module.c for legacy templates.
-	 * For these access to it is synchronized implicitly by
-	 * module_init/module_exit.
-	 */
-	struct list_head sht_legacy_list;
-
-	/*
 	 * Points to the transport data (if any) which is allocated
 	 * separately
 	 */
@@ -791,6 +773,7 @@ extern void scsi_scan_host(struct Scsi_Host *);
 extern void scsi_rescan_device(struct device *);
 extern void scsi_remove_host(struct Scsi_Host *);
 extern struct Scsi_Host *scsi_host_get(struct Scsi_Host *);
+extern int scsi_host_busy(struct Scsi_Host *shost);
 extern void scsi_host_put(struct Scsi_Host *t);
 extern struct Scsi_Host *scsi_host_lookup(unsigned short);
 extern const char *scsi_host_state_name(enum scsi_host_state);
@@ -923,9 +906,6 @@ static inline unsigned char scsi_host_get_guard(struct Scsi_Host *shost)
 	return shost->prot_guard_type;
 }
 
-/* legacy interfaces */
-extern struct Scsi_Host *scsi_register(struct scsi_host_template *, int);
-extern void scsi_unregister(struct Scsi_Host *);
 extern int scsi_host_set_state(struct Scsi_Host *, enum scsi_host_state);
 
 #endif /* _SCSI_SCSI_HOST_H */

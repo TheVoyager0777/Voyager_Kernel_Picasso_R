@@ -608,7 +608,6 @@ static int link_shbuf_remove(struct platform_device *pdev)
 static struct platform_driver of_plat_link_shbuf_driver = {
 	.driver = {
 		.name = "okl4-shbuf",
-		.owner = THIS_MODULE,
 		.of_match_table = okl4_link_shbuf_match,
 	},
 	.probe = link_shbuf_probe,

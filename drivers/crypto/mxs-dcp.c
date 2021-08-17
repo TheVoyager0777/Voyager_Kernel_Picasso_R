@@ -101,7 +101,7 @@ struct dcp_async_ctx {
 	unsigned int			hot:1;
 
 	/* Crypto-specific context */
-	struct crypto_sync_skcipher	*fallback;
+	struct crypto_skcipher		*fallback;
 	unsigned int			key_len;
 	uint8_t				key[AES_KEYSIZE_128];
 };
@@ -426,10 +426,10 @@ static int mxs_dcp_block_fallback(struct ablkcipher_request *req, int enc)
 {
 	struct crypto_ablkcipher *tfm = crypto_ablkcipher_reqtfm(req);
 	struct dcp_async_ctx *ctx = crypto_ablkcipher_ctx(tfm);
-	SYNC_SKCIPHER_REQUEST_ON_STACK(subreq, ctx->fallback);
+	SKCIPHER_REQUEST_ON_STACK(subreq, ctx->fallback);
 	int ret;
 
-	skcipher_request_set_sync_tfm(subreq, ctx->fallback);
+	skcipher_request_set_tfm(subreq, ctx->fallback);
 	skcipher_request_set_callback(subreq, req->base.flags, NULL, NULL);
 	skcipher_request_set_crypt(subreq, req->src, req->dst,
 				   req->nbytes, req->info);
@@ -510,16 +510,16 @@ static int mxs_dcp_aes_setkey(struct crypto_ablkcipher *tfm, const u8 *key,
 	 * but is supported by in-kernel software implementation, we use
 	 * software fallback.
 	 */
-	crypto_sync_skcipher_clear_flags(actx->fallback, CRYPTO_TFM_REQ_MASK);
-	crypto_sync_skcipher_set_flags(actx->fallback,
+	crypto_skcipher_clear_flags(actx->fallback, CRYPTO_TFM_REQ_MASK);
+	crypto_skcipher_set_flags(actx->fallback,
 				  tfm->base.crt_flags & CRYPTO_TFM_REQ_MASK);
 
-	ret = crypto_sync_skcipher_setkey(actx->fallback, key, len);
+	ret = crypto_skcipher_setkey(actx->fallback, key, len);
 	if (!ret)
 		return 0;
 
 	tfm->base.crt_flags &= ~CRYPTO_TFM_RES_MASK;
-	tfm->base.crt_flags |= crypto_sync_skcipher_get_flags(actx->fallback) &
+	tfm->base.crt_flags |= crypto_skcipher_get_flags(actx->fallback) &
 			       CRYPTO_TFM_RES_MASK;
 
 	return ret;
@@ -528,10 +528,11 @@ static int mxs_dcp_aes_setkey(struct crypto_ablkcipher *tfm, const u8 *key,
 static int mxs_dcp_aes_fallback_init(struct crypto_tfm *tfm)
 {
 	const char *name = crypto_tfm_alg_name(tfm);
+	const uint32_t flags = CRYPTO_ALG_ASYNC | CRYPTO_ALG_NEED_FALLBACK;
 	struct dcp_async_ctx *actx = crypto_tfm_ctx(tfm);
-	struct crypto_sync_skcipher *blk;
+	struct crypto_skcipher *blk;
 
-	blk = crypto_alloc_sync_skcipher(name, 0, CRYPTO_ALG_NEED_FALLBACK);
+	blk = crypto_alloc_skcipher(name, 0, flags);
 	if (IS_ERR(blk))
 		return PTR_ERR(blk);
 
@@ -544,7 +545,7 @@ static void mxs_dcp_aes_fallback_exit(struct crypto_tfm *tfm)
 {
 	struct dcp_async_ctx *actx = crypto_tfm_ctx(tfm);
 
-	crypto_free_sync_skcipher(actx->fallback);
+	crypto_free_skcipher(actx->fallback);
 }
 
 /*
@@ -819,6 +820,16 @@ static int dcp_sha_digest(struct ahash_request *req)
 	return dcp_sha_finup(req);
 }
 
+static int dcp_sha_noimport(struct ahash_request *req, const void *in)
+{
+	return -ENOSYS;
+}
+
+static int dcp_sha_noexport(struct ahash_request *req, void *out)
+{
+	return -ENOSYS;
+}
+
 static int dcp_sha_cra_init(struct crypto_tfm *tfm)
 {
 	crypto_ahash_set_reqsize(__crypto_ahash_cast(tfm),
@@ -889,6 +900,8 @@ static struct ahash_alg dcp_sha1_alg = {
 	.final	= dcp_sha_final,
 	.finup	= dcp_sha_finup,
 	.digest	= dcp_sha_digest,
+	.import = dcp_sha_noimport,
+	.export = dcp_sha_noexport,
 	.halg	= {
 		.digestsize	= SHA1_DIGEST_SIZE,
 		.base		= {
@@ -913,6 +926,8 @@ static struct ahash_alg dcp_sha256_alg = {
 	.final	= dcp_sha_final,
 	.finup	= dcp_sha_finup,
 	.digest	= dcp_sha_digest,
+	.import = dcp_sha_noimport,
+	.export = dcp_sha_noexport,
 	.halg	= {
 		.digestsize	= SHA256_DIGEST_SIZE,
 		.base		= {

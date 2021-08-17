@@ -1,16 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2011-2013, 2015, 2017-2018 The Linux Foundation. All rights
+ * Copyright (c) 2011-2013, 2015, 2017-2019 The Linux Foundation. All rights
  * reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
  */
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -32,7 +23,6 @@
 #include <linux/crypto.h>
 #include <crypto/internal/rng.h>
 
-#include <linux/platform_data/qcom_crypto_device.h>
 #include <linux/sched/signal.h>
 
 #define DRIVER_NAME "msm_rng"
@@ -295,6 +285,10 @@ static int msm_rng_probe(struct platform_device *pdev)
 					"qcom,msm-rng-iface-clk")) {
 				msm_rng_dev->prng_clk = clk_get(&pdev->dev,
 							"iface_clk");
+			} else if (of_property_read_bool(pdev->dev.of_node,
+					"qcom,msm-rng-hwkm-clk")) {
+				msm_rng_dev->prng_clk = clk_get(&pdev->dev,
+							 "km_clk_src");
 			} else {
 				msm_rng_dev->prng_clk = clk_get(&pdev->dev,
 							 "core_clk");
@@ -461,7 +455,6 @@ static struct platform_driver rng_driver = {
 	.remove     = msm_rng_remove,
 	.driver     = {
 		.name   = DRIVER_NAME,
-		.owner  = THIS_MODULE,
 		.of_match_table = qrng_match,
 	},
 };

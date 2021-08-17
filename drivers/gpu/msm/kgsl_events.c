@@ -1,23 +1,12 @@
-/* Copyright (c) 2011-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2011-2019, The Linux Foundation. All rights reserved.
  */
 
-#include <linux/slab.h>
-#include <linux/list.h>
-#include <linux/workqueue.h>
 #include <linux/debugfs.h>
 
-#include "kgsl_device.h"
 #include "kgsl_debugfs.h"
+#include "kgsl_device.h"
 #include "kgsl_trace.h"
 
 /*
@@ -89,17 +78,15 @@ static void _process_event_group(struct kgsl_device *device,
 	 * Sanity check to be sure that we we aren't racing with the context
 	 * getting destroyed
 	 */
-	if (context != NULL && !_kgsl_context_get(context)) {
-		WARN_ON(1);
+	if (WARN_ON(context != NULL && !_kgsl_context_get(context)))
 		return;
-	}
 
 	spin_lock(&group->lock);
 
 	group->readtimestamp(device, group->priv, KGSL_TIMESTAMP_RETIRED,
 		&timestamp);
 
-	if (!flush && _do_process_group(group->processed, timestamp) == false)
+	if (!flush && !_do_process_group(group->processed, timestamp))
 		goto out;
 
 	list_for_each_entry_safe(event, tmp, &group->events, node) {
@@ -346,17 +333,20 @@ EXPORT_SYMBOL(kgsl_del_event_group);
 
 /**
  * kgsl_add_event_group() - Add a new GPU event group
- * group: Pointer to the new group to add to the list
- * context: Context that owns the group (or NULL for global)
- * name: Name of the group
- * readtimestamp: Function pointer to the readtimestamp function to call when
+ * @group: Pointer to the new group to add to the list
+ * @context: Context that owns the group (or NULL for global)
+ * @readtimestamp: Function pointer to the readtimestamp function to call when
  * processing events
- * priv: Priv member to pass to the readtimestamp function
+ * @priv: Priv member to pass to the readtimestamp function
+ * @fmt: The format string to use to build the event name
+ * @...: Arguments for the format string
  */
 void kgsl_add_event_group(struct kgsl_event_group *group,
-		struct kgsl_context *context, const char *name,
-		readtimestamp_func readtimestamp, void *priv)
+		struct kgsl_context *context, readtimestamp_func readtimestamp,
+		void *priv, const char *fmt, ...)
 {
+	va_list args;
+
 	WARN_ON(readtimestamp == NULL);
 
 	spin_lock_init(&group->lock);
@@ -366,8 +356,11 @@ void kgsl_add_event_group(struct kgsl_event_group *group,
 	group->readtimestamp = readtimestamp;
 	group->priv = priv;
 
-	if (name)
-		strlcpy(group->name, name, sizeof(group->name));
+	if (fmt) {
+		va_start(args, fmt);
+		vsnprintf(group->name, sizeof(group->name), fmt, args);
+		va_end(args);
+	}
 
 	write_lock(&group_lock);
 	list_add_tail(&group->group, &group_list);

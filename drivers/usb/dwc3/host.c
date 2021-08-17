@@ -1,18 +1,10 @@
+// SPDX-License-Identifier: GPL-2.0
 /**
  * host.c - DesignWare USB3 DRD Controller Host Glue
  *
  * Copyright (C) 2011 Texas Instruments Incorporated - http://www.ti.com
  *
  * Authors: Felipe Balbi <balbi@ti.com>,
- *
- * This program is free software: you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2  of
- * the License as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/platform_device.h>
@@ -105,10 +97,10 @@ int dwc3_host_init(struct dwc3 *dwc)
 		props[prop_idx++].name = "usb3-lpm-capable";
 
 	if (dwc->xhci_imod_value) {
-		imod_prop.name  = "xhci-imod-value";
+		imod_prop.name  = "imod-interval-ns";
 		imod_prop.length  = sizeof(u32);
-		imod_prop.is_string = false;
 		imod_prop.is_array = false;
+		imod_prop.type = DEV_PROP_U32;
 		imod_prop.value.u32_data = dwc->xhci_imod_value;
 		props[prop_idx++] = imod_prop;
 	}
@@ -116,8 +108,8 @@ int dwc3_host_init(struct dwc3 *dwc)
 	if (dwc->core_id >= 0) {
 		core_id_prop.name  = "usb-core-id";
 		core_id_prop.length  = sizeof(u32);
-		core_id_prop.is_string = false;
 		core_id_prop.is_array = false;
+		core_id_prop.type = DEV_PROP_U32;
 		core_id_prop.value.u32_data = dwc->core_id;
 		props[prop_idx++] = core_id_prop;
 	}
@@ -134,8 +126,8 @@ int dwc3_host_init(struct dwc3 *dwc)
 	if (dwc->revision <= DWC3_REVISION_300A)
 		props[prop_idx++].name = "quirk-broken-port-ped";
 
-	if (dwc->ignore_wakeup_src_in_hostmode)
-		props[prop_idx++].name = "ignore-wakeup-src-in-hostmode";
+	if (dwc->host_poweroff_in_pm_suspend)
+		props[prop_idx++].name = "host-poweroff-in-pm-suspend";
 
 	if (prop_idx) {
 		ret = platform_device_add_properties(xhci, props);

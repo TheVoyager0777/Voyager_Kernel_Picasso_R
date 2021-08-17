@@ -179,7 +179,7 @@ config USB_R8A66597
 
 config USB_RENESAS_USBHS_UDC
 	tristate 'Renesas USBHS controller'
-	depends on USB_RENESAS_USBHS && HAS_DMA
+	depends on USB_RENESAS_USBHS
 	help
 	   Renesas USBHS is a discrete USB host and peripheral controller chip
 	   that supports both full and high speed USB 2.0 data transfers.
@@ -192,7 +192,8 @@ config USB_RENESAS_USBHS_UDC
 config USB_RENESAS_USB3
 	tristate 'Renesas USB3.0 Peripheral controller'
 	depends on ARCH_RENESAS || COMPILE_TEST
-	depends on EXTCON && HAS_DMA
+	depends on EXTCON
+	select USB_ROLE_SWITCH
 	help
 	   Renesas USB3.0 Peripheral controller is a USB peripheral controller
 	   that supports super, high, and full speed USB 3.0 data transfers.
@@ -274,7 +275,6 @@ config USB_SNP_UDC_PLAT
 	tristate "Synopsys USB 2.0 Device controller"
 	depends on USB_GADGET && OF && HAS_DMA
 	depends on EXTCON || EXTCON=n
-	select USB_GADGET_DUALSPEED
 	select USB_SNP_CORE
 	default ARCH_BCM_IPROC
 	help
@@ -439,32 +439,7 @@ config USB_GADGET_XILINX
 	  dynamically linked module called "udc-xilinx" and force all
 	  gadget drivers to also be dynamically linked.
 
-config USB_CI13XXX_MSM
-	tristate "MIPS USB CI13xxx for MSM"
-	select USB_MSM_OTG
-	help
-	  MSM SoC has chipidea USB controller.  This driver uses
-	  ci13xxx_udc core.
-	  This driver depends on OTG driver for PHY initialization,
-	  clock management, powering up VBUS, and power management.
-	  This driver is not supported on boards like trout which
-	  has an external PHY.
-
-	  Say "y" to link the driver statically, or "m" to build a
-	  dynamically linked module called "ci13xxx_msm" and force all
-	  gadget drivers to also be dynamically linked.
-
-config USB_CI13XXX_MSM_HSIC
-	tristate "MIPS HSIC CI13xxx for MSM"
-	depends on ARCH_QCOM
-	select USB_GADGET_DUALSPEED
-	help
-	MSM SoC has chipidea USB controller.  This driver uses
-	ci13xxx_udc core. Support USB-HSIC core.
-
-	Say "y" to link the driver statically, or "m" to build a
-	dynamically linked module called "ci13xxx_msm_hsic" and force all
-	gadget drivers to also be dynamically linked.
+source "drivers/usb/gadget/udc/aspeed-vhub/Kconfig"
 
 #
 # LAST -- dummy/emulated controller

@@ -1,4 +1,5 @@
-/* Copyright (c) 2011-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2011-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -58,7 +59,7 @@ static int32_t msm_actuator_piezo_set_default_focus(
 	CDBG("Enter\n");
 
 	if (a_ctrl->i2c_reg_tbl == NULL) {
-		pr_err("failed. i2c reg table is NULL");
+		pr_err("failed. i2c reg table is NULL\n");
 		return -EFAULT;
 	}
 
@@ -99,12 +100,12 @@ static void msm_actuator_parse_i2c_params(struct msm_actuator_ctrl_t *a_ctrl,
 	CDBG("Enter\n");
 
 	if (a_ctrl == NULL) {
-		pr_err("failed. actuator ctrl is NULL");
+		pr_err("failed. actuator ctrl is NULL\n");
 		return;
 	}
 
 	if (a_ctrl->i2c_reg_tbl == NULL) {
-		pr_err("failed. i2c reg table is NULL");
+		pr_err("failed. i2c reg table is NULL\n");
 		return;
 	}
 
@@ -418,7 +419,7 @@ static int32_t msm_actuator_init_focus(struct msm_actuator_ctrl_t *a_ctrl,
 		}
 
 		if (rc < 0) {
-			pr_err("%s:%d fail addr = 0X%X, data = 0X%X, dt = %d",
+			pr_err("%s:%d fail addr = 0X%X, data = 0X%X, dt = %d\n",
 				__func__, __LINE__, settings[i].reg_addr,
 				settings[i].reg_data, settings[i].data_type);
 			break;
@@ -532,7 +533,7 @@ static int32_t msm_actuator_piezo_move_focus(
 	CDBG("Enter\n");
 
 	if (a_ctrl->i2c_reg_tbl == NULL) {
-		pr_err("failed. i2c reg table is NULL");
+		pr_err("failed. i2c reg table is NULL\n");
 		return -EFAULT;
 	}
 
@@ -610,7 +611,7 @@ static int32_t msm_actuator_move_focus(
 		return -EFAULT;
 	}
 	if (a_ctrl->i2c_reg_tbl == NULL) {
-		pr_err("failed. i2c reg table is NULL");
+		pr_err("failed. i2c reg table is NULL\n");
 		return -EFAULT;
 	}
 	if (dest_step_pos > a_ctrl->total_steps) {
@@ -717,7 +718,7 @@ static int32_t msm_actuator_bivcm_move_focus(
 	int32_t num_steps = move_params->num_steps;
 
 	if (a_ctrl->step_position_table == NULL) {
-		pr_err("Step Position Table is NULL");
+		pr_err("Step Position Table is NULL\n");
 		return -EFAULT;
 	}
 
@@ -736,7 +737,7 @@ static int32_t msm_actuator_bivcm_move_focus(
 		return -EFAULT;
 	}
 	if (a_ctrl->i2c_reg_tbl == NULL) {
-		pr_err("failed. i2c reg table is NULL");
+		pr_err("failed. i2c reg table is NULL\n");
 		return -EFAULT;
 	}
 	if (dest_step_pos > a_ctrl->total_steps) {
@@ -941,7 +942,7 @@ static int32_t msm_actuator_bivcm_init_step_table(
 				MOVE_NEAR];
 		if (step_boundary >
 			set_info->af_tuning_params.total_steps) {
-			pr_err("invalid step_boundary = %d, max_val = %d",
+			pr_err("invalid step_boundary = %d, max_val = %d\n",
 				step_boundary,
 				set_info->af_tuning_params.total_steps);
 			kfree(a_ctrl->step_position_table);
@@ -1031,7 +1032,7 @@ static int32_t msm_actuator_init_step_table(struct msm_actuator_ctrl_t *a_ctrl,
 				region_index].step_bound[MOVE_NEAR];
 		if (step_boundary >
 			set_info->af_tuning_params.total_steps) {
-			pr_err("invalid step_boundary = %d, max_val = %d",
+			pr_err("invalid step_boundary = %d, max_val = %d\n",
 				step_boundary,
 				set_info->af_tuning_params.total_steps);
 			kfree(a_ctrl->step_position_table);
@@ -1149,7 +1150,7 @@ static int32_t msm_actuator_power_down(struct msm_actuator_ctrl_t *a_ctrl)
 						a_ctrl->pinctrl_info
 							.gpio_state_suspend);
 					if (rc < 0)
-						pr_err("ERR:%s:%d cannot set pin to suspend state: %d",
+						pr_err("ERR:%s:%d cannot set pin to suspend state: %d\n",
 							__func__, __LINE__, rc);
 
 					devm_pinctrl_put(
@@ -1199,12 +1200,12 @@ static int32_t msm_actuator_set_position(
 	if (!a_ctrl || !a_ctrl->func_tbl ||
 		!a_ctrl->func_tbl->actuator_parse_i2c_params ||
 		!a_ctrl->i2c_reg_tbl) {
-		pr_err("failed. NULL actuator pointers.");
+		pr_err("failed. NULL actuator pointers.\n");
 		return -EFAULT;
 	}
 
 	if (a_ctrl->actuator_state != ACT_OPS_ACTIVE) {
-		pr_err("failed. Invalid actuator state.");
+		pr_err("failed. Invalid actuator state.\n");
 		return -EFAULT;
 	}
 
@@ -1253,12 +1254,12 @@ static int32_t msm_actuator_bivcm_set_position(
 	}
 
 	if (!a_ctrl) {
-		pr_err("failed. NULL actuator pointers.");
+		pr_err("failed. NULL actuator pointers.\n");
 		return -EFAULT;
 	}
 
 	if (a_ctrl->actuator_state != ACT_OPS_ACTIVE) {
-		pr_err("failed. Invalid actuator state.");
+		pr_err("failed. Invalid actuator state.\n");
 		return -EFAULT;
 	}
 
@@ -1820,7 +1821,7 @@ static int32_t msm_actuator_power_up(struct msm_actuator_ctrl_t *a_ctrl)
 					a_ctrl->pinctrl_info.pinctrl,
 					a_ctrl->pinctrl_info.gpio_state_active);
 				if (rc < 0)
-					pr_err("ERR:%s:%d cannot set pin to active state: %d",
+					pr_err("ERR:%s:%d cannot set pin to active state: %d\n",
 						__func__, __LINE__, rc);
 			}
 
@@ -2061,7 +2062,6 @@ static struct i2c_driver msm_actuator_i2c_driver = {
 	.remove = __exit_p(msm_actuator_i2c_remove),
 	.driver = {
 		.name = "qcom,actuator",
-		.owner = THIS_MODULE,
 		.of_match_table = msm_actuator_i2c_dt_match,
 	},
 };
@@ -2077,7 +2077,6 @@ static struct platform_driver msm_actuator_platform_driver = {
 	.probe = msm_actuator_platform_probe,
 	.driver = {
 		.name = "qcom,actuator",
-		.owner = THIS_MODULE,
 		.of_match_table = msm_actuator_dt_match,
 	},
 };

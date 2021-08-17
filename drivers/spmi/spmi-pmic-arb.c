@@ -1,15 +1,7 @@
-/*
- * Copyright (c) 2012-2018, 2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved. */
+/* Copyright (C) 2021 XiaoMi, Inc. */
+
 #include <linux/bitmap.h>
 #include <linux/delay.h>
 #include <linux/err.h>
@@ -728,8 +720,8 @@ static struct irq_chip pmic_arb_irqchip = {
 	.flags		= IRQCHIP_MASK_ON_SUSPEND,
 };
 
-static void qpnpint_irq_domain_activate(struct irq_domain *domain,
-					struct irq_data *d)
+static int qpnpint_irq_domain_activate(struct irq_domain *domain,
+					struct irq_data *d, bool reserve)
 {
 	u8 irq = hwirq_to_irq(d->hwirq);
 	u8 buf;
@@ -737,6 +729,8 @@ static void qpnpint_irq_domain_activate(struct irq_domain *domain,
 	buf = BIT(irq);
 	qpnpint_spmi_write(d, QPNPINT_REG_EN_CLR, &buf, 1);
 	qpnpint_spmi_write(d, QPNPINT_REG_LATCHED_CLR, &buf, 1);
+
+	return 0;
 }
 
 static int qpnpint_irq_domain_dt_translate(struct irq_domain *d,
@@ -783,8 +777,6 @@ static int qpnpint_irq_domain_dt_translate(struct irq_domain *d,
 	return 0;
 }
 
-static struct lock_class_key qpnpint_irq_lock_class;
-
 static int qpnpint_irq_domain_map(struct irq_domain *d,
 				  unsigned int virq,
 				  irq_hw_number_t hwirq)
@@ -793,7 +785,6 @@ static int qpnpint_irq_domain_map(struct irq_domain *d,
 
 	dev_dbg(&pmic_arb->spmic->dev, "virq = %u, hwirq = %lu\n", virq, hwirq);
 
-	irq_set_lockdep_class(virq, &qpnpint_irq_lock_class);
 	irq_set_chip_and_handler(virq, &pmic_arb_irqchip, handle_level_irq);
 	irq_set_chip_data(virq, d->host_data);
 	irq_set_noprobe(virq);
@@ -1182,6 +1173,7 @@ static const struct irq_domain_ops pmic_arb_irq_domain_ops = {
 	.xlate	= qpnpint_irq_domain_dt_translate,
 	.activate	= qpnpint_irq_domain_activate,
 };
+
 
 static int spmi_pmic_arb_probe(struct platform_device *pdev)
 {

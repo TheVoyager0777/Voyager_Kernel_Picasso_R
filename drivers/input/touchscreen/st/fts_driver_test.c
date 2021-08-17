@@ -1,7 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * FTS Capacitive touch screen controller (FingerTipS)
  *
- * Copyright (C) 2016-2018, STMicroelectronics Limited.
+ * Copyright (C) 2016-2019, STMicroelectronics Limited.
  * Authors: AMG(Analog Mems Group) <marco.cali@st.com>
  *
  *
@@ -128,17 +129,17 @@ static ssize_t stm_driver_test_show(struct device *dev,
 	u8 *all_strbuff = NULL;
 	u8 *cmd = NULL;
 
-	struct MutualSenseFrame frameMS;
-	struct SelfSenseFrame frameSS;
+	struct MutualSenseFrame frameMS = {0};
+	struct SelfSenseFrame frameSS = {0};
 
-	struct DataHeader dataHead;
-	struct MutualSenseData compData;
-	struct SelfSenseData comData;
-	struct GeneralData gnData;
+	struct DataHeader dataHead = {0};
+	struct MutualSenseData compData = {0};
+	struct SelfSenseData comData = {0};
+	struct GeneralData gnData = {0};
 
-	u16 address;
-	u16 fw_version;
-	u16 config_id;
+	u16 address = 0;
+	u16 fw_version = 0;
+	u16 config_id = 0;
 
 	struct Firmware fw;
 
@@ -220,11 +221,20 @@ static ssize_t stm_driver_test_show(struct device *dev,
 		temp = (int)functionToTest[1];
 		if (numberParam == 4 + (temp - 1) && temp != 0) {
 			cmd = (u8 *)kmalloc_array(temp, sizeof(u8), GFP_KERNEL);
+			if (!cmd) {
+				res = ERROR_OP_NOT_ALLOW;
+				break;
+			}
 			for (i = 0; i < temp; i++)
 				cmd[i] = functionToTest[i + 2];
 			byteToRead = functionToTest[i + 2];
 			readData = (u8 *)kmalloc_array(byteToRead, sizeof(u8),
 					GFP_KERNEL);
+			if (!readData) {
+				kfree(cmd);
+				res = ERROR_OP_NOT_ALLOW;
+				break;
+			}
 			res = fts_readCmd(cmd, temp, readData, byteToRead);
 			size += (byteToRead * sizeof(u8)) * 2;
 			kfree(cmd);
@@ -247,6 +257,10 @@ static ssize_t stm_driver_test_show(struct device *dev,
 		temp = (int)functionToTest[1];
 		if (numberParam == 3 + (temp - 1) && temp != 0) {
 			cmd = (u8 *)kmalloc_array(temp, sizeof(u8), GFP_KERNEL);
+			if (!cmd) {
+				res = ERROR_OP_NOT_ALLOW;
+				break;
+			}
 			for (i = 0; i < temp; i++)
 				cmd[i] = functionToTest[i + 2];
 			res = fts_writeCmd(cmd, temp);
@@ -270,6 +284,10 @@ static ssize_t stm_driver_test_show(struct device *dev,
 		temp = (int)functionToTest[1];
 		if (numberParam == 3 + (temp - 1) && temp != 0) {
 			cmd = (u8 *)kmalloc_array(temp, sizeof(u8), GFP_KERNEL);
+			if (!cmd) {
+				res = ERROR_OP_NOT_ALLOW;
+				break;
+			}
 			for (i = 0; i < temp; i++)
 				cmd[i] = functionToTest[i + 2];
 			res = fts_writeFwCmd(cmd, temp);
@@ -293,6 +311,10 @@ static ssize_t stm_driver_test_show(struct device *dev,
 		byteToRead = functionToTest[4];
 		readData = kmalloc_array(byteToRead,
 			sizeof(u8), GFP_KERNEL);
+		if (!readData) {
+			res = ERROR_OP_NOT_ALLOW;
+			break;
+		}
 		res = readCmdU16((u8)functionToTest[1],
 			(u16)((((u8) functionToTest[2]
 				& 0x00FF) << 8) + ((u8) functionToTest[3]
@@ -313,6 +335,10 @@ static ssize_t stm_driver_test_show(struct device *dev,
 		byteToRead = functionToTest[3];
 		readData = kmalloc_array(byteToRead,
 				sizeof(u8), GFP_KERNEL);
+		if (!readData) {
+			res = ERROR_OP_NOT_ALLOW;
+			break;
+		}
 		res = readB2((u16)(
 			(((u8)functionToTest[1] & 0x00FF) << 8)
 				+ ((u8) functionToTest[2] & 0x00FF)),
@@ -331,6 +357,10 @@ static ssize_t stm_driver_test_show(struct device *dev,
 		byteToRead = functionToTest[3];
 		readData = (u8 *)kmalloc_array(byteToRead,
 			sizeof(u8), GFP_KERNEL);
+		if (!readData) {
+			res = ERROR_OP_NOT_ALLOW;
+			break;
+		}
 		res = readB2U16((u16)((((u8)functionToTest[1]
 			& 0x00FF) << 8) + ((u8)functionToTest[2]
 			& 0x00FF)), readData, byteToRead);
@@ -352,6 +382,10 @@ static ssize_t stm_driver_test_show(struct device *dev,
 		if (numberParam == 5 + (temp - 1) && temp != 0) {
 			readData = (u8 *)kmalloc_array(FIFO_EVENT_SIZE,
 					sizeof(u8), GFP_KERNEL);
+			if (!readData) {
+				res = ERROR_OP_NOT_ALLOW;
+				break;
+			}
 			res = pollForEvent((int *)&functionToTest[2],
 				temp,
 				readData,
@@ -1060,10 +1094,7 @@ END:
 	return count;
 }
 
-
-static DEVICE_ATTR(stm_driver_test, 0664, stm_driver_test_show,
-	stm_driver_test_store);
-
+static DEVICE_ATTR_RW(stm_driver_test);
 
 static struct attribute *test_cmd_attributes[] = {
 	&dev_attr_stm_driver_test.attr,

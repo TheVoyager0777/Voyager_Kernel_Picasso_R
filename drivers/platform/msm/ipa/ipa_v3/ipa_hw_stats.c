@@ -1,13 +1,6 @@
-/* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -42,8 +35,16 @@ int ipa_hw_stats_init(void)
 	if (ipa3_ctx->platform_type == IPA_PLAT_TYPE_APQ) {
 		teth_stats_init->prod_mask = (
 			IPA_CLIENT_BIT_32(IPA_CLIENT_MHI_PRIME_TETH_PROD) |
-			IPA_CLIENT_BIT_32(IPA_CLIENT_USB_PROD) |
-			IPA_CLIENT_BIT_32(IPA_CLIENT_WLAN1_PROD));
+			IPA_CLIENT_BIT_32(IPA_CLIENT_USB_PROD));
+		if (ipa3_ctx->ipa_wdi3_over_gsi)
+			teth_stats_init->prod_mask |=
+			IPA_CLIENT_BIT_32(IPA_CLIENT_WLAN2_PROD);
+		else
+			teth_stats_init->prod_mask |=
+			IPA_CLIENT_BIT_32(IPA_CLIENT_WLAN1_PROD);
+
+		teth_stats_init->prod_mask |=
+			IPA_CLIENT_BIT_32(IPA_CLIENT_WIGIG_PROD);
 
 		if (IPA_CLIENT_BIT_32(IPA_CLIENT_MHI_PRIME_TETH_PROD)) {
 			ep_index = ipa3_get_ep_mapping(
@@ -54,14 +55,42 @@ int ipa_hw_stats_init(void)
 				return -EINVAL;
 			}
 			teth_stats_init->dst_ep_mask[ep_index] =
-				(IPA_CLIENT_BIT_32(IPA_CLIENT_WLAN1_CONS) |
-				IPA_CLIENT_BIT_32(IPA_CLIENT_USB_CONS));
+				IPA_CLIENT_BIT_32(IPA_CLIENT_USB_CONS);
+
+			if (ipa3_ctx->ipa_wdi3_over_gsi)
+				teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WLAN2_CONS);
+			else
+				teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WLAN1_CONS);
+
+			teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WIGIG1_CONS);
+			teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WIGIG2_CONS);
+			teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WIGIG3_CONS);
+			teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WIGIG4_CONS);
 		}
 	} else {
 		teth_stats_init->prod_mask = (
 			IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_WAN_PROD) |
-			IPA_CLIENT_BIT_32(IPA_CLIENT_USB_PROD) |
-			IPA_CLIENT_BIT_32(IPA_CLIENT_WLAN1_PROD));
+			IPA_CLIENT_BIT_32(IPA_CLIENT_USB_PROD));
+
+		if (ipa3_ctx->ipa_wdi3_over_gsi)
+			teth_stats_init->prod_mask |=
+			IPA_CLIENT_BIT_32(IPA_CLIENT_WLAN2_PROD);
+		else
+			teth_stats_init->prod_mask |=
+			IPA_CLIENT_BIT_32(IPA_CLIENT_WLAN1_PROD);
+
+		teth_stats_init->prod_mask |=
+			IPA_CLIENT_BIT_32(IPA_CLIENT_WIGIG_PROD);
+
+		if (ipa3_ctx->ipa_hw_type >= IPA_HW_v4_5)
+			teth_stats_init->prod_mask |=
+			IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_DL_NLO_DATA_PROD);
 
 		if (IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_WAN_PROD)) {
 			ep_index = ipa3_get_ep_mapping(IPA_CLIENT_Q6_WAN_PROD);
@@ -71,8 +100,52 @@ int ipa_hw_stats_init(void)
 				return -EINVAL;
 			}
 			teth_stats_init->dst_ep_mask[ep_index] =
-			(IPA_CLIENT_BIT_32(IPA_CLIENT_WLAN1_CONS) |
-			IPA_CLIENT_BIT_32(IPA_CLIENT_USB_CONS));
+			IPA_CLIENT_BIT_32(IPA_CLIENT_USB_CONS);
+
+			if (ipa3_ctx->ipa_wdi3_over_gsi)
+				teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WLAN2_CONS);
+			else
+				teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WLAN1_CONS);
+
+			teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WIGIG1_CONS);
+			teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WIGIG2_CONS);
+			teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WIGIG3_CONS);
+			teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WIGIG4_CONS);
+		}
+
+		if (IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_DL_NLO_DATA_PROD) &&
+			(ipa3_ctx->ipa_hw_type >= IPA_HW_v4_5)) {
+			ep_index = ipa3_get_ep_mapping(
+					IPA_CLIENT_Q6_DL_NLO_DATA_PROD);
+			if (ep_index == -1) {
+				IPAERR("Invalid client.\n");
+				kfree(teth_stats_init);
+				return -EINVAL;
+			}
+			teth_stats_init->dst_ep_mask[ep_index] =
+				IPA_CLIENT_BIT_32(IPA_CLIENT_USB_CONS);
+
+			if (ipa3_ctx->ipa_wdi3_over_gsi)
+				teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WLAN2_CONS);
+			else
+				teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WLAN1_CONS);
+
+			teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WIGIG1_CONS);
+			teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WIGIG2_CONS);
+			teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WIGIG3_CONS);
+			teth_stats_init->dst_ep_mask[ep_index] |=
+				IPA_CLIENT_BIT_32(IPA_CLIENT_WIGIG4_CONS);
 		}
 	}
 
@@ -84,14 +157,16 @@ int ipa_hw_stats_init(void)
 			return -EINVAL;
 		}
 		/* enable addtional pipe monitoring for pcie modem */
-		if (ipa3_ctx->ipa_hw_type >= IPA_HW_v4_1)
+		if (ipa3_ctx->platform_type == IPA_PLAT_TYPE_APQ)
 			teth_stats_init->dst_ep_mask[ep_index] =
 				(IPA_CLIENT_BIT_32(
 					IPA_CLIENT_Q6_WAN_CONS) |
 				IPA_CLIENT_BIT_32(
-					IPA_CLIENT_MHI_PRIME_TETH_CONS) |
-				IPA_CLIENT_BIT_32(
-					IPA_CLIENT_Q6_LTE_WIFI_AGGR_CONS));
+					IPA_CLIENT_MHI_PRIME_TETH_CONS));
+		else if (ipa3_ctx->ipa_hw_type >= IPA_HW_v4_5)
+			teth_stats_init->dst_ep_mask[ep_index] =
+				(IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_WAN_CONS) |
+			IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_UL_NLO_DATA_CONS));
 		else
 			teth_stats_init->dst_ep_mask[ep_index] =
 				IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_WAN_CONS);
@@ -104,32 +179,75 @@ int ipa_hw_stats_init(void)
 			kfree(teth_stats_init);
 			return -EINVAL;
 		}
-		/* enable addtional pipe monitoring for pcie modem*/
-		if (ipa3_ctx->ipa_hw_type >= IPA_HW_v4_1)
+		/* enable additional pipe monitoring for pcie modem*/
+		if (ipa3_ctx->platform_type == IPA_PLAT_TYPE_APQ)
 			teth_stats_init->dst_ep_mask[ep_index] =
 				(IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_WAN_CONS) |
 				IPA_CLIENT_BIT_32(
-					IPA_CLIENT_MHI_PRIME_TETH_CONS) |
-				IPA_CLIENT_BIT_32(
-				IPA_CLIENT_Q6_LTE_WIFI_AGGR_CONS));
+					IPA_CLIENT_MHI_PRIME_TETH_CONS));
+		else if (ipa3_ctx->ipa_hw_type >= IPA_HW_v4_5)
+			teth_stats_init->dst_ep_mask[ep_index] =
+				(IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_WAN_CONS) |
+			IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_UL_NLO_DATA_CONS));
 		else
 			teth_stats_init->dst_ep_mask[ep_index] =
 				IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_WAN_CONS);
 	}
 
-	ret = ipa_init_teth_stats(teth_stats_init);
-	if (ret != 0) {
-		IPAERR("init teth stats fails.\n");
-		kfree(teth_stats_init);
-		return ret;
+	if (IPA_CLIENT_BIT_32(IPA_CLIENT_WLAN2_PROD)) {
+		ep_index = ipa3_get_ep_mapping(IPA_CLIENT_WLAN2_PROD);
+		if (ep_index == -1) {
+			IPAERR("Invalid client.\n");
+			kfree(teth_stats_init);
+			return -EINVAL;
+		}
+		/* enable additional pipe monitoring for pcie modem*/
+		if (ipa3_ctx->platform_type == IPA_PLAT_TYPE_APQ)
+			teth_stats_init->dst_ep_mask[ep_index] =
+				(IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_WAN_CONS) |
+				IPA_CLIENT_BIT_32(
+					IPA_CLIENT_MHI_PRIME_TETH_CONS));
+		else if (ipa3_ctx->ipa_hw_type >= IPA_HW_v4_5)
+			teth_stats_init->dst_ep_mask[ep_index] =
+				(IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_WAN_CONS) |
+			IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_UL_NLO_DATA_CONS));
+		else
+			teth_stats_init->dst_ep_mask[ep_index] =
+				IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_WAN_CONS);
 	}
+
+	if (IPA_CLIENT_BIT_32(IPA_CLIENT_WIGIG_PROD)) {
+		ep_index = ipa3_get_ep_mapping(IPA_CLIENT_WIGIG_PROD);
+		if (ep_index == -1) {
+			IPAERR("Invalid client.\n");
+			kfree(teth_stats_init);
+			return -EINVAL;
+		}
+		/* enable additional pipe monitoring for pcie modem */
+		if (ipa3_ctx->platform_type == IPA_PLAT_TYPE_APQ)
+			teth_stats_init->dst_ep_mask[ep_index] =
+			(IPA_CLIENT_BIT_32(
+				IPA_CLIENT_Q6_WAN_CONS) |
+				IPA_CLIENT_BIT_32(
+					IPA_CLIENT_MHI_PRIME_TETH_CONS));
+		else if (ipa3_ctx->ipa_hw_type >= IPA_HW_v4_5)
+			teth_stats_init->dst_ep_mask[ep_index] =
+			(IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_WAN_CONS) |
+			IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_UL_NLO_DATA_CONS));
+		else
+			teth_stats_init->dst_ep_mask[ep_index] =
+			IPA_CLIENT_BIT_32(IPA_CLIENT_Q6_WAN_CONS);
+	}
+
+
+	ret = ipa_init_teth_stats(teth_stats_init);
+	if (ret != 0)
+		IPAERR("init teth stats fails\n");
 	kfree(teth_stats_init);
 	if (ipa3_ctx->ipa_hw_type >= IPA_HW_v4_5) {
 		ret = ipa_init_flt_rt_stats();
-		if (ret != 0) {
-			IPAERR("init flt rt stats fails.\n");
-			return ret;
-		}
+		if (ret != 0)
+			IPAERR("init flt rt stats fails\n");
 	}
 	return ret;
 }
@@ -1261,7 +1379,7 @@ int ipa_get_flt_rt_stats(struct ipa_ioc_flt_rt_query *query)
 	}
 
 	if (query->start_id == 0 || query->end_id == 0) {
-		IPAERR("Invalid start_id/end_id, must be not 0");
+		IPAERR("Invalid start_id/end_id, must be not 0\n");
 		IPAERR("start_id %d, end_id %d\n",
 			query->start_id, query->end_id);
 		return -EINVAL;
@@ -1284,12 +1402,123 @@ int ipa_get_flt_rt_stats(struct ipa_ioc_flt_rt_query *query)
 	}
 
 	if (query->stats_size > sizeof(struct ipa_flt_rt_stats)) {
-		IPAERR("stats_size %d > ipa_flt_rt_stats %ld\n",
+		IPAERR("stats_size %d > ipa_flt_rt_stats %d\n",
 			query->stats_size, sizeof(struct ipa_flt_rt_stats));
 		return -EINVAL;
 	}
 
 	return __ipa_get_flt_rt_stats(query);
+}
+
+
+static int __ipa_set_flt_rt_stats(int index, struct ipa_flt_rt_stats stats)
+{
+	int ret;
+	int smem_ofst;
+	struct ipahal_stats_get_offset_flt_rt_v4_5 *get_offset;
+	struct ipahal_stats_offset offset = { 0 };
+	struct ipahal_imm_cmd_dma_shared_mem cmd = { 0 };
+	struct ipahal_imm_cmd_pyld *cmd_pyld;
+	struct ipa_mem_buffer mem;
+	struct ipa3_desc desc = { 0 };
+
+	get_offset = kzalloc(sizeof(*get_offset), GFP_KERNEL);
+	if (!get_offset) {
+		IPADBG("no mem\n");
+		return -ENOMEM;
+	}
+
+	smem_ofst = IPA_MEM_PART(stats_fnr_ofst);
+
+	get_offset->start_id = index;
+	get_offset->end_id = index;
+
+	ret = ipahal_stats_get_offset(IPAHAL_HW_STATS_FNR, get_offset,
+		&offset);
+	if (ret) {
+		IPAERR("failed to get offset from hal %d\n", ret);
+		goto free_offset;
+	}
+
+	IPADBG("offset = %d size = %d\n", offset.offset, offset.size);
+
+	if (offset.size == 0) {
+		ret = 0;
+		goto free_offset;
+	}
+
+	mem.size = offset.size;
+	mem.base = dma_alloc_coherent(ipa3_ctx->pdev,
+		mem.size,
+		&mem.phys_base,
+		GFP_KERNEL);
+	if (!mem.base) {
+		IPAERR("fail to alloc DMA memory\n");
+		goto free_offset;
+	}
+	ipahal_set_flt_rt_sw_stats(mem.base, stats);
+
+	cmd.is_read = false;
+	cmd.skip_pipeline_clear = false;
+	cmd.pipeline_clear_options = IPAHAL_HPS_CLEAR;
+	cmd.size = mem.size;
+	cmd.system_addr = mem.phys_base;
+	cmd.local_addr = ipa3_ctx->smem_restricted_bytes +
+		smem_ofst + offset.offset;
+	cmd_pyld = ipahal_construct_imm_cmd(
+		IPA_IMM_CMD_DMA_SHARED_MEM, &cmd, false);
+	if (!cmd_pyld) {
+		IPAERR("failed to construct dma_shared_mem imm cmd\n");
+		ret = -ENOMEM;
+		goto free_dma_mem;
+	}
+	desc.opcode = cmd_pyld->opcode;
+	desc.pyld = cmd_pyld->data;
+	desc.len = cmd_pyld->len;
+	desc.type = IPA_IMM_CMD_DESC;
+
+	ret = ipa3_send_cmd(1, &desc);
+	if (ret) {
+		IPAERR("failed to send immediate command (error %d)\n", ret);
+		goto destroy_imm;
+	}
+
+	ret = 0;
+
+destroy_imm:
+	ipahal_destroy_imm_cmd(cmd_pyld);
+free_dma_mem:
+	dma_free_coherent(ipa3_ctx->pdev, mem.size, mem.base, mem.phys_base);
+free_offset:
+	kfree(get_offset);
+	return ret;
+}
+
+int ipa_set_flt_rt_stats(int index, struct ipa_flt_rt_stats stats)
+{
+	if (!ipa3_ctx->hw_stats.enabled) {
+		IPAERR("hw_stats is not enabled\n");
+		return 0;
+	}
+
+	if (ipa3_ctx->ipa_hw_type < IPA_HW_v4_5) {
+		IPAERR("FnR stats not supported in %d hw_type\n",
+			ipa3_ctx->ipa_hw_type);
+		return 0;
+	}
+
+	if (index > IPA_MAX_FLT_RT_CNT_INDEX) {
+		IPAERR("index %d out of range\n", index);
+		return -EINVAL;
+	}
+
+	if (index <= IPA_FLT_RT_HW_COUNTER) {
+		IPAERR("index %d invalid, only support sw counter set\n",
+			index);
+		return -EINVAL;
+	}
+
+	return __ipa_set_flt_rt_stats(index, stats);
 }
 
 int ipa_init_drop_stats(u32 pipe_bitmask)
@@ -1623,27 +1852,14 @@ static char dbg_buff[IPA_MAX_MSG_LEN];
 static ssize_t ipa_debugfs_reset_quota_stats(struct file *file,
 	const char __user *ubuf, size_t count, loff_t *ppos)
 {
-	unsigned long missing;
 	s8 client = 0;
 	int ret;
 
 	mutex_lock(&ipa3_ctx->lock);
-	if (sizeof(dbg_buff) < count + 1) {
-		ret = -EFAULT;
-		goto bail;
-	}
 
-	missing = copy_from_user(dbg_buff, ubuf, min(sizeof(dbg_buff), count));
-	if (missing) {
-		ret = -EFAULT;
+	ret = kstrtos8_from_user(ubuf, count, 0, &client);
+	if (ret)
 		goto bail;
-	}
-
-	dbg_buff[count] = '\0';
-	if (kstrtos8(dbg_buff, 0, &client)) {
-		ret = -EFAULT;
-		goto bail;
-	}
 
 	if (client == -1)
 		ipa_reset_all_quota_stats();
@@ -1722,27 +1938,14 @@ static ssize_t ipa_debugfs_print_quota_stats(struct file *file,
 static ssize_t ipa_debugfs_reset_tethering_stats(struct file *file,
 	const char __user *ubuf, size_t count, loff_t *ppos)
 {
-	unsigned long missing;
 	s8 client = 0;
 	int ret;
 
 	mutex_lock(&ipa3_ctx->lock);
-	if (sizeof(dbg_buff) < count + 1) {
-		ret = -EFAULT;
-		goto bail;
-	}
 
-	missing = copy_from_user(dbg_buff, ubuf, min(sizeof(dbg_buff), count));
-	if (missing) {
-		ret = -EFAULT;
+	ret = kstrtos8_from_user(ubuf, count, 0, &client);
+	if (ret)
 		goto bail;
-	}
-
-	dbg_buff[count] = '\0';
-	if (kstrtos8(dbg_buff, 0, &client)) {
-		ret = -EFAULT;
-		goto bail;
-	}
 
 	if (client == -1)
 		ipa_reset_all_teth_stats();
@@ -1846,27 +2049,24 @@ static ssize_t ipa_debugfs_control_flt_rt_stats(struct file *file,
 
 	query = kzalloc(sizeof(struct ipa_ioc_flt_rt_query),
 		GFP_KERNEL);
-	if (!query) {
-		IPAERR("no mem\n");
+	if (!query)
 		return -ENOMEM;
-	}
 	query->stats_size = sizeof(struct ipa_flt_rt_stats);
 	pyld_size = IPA_MAX_FLT_RT_CNT_INDEX *
 		sizeof(struct ipa_flt_rt_stats);
 	query->stats = (uint64_t)kzalloc(pyld_size, GFP_KERNEL);
 	if (!query->stats) {
-		IPAERR("no mem\n");
 		kfree(query);
 		return -ENOMEM;
 	}
 
 	mutex_lock(&ipa3_ctx->lock);
-	if (sizeof(dbg_buff) < count + 1) {
+	if (count >= sizeof(dbg_buff)) {
 		ret = -EFAULT;
 		goto bail;
 	}
 
-	missing = copy_from_user(dbg_buff, ubuf, min(sizeof(dbg_buff), count));
+	missing = copy_from_user(dbg_buff, ubuf, count);
 	if (missing) {
 		ret = -EFAULT;
 		goto bail;
@@ -1901,10 +2101,8 @@ static ssize_t ipa_debugfs_print_flt_rt_stats(struct file *file,
 
 	query = kzalloc(sizeof(struct ipa_ioc_flt_rt_query),
 		GFP_KERNEL);
-	if (!query) {
-		IPAERR("no mem\n");
+	if (!query)
 		return -ENOMEM;
-	}
 	query->start_id = 1;
 	query->end_id = IPA_MAX_FLT_RT_CNT_INDEX;
 	query->reset = true;
@@ -1913,7 +2111,6 @@ static ssize_t ipa_debugfs_print_flt_rt_stats(struct file *file,
 		sizeof(struct ipa_flt_rt_stats);
 	query->stats = (uint64_t)kzalloc(pyld_size, GFP_KERNEL);
 	if (!query->stats) {
-		IPAERR("no mem\n");
 		kfree(query);
 		return -ENOMEM;
 	}
@@ -1957,27 +2154,14 @@ static ssize_t ipa_debugfs_print_flt_rt_stats(struct file *file,
 static ssize_t ipa_debugfs_reset_drop_stats(struct file *file,
 	const char __user *ubuf, size_t count, loff_t *ppos)
 {
-	unsigned long missing;
 	s8 client = 0;
 	int ret;
 
 	mutex_lock(&ipa3_ctx->lock);
-	if (sizeof(dbg_buff) < count + 1) {
-		ret = -EFAULT;
-		goto bail;
-	}
 
-	missing = copy_from_user(dbg_buff, ubuf, min(sizeof(dbg_buff), count));
-	if (missing) {
-		ret = -EFAULT;
+	ret = kstrtos8_from_user(ubuf, count, 0, &client);
+	if (ret)
 		goto bail;
-	}
-
-	dbg_buff[count] = '\0';
-	if (kstrtos8(dbg_buff, 0, &client)) {
-		ret = -EFAULT;
-		goto bail;
-	}
 
 	if (client == -1)
 		ipa_reset_all_drop_stats();
@@ -2197,7 +2381,7 @@ int ipa_debugfs_init_stats(struct dentry *parent)
 	file = debugfs_create_file("flt_rt", read_write_mode, dent, NULL,
 		&ipa3_flt_rt_ops);
 	if (IS_ERR_OR_NULL(file)) {
-		IPAERR("fail to create file %s\n", "flt_rt");
+		IPAERR("fail to create file flt_rt\n");
 		goto fail;
 	}
 

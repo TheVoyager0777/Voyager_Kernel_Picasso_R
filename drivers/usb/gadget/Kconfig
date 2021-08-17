@@ -190,9 +190,6 @@ config USB_RNDIS
 config USB_F_RNDIS
 	tristate
 
-config USB_F_QCRNDIS
-	tristate
-
 config USB_F_MASS_STORAGE
 	tristate
 
@@ -223,18 +220,6 @@ config USB_F_PRINTER
 config USB_F_TCM
 	tristate
 
-config USB_F_MTP
-	tristate
-
-config USB_F_PTP
-        tristate
-
-config USB_F_AUDIO_SRC
-	tristate
-
-config USB_F_ACC
-	tristate
-
 config USB_F_DIAG
 	tristate
 
@@ -244,23 +229,23 @@ config USB_F_CDEV
 config USB_F_CCID
 	tristate
 
-config USB_F_GSI
+config USB_F_AUDIO_SRC
+	tristate
+
+config USB_F_ACC
 	tristate
 
 config USB_F_QDSS
 	tristate
 
-config USB_F_IPC
+config USB_F_GSI
 	tristate
 
-config USB_F_MDM_DATA
+config USB_F_MTP
 	tristate
 
-config USB_F_RMNET_BAM
+config USB_F_PTP
 	tristate
-
-config USB_F_MBIM_BAM
-        tristate
 
 # this first set of drivers all depend on bulk-capable hardware.
 
@@ -275,6 +260,14 @@ config USB_CONFIGFS
 	  Associating functions with configurations is done by creating
 	  appropriate symbolic links.
 	  For more information see Documentation/usb/gadget_configfs.txt.
+
+config USB_CONFIGFS_UEVENT
+	bool "Uevent notification of Gadget state"
+	depends on USB_CONFIGFS
+	help
+	  Enable uevent notifications to userspace when the gadget
+	  state changes. The gadget can be in any of the following
+	  three states: "CONNECTED/DISCONNECTED/CONFIGURED"
 
 config USB_CONFIGFS_SERIAL
 	bool "Generic serial bulk in/out"
@@ -311,7 +304,6 @@ config USB_CONFIGFS_NCM
 	depends on NET
 	select USB_U_ETHER
 	select USB_F_NCM
-	select CRC32
 	help
 	  NCM is an advanced protocol for Ethernet encapsulation, allows
 	  grouping of several ethernet frames into one USB transfer and
@@ -339,15 +331,6 @@ config USB_CONFIGFS_ECM_SUBSET
 	  On hardware that can't implement the full protocol,
 	  a simple CDC subset is used, placing fewer demands on USB.
 
-config USB_CONFIGFS_QCRNDIS
-	bool "QCRNDIS"
-	depends on USB_CONFIGFS
-	depends on NET
-	depends on RNDIS_IPA
-	select USB_U_ETHER
-	select USB_RNDIS
-	select USB_F_QCRNDIS
-
 config USB_CONFIGFS_RNDIS
 	bool "RNDIS"
 	depends on USB_CONFIGFS
@@ -365,37 +348,12 @@ config USB_CONFIGFS_RNDIS
 	   XP, you'll need to download drivers from Microsoft's website; a URL
 	   is given in comments found in that info file.
 
-config USB_CONFIGFS_RMNET_BAM
-	bool "RMNET_BAM"
-	depends on USB_CONFIGFS
-	select USB_F_RMNET_BAM
-	help
-	   RmNet interface is a new logical device in QMI framework for data
-	   services. RmNet in accordance with QMI architecture uses Data I/O
-	   channel for IP data transfer and control I/O channel for QMI
-	   messaging (functionality similar to AT commands).
-	   RmNet interface is an alternative to standard CDC-ECM and windows
-	   RNDIS.
-
-config USB_CONFIGFS_MBIM_BAM
-        bool "MBIM_BAM"
-        depends on USB_CONFIGFS
-        select USB_F_MBIM_BAM
-	help
-	   Mbim interface is a new logical device in QMI framework for data
-	   services. Mbim in accordance with QMI architecture uses Data I/O
-	   channel for IP data transfer and control I/O channel for QMI
-	   messaging (functionality similar to AT commands).
-	   Mbim interface is an alternative to standard CDC-ECM and windows
-	   RNDIS.
-
 config USB_CONFIGFS_EEM
 	bool "Ethernet Emulation Model (EEM)"
 	depends on USB_CONFIGFS
 	depends on NET
 	select USB_U_ETHER
 	select USB_F_EEM
-	select CRC32
 	help
 	  CDC EEM is a newer USB standard that is somewhat simpler than CDC ECM
 	  and therefore can be supported by more hardware.  Technically ECM and
@@ -451,22 +409,8 @@ config USB_CONFIGFS_F_FS
 	  implemented in kernel space (for instance Ethernet, serial or
 	  mass storage) and other are implemented in user space.
 
-config USB_CONFIGFS_F_MTP
-	boolean "MTP gadget"
-	depends on USB_CONFIGFS
-	select USB_F_MTP
-	help
-	  USB gadget MTP support
-
-config USB_CONFIGFS_F_PTP
-	boolean "PTP gadget"
-	depends on USB_CONFIGFS && USB_CONFIGFS_F_MTP
-	select USB_F_PTP
-	help
-	  USB gadget PTP support
-
 config USB_CONFIGFS_F_ACC
-	boolean "Accessory gadget"
+	bool "Accessory gadget"
 	depends on USB_CONFIGFS
 	depends on HID=y
 	select USB_F_ACC
@@ -474,21 +418,13 @@ config USB_CONFIGFS_F_ACC
 	  USB gadget Accessory support
 
 config USB_CONFIGFS_F_AUDIO_SRC
-	boolean "Audio Source gadget"
+	bool "Audio Source gadget"
 	depends on USB_CONFIGFS && USB_CONFIGFS_F_ACC
 	depends on SND
 	select SND_PCM
 	select USB_F_AUDIO_SRC
 	help
 	  USB gadget Audio Source support
-
-config USB_CONFIGFS_UEVENT
-	boolean "Uevent notification of Gadget state"
-	depends on USB_CONFIGFS
-	help
-	  Enable uevent notifications to userspace when the gadget
-	  state changes. The gadget can be in any of the following
-	  three states: "CONNECTED/DISCONNECTED/CONFIGURED"
 
 config USB_CONFIGFS_F_UAC1
 	bool "Audio Class 1.0"
@@ -609,8 +545,10 @@ config USB_CONFIGFS_F_DIAG
 	select USB_F_DIAG
 	depends on USB_CONFIGFS
 	help
-	  Diag function driver enables support for Qualcomm diagnostics
-	  port over USB.
+	  Diag function driver enables support for diagnostics service over USB.
+	  Diagnostics application running on Host receives  stream of log data
+	  over USB. Applications can also send commands to diagnostics client
+	  running on device.
 
 config USB_CONFIGFS_F_CDEV
 	bool "USB Serial Character function"
@@ -636,42 +574,47 @@ config USB_CONFIGFS_F_CCID
 	  allowing a userspace component to be able to provide the
 	  implementation necessary to interface with the smartcard.
 
-config USB_CONFIGFS_F_GSI
-	bool "USB GSI function"
-	select USB_F_GSI
-	select USB_RNDIS
-	select USB_U_ETHER
-	depends on USB_CONFIGFS
-	help
-	  The GSI function supports the IPA Generic Software Interface found
-	  on various Qualcomm SoCs. This provides a hardware accelerated
-	  datapath for various tethered data functions, such as RmNet, RNDIS,
-	  MBIM, and CDC ECM. The function is configurable when instantiating
-	  through ConfigFS. This driver can be used instead of the standard
-	  implementations in case your hardware supports this.
-
 config USB_CONFIGFS_F_QDSS
 	bool "USB QDSS function"
 	select USB_F_QDSS
 	depends on USB_CONFIGFS
 	help
-	  USB QDSS function driver to get hwtracing related data over USB.
+	  USB QDSS function driver to get hwtracing related data over
+	  USB. USB QDSS function driver which allows communication
+	  between USB BAM and QDSS BAM for QDSS debug functionality
+	  over USB.
 
-config USB_CONFIGFS_F_IPC
-	bool "USB IPC function"
-	select USB_F_IPC
+config USB_CONFIGFS_F_GSI
+	bool "USB GSI function"
+	select USB_F_GSI
+	select USB_RNDIS
 	depends on USB_CONFIGFS
 	help
-	  IPC function driver enables support for IPC messages port over USB.
-	  This driver provides USB gadget access to the QRTR USB device mode
-	  transport.
+	  Generic function driver to support h/w acceleration to IPA
+	  over GSI. This driver provides USB RMNET/RNDIS/ECM/MBIM/DPL
+	  related functionalities using GSI hardware accelerated data
+	  path and control path.
 
-config USB_CONFIGFS_F_MDM_DATA
-	bool "USB QTI Modem Data function"
-	select USB_F_MDM_DATA
-	depends on USB_CONFIGFS && USB_QTI_MDM_DATA_BRIDGE
+config USB_CONFIGFS_F_MTP
+	bool "MTP gadget"
+	select USB_F_MTP
+	depends on USB_CONFIGFS
 	help
-	  USB QTI modem data function driver.
+	  The Media Transfer Protocol (MTP) function mounts USB gadget
+	  as a media device but unlike Mass Storage Gadget, MTP operates
+	  at the file level. Thus exposing the relevant content but hiding
+	  the system/restricted files.
+
+config USB_CONFIGFS_F_PTP
+	bool "PTP gadget"
+	select USB_F_PTP
+	depends on USB_CONFIGFS && USB_CONFIGFS_F_MTP
+	help
+	  The Picture Transfer Protocol (PTP) function driver is a wrapper
+	  around MTP function driver. This function driver mounts USB gadget
+	  as a media device but unlike Mass Storage Gadget, PTP operates
+	  at the file level. Thus exposing the relevant content but hiding
+	  the system/restricted files.
 
 source "drivers/usb/gadget/legacy/Kconfig"
 

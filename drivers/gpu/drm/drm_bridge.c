@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2014 Samsung Electronics Co., Ltd
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * Permission is hereby granted, free of charge, to any person obtaining a
  * copy of this software and associated documentation files (the "Software"),
@@ -67,17 +68,12 @@ static LIST_HEAD(bridge_list);
  * drm_bridge_add - add the given bridge to the global bridge list
  *
  * @bridge: bridge control structure
- *
- * RETURNS:
- * Unconditionally returns Zero.
  */
-int drm_bridge_add(struct drm_bridge *bridge)
+void drm_bridge_add(struct drm_bridge *bridge)
 {
 	mutex_lock(&bridge_lock);
 	list_add_tail(&bridge->list, &bridge_list);
 	mutex_unlock(&bridge_lock);
-
-	return 0;
 }
 EXPORT_SYMBOL(drm_bridge_add);
 
@@ -160,32 +156,6 @@ void drm_bridge_detach(struct drm_bridge *bridge)
 
 	bridge->dev = NULL;
 }
-
-/**
- * drm_bridge_connector_init - call bridge's connector_init callback to allow
- *                     the bridge to update connector's behavior.
- * @bridge: bridge control structure
- * @connector: connector control structure
- *
- * Calls ->connector_init() &drm_bridge_funcs op for the bridge.
- *
- * RETURNS:
- * Zero on success, error code on failure
- */
-int drm_bridge_connector_init(struct drm_bridge *bridge,
-	struct drm_connector *connector)
-{
-	int ret = 0;
-
-	if (!bridge || !connector)
-		return -EINVAL;
-
-	if (bridge->funcs->connector_init)
-		ret = bridge->funcs->connector_init(bridge, connector);
-
-	return ret;
-}
-EXPORT_SYMBOL(drm_bridge_connector_init);
 
 /**
  * DOC: bridge callbacks
@@ -368,19 +338,6 @@ void drm_bridge_pre_enable(struct drm_bridge *bridge)
 		mutex_unlock(&bridge->lock);
 }
 EXPORT_SYMBOL(drm_bridge_pre_enable);
-
-int drm_get_panel_info(struct drm_bridge *bridge, char *buf)
-{
-	int rc = 0;
-	if (!bridge)
-		return rc;
-
-	if (bridge->funcs->disp_get_panel_info)
-		return bridge->funcs->disp_get_panel_info(bridge, buf);
-
-	return rc;
-}
-EXPORT_SYMBOL(drm_get_panel_info);
 
 /**
  * drm_bridge_enable - enables all bridges in the encoder chain

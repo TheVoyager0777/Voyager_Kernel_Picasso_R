@@ -1,13 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /* Copyright (c) 2019, The Linux Foundation. All rights reserved.
  *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
+ * RMNET_CTL header
  *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #ifndef _RMNET_CTL_H_
@@ -32,7 +27,7 @@ enum rmnet_ctl_log_lvl {
 		rmnet_ctl_log(RMNET_CTL_LOG_DEBUG, msg, 0, data, len)
 
 struct rmnet_ctl_client_hooks {
-	void (*ctl_dl_client_hook)(struct sk_buff *);
+	void (*ctl_dl_client_hook)(struct sk_buff *skb);
 };
 
 #ifdef CONFIG_RMNET_CTL

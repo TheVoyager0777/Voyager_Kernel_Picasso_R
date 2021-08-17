@@ -1,14 +1,5 @@
-/* Copyright (c) 2016-2017, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2016-2017,2019, The Linux Foundation. All rights reserved. */
 
 #define CNSS_MAX_CH_NUM			45
 
@@ -83,13 +74,12 @@ int cnss_wlan_set_dfs_nol(const void *info, u16 info_len)
 		return -EINVAL;
 	}
 
-	temp = kmalloc(info_len, GFP_KERNEL);
+	temp = kmemdup(info, info_len, GFP_KERNEL);
 	if (!temp) {
 		mutex_unlock(&dfs_nol_info_lock);
 		return -ENOMEM;
 	}
 
-	memcpy(temp, info, info_len);
 	dfs_info = &dfs_nol_info;
 	kfree(dfs_info->dfs_nol_info);
 

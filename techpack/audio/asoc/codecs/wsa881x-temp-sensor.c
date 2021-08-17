@@ -1,13 +1,5 @@
-/* Copyright (c) 2015, 2017-2018 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2015, 2017-2019 The Linux Foundation. All rights reserved.
  */
 
 #include <linux/bitops.h>
@@ -38,7 +30,7 @@ int wsa881x_get_temp(struct thermal_zone_device *thermal,
 		     int *temp)
 {
 	struct wsa881x_tz_priv *pdata;
-	struct snd_soc_codec *codec;
+	struct snd_soc_component *component;
 	struct wsa_temp_register reg;
 	int dmeas, d1, d2;
 	int ret = 0;
@@ -52,8 +44,8 @@ int wsa881x_get_temp(struct thermal_zone_device *thermal,
 
 	if (thermal->devdata) {
 		pdata = thermal->devdata;
-		if (pdata->codec) {
-			codec = pdata->codec;
+		if (pdata->component) {
+			component = pdata->component;
 		} else {
 			pr_err("%s: codec is NULL\n", __func__);
 			return -EINVAL;
@@ -78,7 +70,7 @@ int wsa881x_get_temp(struct thermal_zone_device *thermal,
 
 temp_retry:
 	if (pdata->wsa_temp_reg_read) {
-		ret = pdata->wsa_temp_reg_read(codec, &reg);
+		ret = pdata->wsa_temp_reg_read(component, &reg);
 		if (ret) {
 			pr_err("%s: temp read failed: %d, current temp: %d\n",
 				__func__, ret, pdata->curr_temp);
@@ -117,9 +109,8 @@ temp_retry:
 
 	if (temp_val <= LOW_TEMP_THRESHOLD ||
 		temp_val >= HIGH_TEMP_THRESHOLD) {
-		printk_ratelimited("%s: T0: %d is out of range[%d, %d]\n",
-				   __func__, temp_val, LOW_TEMP_THRESHOLD,
-				   HIGH_TEMP_THRESHOLD);
+		pr_debug("%s: T0: %d is out of range[%d, %d]\n", __func__,
+			 temp_val, LOW_TEMP_THRESHOLD, HIGH_TEMP_THRESHOLD);
 		if (retry--) {
 			msleep(20);
 			goto temp_retry;

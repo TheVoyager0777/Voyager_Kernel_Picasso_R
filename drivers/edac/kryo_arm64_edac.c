@@ -1,13 +1,6 @@
-/* Copyright (c) 2016-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -18,6 +11,7 @@
 #include <linux/cpu.h>
 #include <linux/cpu_pm.h>
 #include <linux/interrupt.h>
+#include <linux/notifier.h>
 #include <linux/of_irq.h>
 
 #include <asm/cputype.h>
@@ -47,6 +41,7 @@ module_param(poll_msec, int, 0444);
 #define L3_BIT 0x2
 
 #define QCOM_CPU_PART_KRYO4XX_GOLD 0x804
+#define QCOM_CPU_PART_KRYO5XX_GOLD 0xD0D
 #define QCOM_CPU_PART_KRYO4XX_SILVER_V1 0x803
 #define QCOM_CPU_PART_KRYO4XX_SILVER_V2 0x805
 
@@ -142,6 +137,7 @@ struct erp_drvdata {
 	struct edac_device_ctl_info *edev_ctl;
 	struct erp_drvdata __percpu **erp_cpu_drvdata;
 	struct notifier_block nb_pm;
+	struct notifier_block nb_panic;
 	int ppi;
 };
 
@@ -218,6 +214,9 @@ out:
 static void dump_err_reg(int errorcode, int level, u64 errxstatus, u64 errxmisc,
 	struct edac_device_ctl_info *edev_ctl)
 {
+	u32 part_num;
+	int way;
+
 	edac_printk(KERN_CRIT, EDAC_CPU, "ERRXSTATUS_EL1: %llx\n", errxstatus);
 	edac_printk(KERN_CRIT, EDAC_CPU, "ERRXMISC_EL1: %llx\n", errxmisc);
 	edac_printk(KERN_CRIT, EDAC_CPU, "Cache level: L%d\n", level + 1);
@@ -248,12 +247,27 @@ static void dump_err_reg(int errorcode, int level, u64 errxstatus, u64 errxmisc,
 		break;
 	}
 
-	if (level == L3)
-		edac_printk(KERN_CRIT, EDAC_CPU,
-			"Way: %d\n", (int) KRYO_ERRXMISC_WAY(errxmisc));
-	else
-		edac_printk(KERN_CRIT, EDAC_CPU,
-			"Way: %d\n", (int) KRYO_ERRXMISC_WAY(errxmisc) >> 2);
+	if (level == L3) {
+		way = (int) KRYO_ERRXMISC_WAY(errxmisc);
+	} else {
+		part_num = read_cpuid_part_number();
+		switch (part_num) {
+		case QCOM_CPU_PART_KRYO4XX_SILVER_V1:
+		case QCOM_CPU_PART_KRYO4XX_SILVER_V2:
+			way = (int) KRYO_ERRXMISC_WAY(errxmisc) >> 2;
+			break;
+		case QCOM_CPU_PART_KRYO4XX_GOLD:
+		case QCOM_CPU_PART_KRYO5XX_GOLD:
+			way = (int) KRYO_ERRXMISC_WAY(errxmisc);
+			break;
+		default:
+			edac_printk(KERN_CRIT, EDAC_CPU,
+				"Error in matching part num:%u\n", part_num);
+			return;
+		}
+	}
+
+	edac_printk(KERN_CRIT, EDAC_CPU, "Way: %d\n", way);
 	errors[errorcode].func(edev_ctl, smp_processor_id(),
 				level, errors[errorcode].msg);
 }
@@ -282,6 +296,7 @@ static void kryo_parse_l1_l2_cache_error(u64 errxstatus, u64 errxmisc,
 		}
 		break;
 	case QCOM_CPU_PART_KRYO4XX_GOLD:
+	case QCOM_CPU_PART_KRYO5XX_GOLD:
 		switch (KRYO_ERRXMISC_LVL_GOLD(errxmisc)) {
 		case L1_GOLD_DC_BIT:
 		case L1_GOLD_IC_BIT:
@@ -408,6 +423,21 @@ void kryo_poll_cache_errors(struct edac_device_ctl_info *edev_ctl)
 			edev_ctl, 0);
 }
 
+static int kryo_cpu_panic_notify(struct notifier_block *this,
+				unsigned long event, void *ptr)
+{
+	struct edac_device_ctl_info *edev_ctl =
+				panic_handler_drvdata->edev_ctl;
+
+	edev_ctl->panic_on_ce = 0;
+	edev_ctl->panic_on_ue = 0;
+
+	kryo_check_l3_scu_error(edev_ctl);
+	kryo_check_l1_l2_ecc(edev_ctl);
+
+	return NOTIFY_OK;
+}
+
 static irqreturn_t kryo_l1_l2_handler(int irq, void *drvdata)
 {
 	kryo_check_l1_l2_ecc(panic_handler_drvdata->edev_ctl);
@@ -493,6 +523,9 @@ static int kryo_cpu_erp_probe(struct platform_device *pdev)
 	drv->edev_ctl->panic_on_ce = ARM64_ERP_PANIC_ON_CE;
 	drv->edev_ctl->panic_on_ue = ARM64_ERP_PANIC_ON_UE;
 	drv->nb_pm.notifier_call = kryo_pmu_cpu_pm_notify;
+	drv->nb_panic.notifier_call = kryo_cpu_panic_notify;
+	atomic_notifier_chain_register(&panic_notifier_list,
+				       &drv->nb_panic);
 	platform_set_drvdata(pdev, drv);
 
 	rc = edac_device_add_device(drv->edev_ctl);

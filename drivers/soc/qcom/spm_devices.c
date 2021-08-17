@@ -1,4 +1,5 @@
-/* Copyright (c) 2011-2019  The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2011-2020  The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -991,7 +992,6 @@ static struct platform_driver msm_spm_device_driver = {
 	.remove = msm_spm_dev_remove,
 	.driver = {
 		.name = "spm-v2",
-		.owner = THIS_MODULE,
 		.of_match_table = msm_spm_match_table,
 	},
 };

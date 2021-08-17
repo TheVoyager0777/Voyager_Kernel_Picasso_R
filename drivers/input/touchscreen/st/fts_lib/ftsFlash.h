@@ -1,7 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * FTS Capacitive touch screen controller (FingerTipS)
  *
- * Copyright (C) 2016-2018, STMicroelectronics Limited.
+ * Copyright (C) 2016-2019, STMicroelectronics Limited.
  * Authors: AMG(Analog Mems Group) <marco.cali@st.com>
  *
  *
@@ -99,9 +100,10 @@ int flash_unlock(void);
 int fillMemory(u32 address, u8 *data, int size);
 int getFirmwareVersion(u16 *fw_vers, u16 *config_id);
 int getFWdata(const char *pathToFile, u8 **data, int *size, int from);
+int getFWdata_nocheck(const char *pathToFile, u8 **data, int *size, int from);
 int parseBinFile(u8 *fw_data, int fw_size, struct Firmware *fw, int keep_cx);
 int readFwFile(const char *path, struct Firmware *fw, int keep_cx);
-int flash_burn(struct Firmware fw, int force_burn, int keep_cx);
+int flash_burn(struct Firmware *fw, int force_burn, int keep_cx);
 int flashProcedure(const char *path, int force, int keep_cx);
 
 #endif

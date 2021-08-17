@@ -1,16 +1,10 @@
-/* Copyright (c) 2015, Sony Mobile Communications, AB.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2015, Sony Mobile Communications, AB.
  * Copyright (C) 2021 XiaoMi, Inc.
- *
- * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ */
+/*
+ * Copyright (c) 2018-2021, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt)	"WLED: %s: " fmt, __func__
@@ -368,15 +362,13 @@ static int wled_sync_toggle(struct wled *wled)
 
 	rc = regmap_update_bits(wled->regmap,
 			wled->sink_addr + WLED_SINK_SYNC,
-			WLED_SINK_SYNC_MASK, WLED_SINK_SYNC_MASK);
+			WLED_SINK_SYNC_MASK, WLED_SINK_SYNC_CLEAR);
 	if (rc < 0)
 		return rc;
 
-	rc = regmap_update_bits(wled->regmap,
+	return regmap_update_bits(wled->regmap,
 			wled->sink_addr + WLED_SINK_SYNC,
-			WLED_SINK_SYNC_MASK, WLED_SINK_SYNC_CLEAR);
-
-	return rc;
+			WLED_SINK_SYNC_MASK, WLED_SINK_SYNC_MASK);
 }
 
 static int wled5_sample_hold_control(struct wled *wled, u16 brightness,
@@ -427,19 +419,42 @@ static int wled5_sample_hold_control(struct wled *wled, u16 brightness,
 	return rc;
 }
 
-#define  WLED_CABC_THR 200
 static int wled5_set_brightness(struct wled *wled, u16 brightness)
 {
 	int rc, offset;
 	u16 low_limit = wled->max_brightness * 1 / 1000;
 	u8 val, v[2], brightness_msb_mask;
+	static u32 prop_read = 0;
+	static u32 cabc_disable = 0;
+	static u32 cabc_off_dbv = 0;
+	static u32 cabc_pwm[2] = {0};
 
-	if (brightness < WLED_CABC_THR) {
-		wled->cabc_config(wled,false);
-		brightness = brightness*0x0B6C/0xFFF;
+	if (!prop_read) {
+		of_property_read_u32(wled->pdev->dev.of_node,"mi,cabcoff-dbv", &cabc_off_dbv);
+		of_property_read_u32_array(wled->pdev->dev.of_node,"mi,cabc-pwm", cabc_pwm, 2);
+		pr_info("wled config dbv:%d, pwm:%d:%d", cabc_off_dbv, cabc_pwm[0], cabc_pwm[1]);
+
+		if (cabc_off_dbv > wled->max_brightness
+		|| cabc_pwm[0] == 0 || cabc_pwm[0] > cabc_pwm[1])
+			cabc_off_dbv = 0;
+		prop_read = 1;
 	}
-	else
+
+	if (cabc_off_dbv > 0	&& brightness < cabc_off_dbv) {
+		brightness = brightness*cabc_pwm[0]/cabc_pwm[1];
+
+		if (!cabc_disable) {
+			pr_info("wled config to disable cabc\n");
+			wled->cabc_config(wled,false);
+		}
+
+		cabc_disable = 1;
+	}
+	else if (cabc_disable) {
 		wled->cabc_config(wled,true);
+		cabc_disable = 0;
+		pr_info("wled config to enable cabc \n");
+	}
 
 	/* WLED5's lower limit is 0.1% */
 	if (brightness > 0 && brightness < low_limit)
@@ -458,20 +473,19 @@ static int wled5_set_brightness(struct wled *wled, u16 brightness)
 	if (rc < 0)
 		return rc;
 
-	/* Update brightness values to modulator in WLED5 */
-	val = (wled->cfg.mod_sel == MOD_A) ? WLED5_SINK_SYNC_MODA_BIT :
-		WLED5_SINK_SYNC_MODB_BIT;
-	rc = regmap_update_bits(wled->regmap,
-			wled->sink_addr + WLED5_SINK_MOD_SYNC_BIT_REG,
-			WLED5_SINK_SYNC_MASK, val);
-	if (rc < 0)
-		return rc;
-
 	val = 0;
 	rc = regmap_update_bits(wled->regmap,
 			wled->sink_addr + WLED5_SINK_MOD_SYNC_BIT_REG,
 			WLED_SINK_SYNC_MASK, val);
-	return rc;
+	/* Update brightness values to modulator in WLED5 */
+	if (rc < 0)
+		return rc;
+
+	val = (wled->cfg.mod_sel == MOD_A) ? WLED5_SINK_SYNC_MODA_BIT :
+		WLED5_SINK_SYNC_MODB_BIT;
+	return regmap_update_bits(wled->regmap,
+			wled->sink_addr + WLED5_SINK_MOD_SYNC_BIT_REG,
+			WLED5_SINK_SYNC_MASK, val);
 }
 
 static int wled4_set_brightness(struct wled *wled, u16 brightness)
@@ -734,7 +748,7 @@ static void wled_get_ovp_delay(struct wled *wled, int *delay_time_us)
 	pr_debug("delay_time_us: %d\n", *delay_time_us);
 }
 
-#define AUTO_CALIB_BRIGHTNESS		200
+#define AUTO_CALIB_BRIGHTNESS		512
 static int wled_auto_calibrate(struct wled *wled)
 {
 	int rc = 0, i, delay_time_us;
@@ -1184,9 +1198,8 @@ static int wled5_setup(struct wled *wled)
 	if (rc < 0)
 		return rc;
 
-	rc = regmap_update_bits(wled->regmap,
-			wled->sink_addr + WLED_SINK_CURR_SINK_EN,
-			WLED_SINK_CURR_SINK_MASK, sink_en);
+	rc = regmap_write(wled->regmap,
+			wled->sink_addr + WLED_SINK_CURR_SINK_EN, sink_en);
 	if (rc < 0)
 		return rc;
 
@@ -1303,9 +1316,8 @@ static int wled4_setup(struct wled *wled)
 	if (rc < 0)
 		return rc;
 
-	rc = regmap_update_bits(wled->regmap,
-			wled->sink_addr + WLED_SINK_CURR_SINK_EN,
-			WLED_SINK_CURR_SINK_MASK, sink_en);
+	rc = regmap_write(wled->regmap,
+			wled->sink_addr + WLED_SINK_CURR_SINK_EN, sink_en);
 	if (rc < 0)
 		return rc;
 
@@ -1403,7 +1415,7 @@ static const struct wled_config wled5_config_defaults = {
 
 struct wled_var_cfg {
 	const u32 *values;
-	u32 (*fn)(u32);
+	u32 (*fn)(u32 idx);
 	int size;
 };
 
@@ -1560,8 +1572,7 @@ static int wled_get_max_avail_current(struct led_classdev *led_cdev,
 					int *max_current)
 {
 	struct wled *wled;
-	int rc, ocv_mv, r_bat_mohms, i_bat_ma;
-	int64_t max_fsc_ma, i_sink_ma = 0;
+	int rc, ocv_mv, r_bat_mohms, i_bat_ma, i_sink_ma = 0, max_fsc_ma;
 	int64_t p_out_string, p_out, p_in, v_safe_mv, i_flash_ma, v_ph_mv;
 
 	if (!strcmp(led_cdev->name, "wled_switch"))
@@ -1607,7 +1618,7 @@ static int wled_get_max_avail_current(struct led_classdev *led_cdev,
 	p_out_string = ((wled->leds_per_string * V_LED_MV) + V_HDRM_MV) *
 			I_FLASH_MAX_MA;
 	p_out = p_out_string * wled->num_strings;
-	p_in = div_s64(p_out * 1000, EFF_FACTOR);
+	p_in = (p_out * 1000) / EFF_FACTOR;
 
 	pr_debug("p_out_string: %lld, p_out: %lld, p_in: %lld\n", p_out_string,
 		p_out, p_in);
@@ -1619,9 +1630,8 @@ static int wled_get_max_avail_current(struct led_classdev *led_cdev,
 		return 0;
 	}
 
-	i_flash_ma = div_s64(p_in, v_safe_mv);
-	v_ph_mv = ocv_mv - div_s64(((i_bat_ma + i_flash_ma) * r_bat_mohms),
-							1000);
+	i_flash_ma = p_in / v_safe_mv;
+	v_ph_mv = ocv_mv - ((i_bat_ma + i_flash_ma) * r_bat_mohms) / 1000;
 
 	pr_debug("v_safe: %lld, i_flash: %lld, v_ph: %lld\n", v_safe_mv,
 		i_flash_ma, v_ph_mv);
@@ -1630,22 +1640,19 @@ static int wled_get_max_avail_current(struct led_classdev *led_cdev,
 	if (wled->num_strings == 3 && wled->leds_per_string == 8) {
 		if (v_ph_mv < 3410) {
 			/* For 8s3p, I_sink(mA) = 25.396 * Vph(V) - 26.154 */
-			i_sink_ma = div_s64((div_s64((25396 * v_ph_mv),
-					1000) - 26154), 1000);
+			i_sink_ma = (((25396 * v_ph_mv) / 1000) - 26154) / 1000;
 			i_sink_ma *= wled->num_strings;
 		}
 	} else if (wled->num_strings == 3 && wled->leds_per_string == 6) {
 		if (v_ph_mv < 2800) {
 			/* For 6s3p, I_sink(mA) = 41.311 * Vph(V) - 52.334 */
-			i_sink_ma = div_s64((div_s64((41311 * v_ph_mv),
-					1000) - 52334), 1000);
+			i_sink_ma = (((41311 * v_ph_mv) / 1000) - 52334) / 1000;
 			i_sink_ma *= wled->num_strings;
 		}
 	} else if (wled->num_strings == 4 && wled->leds_per_string == 6) {
 		if (v_ph_mv < 3400) {
 			/* For 6s4p, I_sink(mA) = 26.24 * Vph(V) - 24.834 */
-			i_sink_ma = div_s64((div_s64((26240 * v_ph_mv),
-					1000) - 24834), 1000);
+			i_sink_ma = (((26240 * v_ph_mv) / 1000) - 24834) / 1000;
 			i_sink_ma *= wled->num_strings;
 		}
 	} else if (v_ph_mv < 3200) {
@@ -1722,7 +1729,7 @@ int wled_flash_led_prepare(struct led_trigger *trig, int options,
 		return 0;
 	default:
 		return -EINVAL;
-	};
+	}
 
 	return 0;
 }

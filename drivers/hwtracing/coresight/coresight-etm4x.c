@@ -1,13 +1,6 @@
-/* Copyright (c) 2014, 2017-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0
+/*
+ * Copyright (c) 2014,2016,2018, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -1441,7 +1434,6 @@ static int etm4_probe(struct amba_device *adev, const struct amba_id *id)
 	spin_lock_init(&drvdata->spinlock);
 
 	drvdata->cpu = pdata ? pdata->cpu : -ENODEV;
-
 	if (drvdata->cpu == -ENODEV) {
 		dev_info(dev, "CPU not available\n");
 		return -ENODEV;
@@ -1454,7 +1446,7 @@ static int etm4_probe(struct amba_device *adev, const struct amba_id *id)
 		dev_err(dev, "ETM arch init failed\n");
 		cpus_read_unlock();
 		return ret;
-	} else if (etm4_arch_supported(drvdata->arch) == false) {
+	} else if (!etm4_arch_supported(drvdata->arch)) {
 		cpus_read_unlock();
 		return -EINVAL;
 	}

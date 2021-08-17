@@ -304,10 +304,8 @@ static int s3fwrn5_fw_request_firmware(struct s3fwrn5_fw_info *fw_info)
 	if (ret < 0)
 		return ret;
 
-	if (fw->fw->size < S3FWRN5_FW_IMAGE_HEADER_SIZE) {
-		release_firmware(fw->fw);
+	if (fw->fw->size < S3FWRN5_FW_IMAGE_HEADER_SIZE)
 		return -EINVAL;
-	}
 
 	memcpy(fw->date, fw->fw->data + 0x00, 12);
 	fw->date[12] = '\0';
@@ -338,7 +336,7 @@ static int s3fwrn5_fw_get_base_addr(
 	struct s3fwrn5_fw_cmd_get_bootinfo_rsp *bootinfo, u32 *base_addr)
 {
 	int i;
-	struct {
+	static const struct {
 		u8 version[4];
 		u32 base_addr;
 	} match[] = {

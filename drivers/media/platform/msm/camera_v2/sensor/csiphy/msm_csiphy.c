@@ -1,4 +1,5 @@
-/* Copyright (c) 2011-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2011-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -209,7 +210,7 @@ static int msm_csiphy_snps_2_lane_config(
 	diff = abs(snps_v100_freq_values[0].default_bit_rate -
 		local_data_rate);
 	/* ToDo: Can be optimized to a O(1) search */
-	for (i = 1; i < sizeof(snps_v100_freq_values)/
+	for (i = 1; i < ARRAY_SIZE(snps_v100_freq_values)/
 		sizeof(snps_v100_freq_values[0]);) {
 		diff_i = abs(snps_v100_freq_values[i].default_bit_rate -
 			local_data_rate);
@@ -219,7 +220,7 @@ static int msm_csiphy_snps_2_lane_config(
 		}
 		diff = diff_i;
 		i++;
-		if (sizeof(snps_v100_freq_values)/
+		if (ARRAY_SIZE(snps_v100_freq_values)/
 		sizeof(snps_v100_freq_values[0]) == i) {
 			i--;
 			break;
@@ -334,7 +335,7 @@ static int msm_csiphy_snps_lane_config(
 		if (csiphy_dev->snps_state != NOT_CONFIGURED) {
 			if (csiphy_dev->snps_programmed_data_rate !=
 				csiphy_params->data_rate)
-				pr_err("reconfiguring snps phy");
+				pr_err("reconfiguring snps phy\n");
 			else
 				return 0;
 		}
@@ -355,7 +356,7 @@ static int msm_csiphy_snps_lane_config(
 		} else {
 			if (csiphy_dev->snps_programmed_data_rate !=
 				csiphy_params->data_rate)
-				pr_err("reconfiguring snps phy");
+				pr_err("reconfiguring snps phy\n");
 			else
 				return 0;
 		}
@@ -374,7 +375,7 @@ static int msm_csiphy_snps_lane_config(
 		} else {
 			if (csiphy_dev->snps_programmed_data_rate !=
 				csiphy_params->data_rate)
-				pr_err("reconfiguring snps phy");
+				pr_err("reconfiguring snps phy\n");
 			else
 				return 0;
 		}
@@ -2426,7 +2427,7 @@ static int csiphy_probe(struct platform_device *pdev)
 	/* ToDo: Enable 3phase clock for dynamic clock enable/disable */
 	rc = msm_csiphy_get_clk_info(new_csiphy_dev, pdev);
 	if (rc < 0) {
-		pr_err("%s: msm_csiphy_get_clk_info() failed", __func__);
+		pr_err("%s: msm_csiphy_get_clk_info() failed\n", __func__);
 		rc =  -EFAULT;
 		goto csiphy_no_resource;
 	}
@@ -2514,7 +2515,6 @@ static struct platform_driver csiphy_driver = {
 	.remove = msm_csiphy_exit,
 	.driver = {
 		.name = MSM_CSIPHY_DRV_NAME,
-		.owner = THIS_MODULE,
 		.of_match_table = msm_csiphy_dt_match,
 	},
 };

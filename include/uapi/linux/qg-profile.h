@@ -1,3 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0 WITH Linux-syscall-note */
+/*
+ * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
+ */
+
 #ifndef __QG_PROFILE_H__
 #define __QG_PROFILE_H__
 

@@ -1,46 +1,21 @@
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _IPA_H_
 #define _IPA_H_
 
-#include <linux/if_ether.h>
-#include <linux/ip.h>
-#include <linux/ipv6.h>
 #include <linux/msm_ipa.h>
-#include "linux/msm_gsi.h"
 #include <linux/skbuff.h>
 #include <linux/types.h>
-#include <linux/msm-sps.h>
+#include <linux/if_ether.h>
+#include "linux/msm_gsi.h"
 
 #define IPA_APPS_MAX_BW_IN_MBPS 700
+#define IPA_BW_THRESHOLD_MAX 3
+
 #define IPA_MAX_CH_STATS_SUPPORTED 5
-
-/**
- * the attributes of the socksv5 options
- */
-#define IPA_SOCKSv5_ENTRY_VALID	(1ul << 0)
-#define IPA_SOCKSv5_IPV4	(1ul << 1)
-#define IPA_SOCKSv5_IPV6	(1ul << 2)
-#define IPA_SOCKSv5_OPT_TS	(1ul << 3)
-#define IPA_SOCKSv5_OPT_SACK	(1ul << 4)
-#define IPA_SOCKSv5_OPT_WS_STC	(1ul << 5)
-#define IPA_SOCKSv5_OPT_WS_DMC	(1ul << 6)
-
-#define IPA_SOCKsv5_ADD_COM_ID		15
-#define IPA_SOCKsv5_ADD_V6_V4_COM_PM	1
-#define IPA_SOCKsv5_ADD_V4_V6_COM_PM	2
-#define IPA_SOCKsv5_ADD_V6_V6_COM_PM	3
-
 /**
  * enum ipa_transport_type
  * transport type: either GSI or SPS
@@ -122,8 +97,6 @@ enum ipa_aggr_mode {
 enum ipa_dp_evt_type {
 	IPA_RECEIVE,
 	IPA_WRITE_DONE,
-	IPA_CLIENT_START_POLL,
-	IPA_CLIENT_COMP_NAPI,
 };
 
 /**
@@ -377,18 +350,28 @@ struct ipa_ep_cfg_holb {
  * struct ipa_ep_cfg_deaggr - deaggregation configuration in IPA end-point
  * @deaggr_hdr_len: Deaggregation Header length in bytes. Valid only for Input
  *	Pipes, which are configured for 'Generic' deaggregation.
+ * @syspipe_err_detection - If set to 1, enables error detection for
+ *	de-aggregration. Valid only for Input Pipes, which are configured
+ *	for 'Generic' deaggregation.
+ *	Note: if this bit is set, de-aggregated frames must be contiguous
+ *	in memory.
  * @packet_offset_valid: - 0: PACKET_OFFSET is not used, 1: PACKET_OFFSET is
  *	used.
  * @packet_offset_location: Location of packet offset field, which specifies
  *	the offset to the packet from the start of the packet offset field.
+ * @ignore_min_pkt_err - Ignore packets smaller than header. This is intended
+ *	for use in RNDIS de-aggregated pipes, to silently ignore a redundant
+ *	1-byte trailer in MSFT implementation.
  * @max_packet_len: DEAGGR Max Packet Length in Bytes. A Packet with higher
  *	size wil be treated as an error. 0 - Packet Length is not Bound,
  *	IPA should not check for a Max Packet Length.
  */
 struct ipa_ep_cfg_deaggr {
 	u32 deaggr_hdr_len;
+	bool syspipe_err_detection;
 	bool packet_offset_valid;
 	u32 packet_offset_location;
+	bool ignore_min_pkt_err;
 	u32 max_packet_len;
 };
 
@@ -531,10 +514,13 @@ typedef void (*ipa_notify_cb)(void *priv, enum ipa_dp_evt_type evt,
  *			use ipa_get_wdi_sap_stats structure
  * @IPA_SET_WIFI_QUOTA: set quota limit on STA -
  *			use ipa_set_wifi_quota structure
+ * @IPA_SET_WLAN_BW: set wlan BW -
+ *			use ipa_set_wlan_bw structure
  */
 enum ipa_wdi_meter_evt_type {
 	IPA_GET_WDI_SAP_STATS,
 	IPA_SET_WIFI_QUOTA,
+	IPA_INFORM_WLAN_BW,
 };
 
 struct ipa_get_wdi_sap_stats {
@@ -570,63 +556,22 @@ struct ipa_set_wifi_quota {
 	uint8_t set_valid;
 };
 
+/**
+ * struct ipa_inform_wlan_bw - structure used for
+ *                                   IPA_INFORM_WLAN_BW.
+ *
+ * @index:       Indicate which bw-index hit
+ * @throughput:  throughput usage
+ *
+ */
+struct ipa_inform_wlan_bw {
+	uint8_t  index;
+	uint64_t throughput;
+};
+
 typedef void (*ipa_wdi_meter_notifier_cb)(enum ipa_wdi_meter_evt_type evt,
 		       void *data);
 
-/**
- * struct ipa_connect_params - low-level client connect input parameters. Either
- * client allocates the data and desc FIFO and specifies that in data+desc OR
- * specifies sizes and pipe_mem pref and IPA does the allocation.
- *
- * @ipa_ep_cfg:	IPA EP configuration
- * @client:	type of "client"
- * @client_bam_hdl:	 client SPS handle
- * @client_ep_idx:	 client PER EP index
- * @priv:	callback cookie
- * @notify:	callback
- *		priv - callback cookie evt - type of event data - data relevant
- *		to event.  May not be valid. See event_type enum for valid
- *		cases.
- * @desc_fifo_sz:	size of desc FIFO
- * @data_fifo_sz:	size of data FIFO
- * @pipe_mem_preferred:	if true, try to alloc the FIFOs in pipe mem, fallback
- *			to sys mem if pipe mem alloc fails
- * @desc:	desc FIFO meta-data when client has allocated it
- * @data:	data FIFO meta-data when client has allocated it
- * @skip_ep_cfg: boolean field that determines if EP should be configured
- *  by IPA driver
- * @keep_ipa_awake: when true, IPA will not be clock gated
- */
-struct ipa_connect_params {
-	struct ipa_ep_cfg ipa_ep_cfg;
-	enum ipa_client_type client;
-	unsigned long client_bam_hdl;
-	u32 client_ep_idx;
-	void *priv;
-	ipa_notify_cb notify;
-	u32 desc_fifo_sz;
-	u32 data_fifo_sz;
-	bool pipe_mem_preferred;
-	struct sps_mem_buffer desc;
-	struct sps_mem_buffer data;
-	bool skip_ep_cfg;
-	bool keep_ipa_awake;
-};
-
-/**
- *  struct ipa_sps_params - SPS related output parameters resulting from
- *  low/high level client connect
- *  @ipa_bam_hdl:	IPA SPS handle
- *  @ipa_ep_idx:	IPA PER EP index
- *  @desc:	desc FIFO meta-data
- *  @data:	data FIFO meta-data
- */
-struct ipa_sps_params {
-	unsigned long ipa_bam_hdl;
-	u32 ipa_ep_idx;
-	struct sps_mem_buffer desc;
-	struct sps_mem_buffer data;
-};
 
 /**
  * struct ipa_tx_intf - interface tx properties
@@ -682,7 +627,6 @@ struct ipa_ext_intf {
  *  by IPA driver
  * @keep_ipa_awake: when true, IPA will not be clock gated
  * @napi_enabled: when true, IPA call client callback to start polling
- * @bypass_agg: when true, IPA bypasses the aggregation
  */
 struct ipa_sys_connect_params {
 	struct ipa_ep_cfg ipa_ep_cfg;
@@ -693,9 +637,7 @@ struct ipa_sys_connect_params {
 	bool skip_ep_cfg;
 	bool keep_ipa_awake;
 	struct napi_struct *napi_obj;
-	bool napi_enabled;
 	bool recycle_enabled;
-	bool bypass_agg;
 };
 
 /**
@@ -826,7 +768,6 @@ struct ipa_rm_perf_profile {
 enum teth_tethering_mode {
 	TETH_TETHERING_MODE_RMNET,
 	TETH_TETHERING_MODE_MBIM,
-	TETH_TETHERING_MODE_RMNET_2,
 	TETH_TETHERING_MODE_MAX,
 };
 
@@ -907,15 +848,12 @@ struct ipa_rx_page_data {
  */
 enum ipa_irq_type {
 	IPA_BAD_SNOC_ACCESS_IRQ,
-	IPA_EOT_COAL_IRQ,
 	IPA_UC_IRQ_0,
 	IPA_UC_IRQ_1,
 	IPA_UC_IRQ_2,
 	IPA_UC_IRQ_3,
 	IPA_UC_IN_Q_NOT_EMPTY_IRQ,
 	IPA_UC_RX_CMD_Q_NOT_FULL_IRQ,
-	IPA_UC_TX_CMD_Q_NOT_FULL_IRQ,
-	IPA_UC_TO_PROC_ACK_Q_NOT_FULL_IRQ,
 	IPA_PROC_TO_UC_ACK_Q_NOT_EMPTY_IRQ,
 	IPA_RX_ERR_IRQ,
 	IPA_DEAGGR_ERR_IRQ,
@@ -924,8 +862,6 @@ enum ipa_irq_type {
 	IPA_PROC_ERR_IRQ,
 	IPA_TX_SUSPEND_IRQ,
 	IPA_TX_HOLB_DROP_IRQ,
-	IPA_BAM_IDLE_IRQ,
-	IPA_GSI_IDLE_IRQ = IPA_BAM_IDLE_IRQ,
 	IPA_BAM_GSI_IDLE_IRQ,
 	IPA_PIPE_YELLOW_MARKER_BELOW_IRQ,
 	IPA_PIPE_RED_MARKER_BELOW_IRQ,
@@ -1135,8 +1071,6 @@ struct IpaHwStatsWDIInfoData_t {
  * uc is writing (WDI-2.0)
  * @rdy_comp_ring_size: size of the Rx_completion ring in bytes
  * expected to communicate about the Read pointer into the Rx Ring
- * @is_txr_rn_db_pcie_addr: tx ring PCIE doorbell address
- * @is_evt_rn_db_pcie_addr: event ring PCIE doorbell address
  */
 struct ipa_wdi_ul_params {
 	phys_addr_t rdy_ring_base_pa;
@@ -1147,8 +1081,6 @@ struct ipa_wdi_ul_params {
 	u32 rdy_comp_ring_size;
 	u32 *rdy_ring_rp_va;
 	u32 *rdy_comp_ring_wp_va;
-	bool is_txr_rn_db_pcie_addr;
-	bool is_evt_rn_db_pcie_addr;
 };
 
 /**
@@ -1157,8 +1089,6 @@ struct ipa_wdi_ul_params {
  * @rdy_ring_size: size of the Rx ring in bytes
  * @rdy_ring_rp_pa: physical address of the location through which IPA uc is
  * expected to communicate about the Read pointer into the Rx Ring
- * @is_txr_rn_db_pcie_addr: tx ring PCIE doorbell address
- * @is_evt_rn_db_pcie_addr: event ring PCIE doorbell address
  */
 struct ipa_wdi_ul_params_smmu {
 	struct sg_table rdy_ring;
@@ -1169,8 +1099,6 @@ struct ipa_wdi_ul_params_smmu {
 	u32 rdy_comp_ring_size;
 	u32 *rdy_ring_rp_va;
 	u32 *rdy_comp_ring_wp_va;
-	bool is_txr_rn_db_pcie_addr;
-	bool is_evt_rn_db_pcie_addr;
 };
 
 /**
@@ -1183,8 +1111,6 @@ struct ipa_wdi_ul_params_smmu {
  * write into to trigger the copy engine
  * @ce_ring_size: Copy Engine Ring size in bytes
  * @num_tx_buffers: Number of pkt buffers allocated
- * @is_txr_rn_db_pcie_addr: tx ring PCIE doorbell address
- * @is_evt_rn_db_pcie_addr: event ring PCIE doorbell address
  */
 struct ipa_wdi_dl_params {
 	phys_addr_t comp_ring_base_pa;
@@ -1193,8 +1119,6 @@ struct ipa_wdi_dl_params {
 	phys_addr_t ce_door_bell_pa;
 	u32 ce_ring_size;
 	u32 num_tx_buffers;
-	bool is_txr_rn_db_pcie_addr;
-	bool is_evt_rn_db_pcie_addr;
 };
 
 /**
@@ -1206,8 +1130,6 @@ struct ipa_wdi_dl_params {
  * write into to trigger the copy engine
  * @ce_ring_size: Copy Engine Ring size in bytes
  * @num_tx_buffers: Number of pkt buffers allocated
- * @is_txr_rn_db_pcie_addr: tx ring PCIE doorbell address
- * @is_evt_rn_db_pcie_addr: event ring PCIE doorbell address
  */
 struct ipa_wdi_dl_params_smmu {
 	struct sg_table comp_ring;
@@ -1216,8 +1138,6 @@ struct ipa_wdi_dl_params_smmu {
 	phys_addr_t ce_door_bell_pa;
 	u32 ce_ring_size;
 	u32 num_tx_buffers;
-	bool is_txr_rn_db_pcie_addr;
-	bool is_evt_rn_db_pcie_addr;
 };
 
 /**
@@ -1301,6 +1221,32 @@ struct ipa_wdi_buffer_info {
 };
 
 /**
+ * struct  ipa_wdi_bw_info - address info of a WLAN allocated buffer
+ * @threshold: throughput wants to be monitored
+ * @num: number of threshold entries
+ * @stop: true to stop monitoring
+ *
+ * IPA driver will create/release IOMMU mapping in IPA SMMU from iova->pa
+ */
+struct ipa_wdi_bw_info {
+	uint64_t threshold[IPA_BW_THRESHOLD_MAX];
+	int num;
+	bool stop;
+};
+
+/**
+ * struct  ipa_wdi_tx_info - sw tx info from WLAN
+ * @sta_tx: sw tx stats on sta interface
+ * @ap_tx: sw tx stats on ap interface
+ *
+ * IPA driver will create/release IOMMU mapping in IPA SMMU from iova->pa
+ */
+struct ipa_wdi_tx_info {
+	uint64_t sta_tx;
+	uint64_t ap_tx;
+};
+
+/**
  * struct ipa_gsi_ep_config - IPA GSI endpoint configurations
  *
  * @ipa_ep_num: IPA EP pipe number
@@ -1340,6 +1286,7 @@ struct ipa_tz_unlock_reg_info {
 enum ipa_smmu_client_type {
 	IPA_SMMU_WLAN_CLIENT,
 	IPA_SMMU_AP_CLIENT,
+	IPA_SMMU_WIGIG_CLIENT,
 	IPA_SMMU_CLIENT_MAX
 };
 
@@ -1349,118 +1296,15 @@ struct ipa_smmu_in_params {
 
 /**
  * struct  ipa_smmu_out_params - information provided to IPA client
- * @ipa_smmu_s1_enable: IPA S1 SMMU enable/disable status
+ * @smmu_enable: IPA S1 SMMU enable/disable status
+ * @shared_cb: is client CB shared (mappings should be done by client only)
  */
 struct ipa_smmu_out_params {
 	bool smmu_enable;
+	bool shared_cb;
 };
-
-struct iphdr_rsv {
-	struct iphdr ipv4_temp;  /* 20 bytes */
-	uint32_t rsv1;
-	uint32_t rsv2;
-	uint32_t rsv3;
-	uint32_t rsv4;
-	uint32_t rsv5;
-} __packed;
-
-union ip_hdr_temp {
-	struct iphdr_rsv ipv4_rsv;	/* 40 bytes */
-	struct ipv6hdr ipv6_temp;	/* 40 bytes */
-} __packed;
-
-struct ipa_socksv5_uc_tmpl {
-	uint16_t cmd_id;
-	uint16_t rsv;
-	uint32_t cmd_param;
-	uint16_t pkt_count;
-	uint16_t rsv2;
-	uint32_t byte_count;
-	union ip_hdr_temp ip_hdr;
-	/* 2B src/dst port */
-	uint16_t src_port;
-	uint16_t dst_port;
-
-	/* attribute mask */
-	uint32_t ipa_sockv5_mask;
-
-	/* reqquired update 4B/4B Seq/Ack/SACK */
-	uint32_t out_irs;
-	uint32_t out_iss;
-	uint32_t in_irs;
-	uint32_t in_iss;
-
-	/* option 10B: time-stamp */
-	uint32_t out_ircv_tsval;
-	uint32_t in_ircv_tsecr;
-	uint32_t out_ircv_tsecr;
-	uint32_t in_ircv_tsval;
-
-	/* option 2B: window-scaling/dynamic */
-	uint16_t in_isnd_wscale:4;
-	uint16_t out_isnd_wscale:4;
-	uint16_t in_ircv_wscale:4;
-	uint16_t out_ircv_wscale:4;
-	uint16_t MAX_WINDOW_SIZE;
-	/* 11*4 + 40 bytes = 84 bytes */
-	uint32_t rsv3;
-	uint32_t rsv4;
-	uint32_t rsv5;
-	uint32_t rsv6;
-	uint32_t rsv7;
-	uint32_t rsv8;
-	uint32_t rsv9;
-} __packed;
-/*reserve 16 bytes : 16 bytes+ 40 bytes + 44 bytes = 100 bytes (28 bytes left)*/
-
-struct ipa_socksv5_info {
-	/* ipa-uc info */
-	struct ipa_socksv5_uc_tmpl ul_out;
-	struct ipa_socksv5_uc_tmpl dl_out;
-
-	/* ipacm info */
-	struct ipacm_socksv5_info ul_in;
-	struct ipacm_socksv5_info dl_in;
-
-	/* output: handle (index) */
-	uint16_t handle;
-};
-
-struct ipa_ipv6_nat_uc_tmpl {
-	uint16_t cmd_id;
-	uint16_t rsv;
-	uint32_t cmd_param;
-	uint16_t pkt_count;
-	uint16_t rsv2;
-	uint32_t byte_count;
-	uint64_t private_address_lsb;
-	uint64_t private_address_msb;
-	uint64_t public_address_lsb;
-	uint64_t public_address_msb;
-	uint16_t private_port;
-	uint16_t public_port;
-	uint32_t rsv3;
-	uint64_t rsv4;
-	uint64_t rsv5;
-	uint64_t rsv6;
-	uint64_t rsv7;
-	uint64_t rsv8;
-	uint64_t rsv9;
-	uint64_t rsv10;
-	uint64_t rsv11;
-	uint64_t rsv12;
-} __packed;
-
-
 
 #if defined CONFIG_IPA || defined CONFIG_IPA3
-
-/*
- * Connect / Disconnect
- */
-int ipa_connect(const struct ipa_connect_params *in, struct ipa_sps_params *sps,
-		u32 *clnt_hdl);
-int ipa_disconnect(u32 clnt_hdl);
 
 /*
  * Resume / Suspend
@@ -1670,6 +1514,8 @@ int ipa_disable_wdi_pipe(u32 clnt_hdl);
 int ipa_resume_wdi_pipe(u32 clnt_hdl);
 int ipa_suspend_wdi_pipe(u32 clnt_hdl);
 int ipa_get_wdi_stats(struct IpaHwStatsWDIInfoData_t *stats);
+int ipa_uc_bw_monitor(struct ipa_wdi_bw_info *info);
+int ipa_set_wlan_tx_info(struct ipa_wdi_tx_info *info);
 u16 ipa_get_smem_restr_bytes(void);
 int ipa_broadcast_wdi_quota_reach_ind(uint32_t fid,
 		uint64_t num_bytes);
@@ -1886,31 +1732,7 @@ int ipa_is_vlan_mode(enum ipa_vlan_ifaces iface, bool *res);
  * ipa_get_lan_rx_napi - returns true if NAPI is enabled in the LAN RX dp
  */
 bool ipa_get_lan_rx_napi(void);
-
-/*
- * ipa_add_socksv5_conn - add socksv5 info to ipa driver
- */
-int ipa_add_socksv5_conn(struct ipa_socksv5_info *info);
-
-/*
- * ipa_del_socksv5_conn - del socksv5 info to ipa driver
- */
-int ipa_del_socksv5_conn(uint32_t handle);
-
 #else /* (CONFIG_IPA || CONFIG_IPA3) */
-
-/* low-level IPA client Connect / Disconnect */
-
-static inline int ipa_connect(const struct ipa_connect_params *in,
-	struct ipa_sps_params *sps, u32 *clnt_hdl)
-{
-	return -EPERM;
-}
-
-static inline int ipa_disconnect(u32 clnt_hdl)
-{
-	return -EPERM;
-}
 
 /*
  * Resume / Suspend
@@ -2642,6 +2464,16 @@ static inline int ipa_get_wdi_stats(struct IpaHwStatsWDIInfoData_t *stats)
 	return -EPERM;
 }
 
+static inline int ipa_uc_bw_monitor(struct ipa_wdi_bw_info *info)
+{
+	return -EPERM;
+}
+
+static inline int ipa_set_wlan_tx_info(struct ipa_wdi_tx_info *info)
+{
+	return -EPERM;
+}
+
 static inline int ipa_get_ep_mapping(enum ipa_client_type client)
 {
 	return -EPERM;
@@ -2713,8 +2545,7 @@ static inline int ipa_release_wdi_mapping(u32 num_buffers,
 	return -EINVAL;
 }
 
-static inline int ipa_disable_apps_wan_cons_deaggr(uint32_t agg_size,
-		uint32_t agg_count)
+static inline int ipa_disable_apps_wan_cons_deaggr(void)
 {
 	return -EINVAL;
 }
@@ -2760,7 +2591,6 @@ static inline int ipa_uc_debug_stats_alloc(
 {
 	return -EPERM;
 }
-
 static inline int ipa_uc_debug_stats_dealloc(uint32_t protocol)
 {
 	return -EPERM;
@@ -2781,15 +2611,6 @@ static inline bool ipa_get_lan_rx_napi(void)
 	return false;
 }
 
-static inline int ipa_add_socksv5_conn(struct ipa_socksv5_info *info)
-{
-	return -EPERM;
-}
-
-static inline int ipa_del_socksv5_conn(uint32_t handle)
-{
-	return -EPERM;
-}
 #endif /* (CONFIG_IPA || CONFIG_IPA3) */
 
 #endif /* _IPA_H_ */

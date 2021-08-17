@@ -1,15 +1,7 @@
-/* Copyright (c) 2011-2017, 2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2011-2018, The Linux Foundation. All rights reserved.
  */
-
 /* Bus-Access-Manager (BAM) Hardware manager functions API. */
 
 #ifndef _BAM_H_
@@ -83,7 +75,6 @@ struct bam_pipe_parameters {
 	u32 peer_pipe;
 	phys_addr_t data_base;	/* Physical address of data FIFO */
 	u32 data_size;	/* Size (bytes) of data FIFO */
-	bool dummy_peer;
 };
 
 /**

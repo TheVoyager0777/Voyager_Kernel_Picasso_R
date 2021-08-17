@@ -1,15 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
- * Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2012-2014, 2018 The Linux Foundation. All rights reserved.
  * Copyright (c) 2017, Linaro Ltd.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 #ifndef __QMI_HELPERS_H__
 #define __QMI_HELPERS_H__
@@ -19,8 +11,9 @@
 #include <linux/list.h>
 #include <linux/qrtr.h>
 #include <linux/types.h>
-#include <linux/mutex.h>
 #include <linux/workqueue.h>
+
+struct socket;
 
 /**
  * qmi_header - wireformat header of QMI messages
@@ -67,7 +60,7 @@ enum qmi_array_type {
  * @data_type:	Data type of this element.
  * @elem_len:	Array length of this element, if an array.
  * @elem_size:	Size of a single instance of this data type.
- * @is_array:	Array type of this element.
+ * @array_type:	Array type of this element.
  * @tlv_type:	QMI message specific type to identify which element
  *		is present in an incoming message.
  * @offset:	Specifies the offset of the first instance of this
@@ -79,7 +72,7 @@ struct qmi_elem_info {
 	enum qmi_elem_type data_type;
 	u32 elem_len;
 	u32 elem_size;
-	enum qmi_array_type is_array;
+	enum qmi_array_type array_type;
 	u8 tlv_type;
 	u32 offset;
 	struct qmi_elem_info *ei_array;
@@ -94,6 +87,7 @@ struct qmi_elem_info {
 #define QMI_ERR_INTERNAL_V01			3
 #define QMI_ERR_CLIENT_IDS_EXHAUSTED_V01	5
 #define QMI_ERR_INVALID_ID_V01			41
+#define QMI_ERR_NETWORK_NOT_READY_V01		53
 #define QMI_ERR_ENCODING_V01			58
 #define QMI_ERR_DISABLED_V01			69
 #define QMI_ERR_INCOMPATIBLE_STATE_V01		90
@@ -160,7 +154,6 @@ struct qmi_ops {
 	void (*del_client)(struct qmi_handle *qmi,
 			   unsigned int node, unsigned int port);
 };
-
 
 /**
  * struct qmi_txn - transaction context
@@ -240,7 +233,7 @@ struct qmi_handle {
 	struct idr txns;
 	struct mutex txn_lock;
 
-	struct qmi_msg_handler *handlers;
+	const struct qmi_msg_handler *handlers;
 };
 
 int qmi_add_lookup(struct qmi_handle *qmi, unsigned int service,
@@ -249,7 +242,8 @@ int qmi_add_server(struct qmi_handle *qmi, unsigned int service,
 		   unsigned int version, unsigned int instance);
 
 int qmi_handle_init(struct qmi_handle *qmi, size_t max_msg_len,
-		    struct qmi_ops *ops, struct qmi_msg_handler *handlers);
+		    const struct qmi_ops *ops,
+		    const struct qmi_msg_handler *handlers);
 void qmi_handle_release(struct qmi_handle *qmi);
 
 ssize_t qmi_send_request(struct qmi_handle *qmi, struct sockaddr_qrtr *sq,

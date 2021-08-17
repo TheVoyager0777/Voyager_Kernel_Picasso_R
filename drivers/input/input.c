@@ -31,6 +31,9 @@
 #ifdef CONFIG_LAST_TOUCH_EVENTS
 #include <linux/rtc.h>
 #endif
+#ifdef CONFIG_TOUCH_COUNT_DUMP
+#include <linux/input/touch_common_info.h>
+#endif
 #include "input-compat.h"
 
 MODULE_AUTHOR("Vojtech Pavlik <vojtech@suse.cz>");
@@ -51,7 +54,9 @@ static LIST_HEAD(input_handler_list);
  * input handlers.
  */
 static DEFINE_MUTEX(input_mutex);
+
 static const struct input_value input_value_sync = { EV_SYN, SYN_REPORT, 1 };
+
 #ifdef CONFIG_TOUCH_COUNT_DUMP
 static struct touch_event_info *touch_info;
 #endif
@@ -66,6 +71,8 @@ static int input_device_is_touch(struct input_dev *input_dev)
 static inline void touch_press_release_events_collect(struct input_dev *dev,
 		 unsigned int type, unsigned int code, int value)
 {
+#ifdef CONFIG_TOUCH_COUNT_DUMP
+#endif
 	struct touch_event *touch_event_buf;
 	struct touch_event_info *touch_events;
 
@@ -109,9 +116,6 @@ static inline void touch_press_release_events_collect(struct input_dev *dev,
 			if (value == 0) {
 				if (touch_events->touch_is_pressed) {
 					touch_events->touch_is_pressed = false;
-#ifdef CONFIG_TOUCH_COUNT_DUMP
-					touch_events->click_num++;
-#endif
 				}
 				touch_events->finger_bitmap = 0;
 			}
@@ -122,6 +126,7 @@ static inline void touch_press_release_events_collect(struct input_dev *dev,
 	return;
 }
 #endif
+extern void sde_crtc_touch_notify(void);
 
 static inline int is_event_supported(unsigned int code,
 				     unsigned long *bm, unsigned int max)
@@ -149,7 +154,7 @@ static void input_start_autorepeat(struct input_dev *dev, int code)
 {
 	if (test_bit(EV_REP, dev->evbit) &&
 	    dev->rep[REP_PERIOD] && dev->rep[REP_DELAY] &&
-	    dev->timer.data) {
+	    dev->timer.function) {
 		dev->repeat_key = code;
 		mod_timer(&dev->timer,
 			  jiffies + msecs_to_jiffies(dev->rep[REP_DELAY]));
@@ -252,9 +257,9 @@ static void input_pass_event(struct input_dev *dev,
  * dev->event_lock here to avoid racing with input_event
  * which may cause keys get "stuck".
  */
-static void input_repeat_key(unsigned long data)
+static void input_repeat_key(struct timer_list *t)
 {
-	struct input_dev *dev = (void *) data;
+	struct input_dev *dev = from_timer(dev, t, timer);
 	unsigned long flags;
 
 	spin_lock_irqsave(&dev->event_lock, flags);
@@ -485,6 +490,8 @@ static void input_handle_event(struct input_dev *dev,
 		input_pass_values(dev, dev->vals, dev->num_vals);
 		dev->num_vals = 0;
 	}
+
+	sde_crtc_touch_notify();
 
 }
 
@@ -1145,12 +1152,12 @@ static inline void input_wakeup_procfs_readers(void)
 	wake_up(&input_devices_poll_wait);
 }
 
-static unsigned int input_proc_devices_poll(struct file *file, poll_table *wait)
+static __poll_t input_proc_devices_poll(struct file *file, poll_table *wait)
 {
 	poll_wait(file, &input_devices_poll_wait, wait);
 	if (file->f_version != input_devices_state) {
 		file->f_version = input_devices_state;
-		return POLLIN | POLLRDNORM;
+		return EPOLLIN | EPOLLRDNORM;
 	}
 
 	return 0;
@@ -1427,9 +1434,8 @@ static ssize_t input_touch_count_write(struct file *file, const char __user *buf
 
 	if (sscanf(tmp, "%llu\n", &touch_info->click_num) != 1)
 		return -EINVAL;
-	else {
+	else
 		return count;
-	}
 }
 
 static const struct file_operations input_touch_count_fileops = {
@@ -1992,7 +1998,7 @@ struct input_dev *input_allocate_device(void)
 		device_initialize(&dev->dev);
 		mutex_init(&dev->mutex);
 		spin_lock_init(&dev->event_lock);
-		init_timer(&dev->timer);
+		timer_setup(&dev->timer, NULL, 0);
 		INIT_LIST_HEAD(&dev->h_list);
 		INIT_LIST_HEAD(&dev->node);
 
@@ -2109,16 +2115,15 @@ EXPORT_SYMBOL(input_free_device);
  * call this function as soon as a timestamp is acquired ensuring
  * clock conversions in input_set_timestamp are done correctly.
  *
- * The system entering a suspend between timestamp acquisition and
+ * The system entering suspend state between timestamp acquisition and
  * calling input_set_timestamp can result in inaccurate conversions.
- *
  */
 void input_set_timestamp(struct input_dev *dev, ktime_t timestamp)
 {
 	dev->timestamp[INPUT_CLK_MONO] = timestamp;
 	dev->timestamp[INPUT_CLK_REAL] = ktime_mono_to_real(timestamp);
-	dev->timestamp[INPUT_CLK_BOOT] = ktime_mono_to_any(
-		timestamp, TK_OFFS_BOOT);
+	dev->timestamp[INPUT_CLK_BOOT] = ktime_mono_to_any(timestamp,
+							   TK_OFFS_BOOT);
 }
 EXPORT_SYMBOL(input_set_timestamp);
 
@@ -2192,8 +2197,7 @@ void input_set_capability(struct input_dev *dev, unsigned int type, unsigned int
 		break;
 
 	default:
-		pr_err("input_set_capability: unknown type %u (code %u)\n",
-		       type, code);
+		pr_err("%s: unknown type %u (code %u)\n", __func__, type, code);
 		dump_stack();
 		return;
 	}
@@ -2296,7 +2300,6 @@ static void devm_input_device_unregister(struct device *dev, void *res)
  */
 void input_enable_softrepeat(struct input_dev *dev, int delay, int period)
 {
-	dev->timer.data = (unsigned long) dev;
 	dev->timer.function = input_repeat_key;
 	dev->rep[REP_DELAY] = delay;
 	dev->rep[REP_PERIOD] = period;
@@ -2421,10 +2424,7 @@ int input_register_device(struct input_dev *dev)
 		dev->touch_events->touch_event_num = 0;
 		dev->touch_events->touch_slot = 0;
 		dev->touch_events->finger_bitmap = 0;
-#ifdef CONFIG_TOUCH_COUNT_DUMP
 		touch_info = dev->touch_events;
-#endif
-
 	}
 #endif
 	return 0;

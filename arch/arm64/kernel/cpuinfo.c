@@ -19,6 +19,7 @@
 #include <asm/cpu.h>
 #include <asm/cputype.h>
 #include <asm/cpufeature.h>
+#include <asm/fpsimd.h>
 #include <asm/elf.h>
 
 #include <linux/bitops.h>
@@ -332,8 +333,7 @@ static void cpuinfo_detect_icache_policy(struct cpuinfo_arm64 *info)
 		set_bit(ICACHEF_ALIASING, &__icache_flags);
 	}
 
-	pr_debug("Detected %s I-cache on CPU%d\n", icache_policy_str[l1ip],
-			cpu);
+	pr_info("Detected %s I-cache on CPU%d\n", icache_policy_str[l1ip], cpu);
 }
 
 static void __cpuinfo_store_cpu(struct cpuinfo_arm64 *info)
@@ -353,6 +353,7 @@ static void __cpuinfo_store_cpu(struct cpuinfo_arm64 *info)
 	info->reg_id_aa64mmfr2 = read_cpuid(ID_AA64MMFR2_EL1);
 	info->reg_id_aa64pfr0 = read_cpuid(ID_AA64PFR0_EL1);
 	info->reg_id_aa64pfr1 = read_cpuid(ID_AA64PFR1_EL1);
+	info->reg_id_aa64zfr0 = read_cpuid(ID_AA64ZFR0_EL1);
 
 	/* Update the 32bit ID registers only if AArch32 is implemented */
 	if (id_aa64pfr0_32bit_el0(info->reg_id_aa64pfr0)) {
@@ -375,6 +376,10 @@ static void __cpuinfo_store_cpu(struct cpuinfo_arm64 *info)
 		info->reg_mvfr2 = read_cpuid(MVFR2_EL1);
 	}
 
+	if (IS_ENABLED(CONFIG_ARM64_SVE) &&
+	    id_aa64pfr0_sve(info->reg_id_aa64pfr0))
+		info->reg_zcr = read_zcr_features();
+
 	cpuinfo_detect_icache_policy(info);
 }
 
@@ -387,7 +392,7 @@ void cpuinfo_store_cpu(void)
 
 void __init cpuinfo_store_boot_cpu(void)
 {
-	struct cpuinfo_arm64 *info = &per_cpu(cpu_data, logical_bootcpu_id);
+	struct cpuinfo_arm64 *info = &per_cpu(cpu_data, 0);
 	__cpuinfo_store_cpu(info);
 
 	boot_cpu_data = *info;

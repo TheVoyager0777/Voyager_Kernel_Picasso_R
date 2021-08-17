@@ -1,14 +1,8 @@
-/* Copyright (c) 2011-2017, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2011-2019, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
+#define DEBUG
 #include <linux/bitops.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
@@ -27,13 +21,13 @@
 #include <linux/gpio.h>
 #include <linux/of_gpio.h>
 #include <linux/mfd/wcd9xxx/wcd9xxx_registers.h>
-#include "core.h"
-#include "wcd9xxx-irq.h"
+#include <asoc/core.h>
+#include <asoc/wcd9xxx-irq.h>
 
 #define BYTE_BIT_MASK(nr)		(1UL << ((nr) % BITS_PER_BYTE))
 #define BIT_BYTE(nr)			((nr) / BITS_PER_BYTE)
 
-#define WCD9XXX_SYSTEM_RESUME_TIMEOUT_MS 100
+#define WCD9XXX_SYSTEM_RESUME_TIMEOUT_MS 1200
 
 #ifndef NO_IRQ
 #define NO_IRQ	(-1)
@@ -533,7 +527,7 @@ static int wcd9xxx_irq_setup_downstream_irq(
 int wcd9xxx_irq_init(struct wcd9xxx_core_resource *wcd9xxx_res)
 {
 	int i, ret;
-	u8 irq_level[wcd9xxx_res->num_irq_regs];
+	u8 *irq_level = NULL;
 	struct irq_domain *domain;
 	struct device_node *pnode;
 
@@ -563,9 +557,7 @@ int wcd9xxx_irq_init(struct wcd9xxx_core_resource *wcd9xxx_res)
 	ret = wcd9xxx_irq_setup_downstream_irq(wcd9xxx_res);
 	if (ret) {
 		pr_err("%s: Failed to setup downstream IRQ\n", __func__);
-		wcd9xxx_irq_put_upstream_irq(wcd9xxx_res);
-		mutex_destroy(&wcd9xxx_res->irq_lock);
-		mutex_destroy(&wcd9xxx_res->nested_irq_lock);
+		goto fail_irq_level;
 		return ret;
 	}
 
@@ -573,7 +565,11 @@ int wcd9xxx_irq_init(struct wcd9xxx_core_resource *wcd9xxx_res)
 	wcd9xxx_res->irq_level_high[0] = true;
 
 	/* mask all the interrupts */
-	memset(irq_level, 0, wcd9xxx_res->num_irq_regs);
+	irq_level = kzalloc(wcd9xxx_res->num_irq_regs, GFP_KERNEL);
+	if (!irq_level) {
+		ret = -ENOMEM;
+		goto fail_irq_level;
+	}
 	for (i = 0; i < wcd9xxx_res->num_irqs; i++) {
 		wcd9xxx_res->irq_masks_cur[BIT_BYTE(i)] |= BYTE_BIT_MASK(i);
 		wcd9xxx_res->irq_masks_cache[BIT_BYTE(i)] |= BYTE_BIT_MASK(i);
@@ -618,11 +614,14 @@ int wcd9xxx_irq_init(struct wcd9xxx_core_resource *wcd9xxx_res)
 	if (ret)
 		goto fail_irq_init;
 
+	kfree(irq_level);
 	return ret;
 
 fail_irq_init:
 	dev_err(wcd9xxx_res->dev,
 			"%s: Failed to init wcd9xxx irq\n", __func__);
+	kfree(irq_level);
+fail_irq_level:
 	wcd9xxx_irq_put_upstream_irq(wcd9xxx_res);
 	mutex_destroy(&wcd9xxx_res->irq_lock);
 	mutex_destroy(&wcd9xxx_res->nested_irq_lock);
@@ -881,6 +880,7 @@ static struct platform_driver wcd9xxx_irq_driver = {
 		.name = "wcd9xxx_intc",
 		.owner = THIS_MODULE,
 		.of_match_table = of_match_ptr(of_match),
+		.suppress_bind_attrs = true,
 	},
 };
 

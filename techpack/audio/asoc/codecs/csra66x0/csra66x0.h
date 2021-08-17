@@ -1,14 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #ifndef _CSRA66X0_H
@@ -206,7 +199,10 @@
 /* RESERVED (CSRA66X0_BASE+0x00C6) */
 /* ... */
 /* RESERVED (CSRA66X0_BASE+0x00FF) */
-#define CSRA66X0_MAX_REGISTER_ADDR  CSRA66X0_DCA_FREEZE_CTRL
+#define CSRA66X0_MAX_REGISTER_ADDR CSRA66X0_DCA_FREEZE_CTRL
+
+#define CSRA66X0_COEFF_BASE     0xD000
+#define CSRA66X0_MAX_COEFF_ADDR 0xD6DF
 
 #define EXPECTED_CSRA66X0_CHIP_ID 0x39
 
@@ -216,9 +212,13 @@
 #define SPK_VOLUME_LSB_MSK 0x00FF
 #define SPK_VOLUME_MSB_MSK 0x0100
 
-#define CONFIG_STATE    0x0
-#define RUN_STATE       0x1
-#define STDBY_STATE     0x2
+#define SET_CONFIG_STATE    0x0
+#define SET_RUN_STATE       0x1
+#define SET_STDBY_STATE     0x2
+
+#define CONFIG_STATE_ID 0x3
+#define WAIT_FOR_CONFIG_STATE_TIMEOUT_MS 2000
+#define SYSFS_RESET 1
 
 #define FAULT_STATUS_INTERNAL       0x01
 #define FAULT_STATUS_OTP_INTEGRITY  0x02
@@ -227,4 +227,6 @@
 #define FAULT_STATUS_TEMP           0x10
 #define FAULT_STATUS_PROTECT        0x20
 
+
+void csra66x0_hw_free_mute(struct snd_soc_component *component);
 #endif /* _CSRA66X0_H */

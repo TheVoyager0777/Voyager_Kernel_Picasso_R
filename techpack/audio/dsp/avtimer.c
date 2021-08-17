@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2012-2015, 2017-2018 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2012-2015, 2017-2019 The Linux Foundation. All rights reserved.
  */
 
 #include <linux/kernel.h>
@@ -123,7 +115,7 @@ static int32_t aprv2_core_fn_q(struct apr_client_data *data, void *priv)
 		avtimer.core_handle_q = NULL;
 		avtimer.avtimer_open_cnt = 0;
 		atomic_set(&avtimer.adsp_ready, 0);
-		schedule_delayed_work(&avtimer.ssr_dwork,
+		queue_delayed_work(system_power_efficient_wq, &avtimer.ssr_dwork,
 				  msecs_to_jiffies(SSR_WAKETIME));
 		break;
 	}
@@ -279,6 +271,7 @@ int avcs_core_disable_power_collapse(int enable)
 				rc = avcs_core_disable_avtimer(
 				avtimer.timer_handle);
 				avtimer.timer_handle = 0;
+				atomic_set(&avtimer.adsp_ready, 0);
 			}
 		}
 	}
@@ -297,7 +290,7 @@ static void reset_work(struct work_struct *work)
 	}
 	pr_debug("%s:Q6 not ready-retry after sometime\n", __func__);
 	if (--avtimer.num_retries > 0) {
-		schedule_delayed_work(&avtimer.ssr_dwork,
+		queue_delayed_work(system_power_efficient_wq, &avtimer.ssr_dwork,
 			  msecs_to_jiffies(Q6_READY_RETRY));
 	} else {
 		pr_err("%s: Q6 failed responding after multiple retries\n",
@@ -328,6 +321,66 @@ int avcs_core_query_timer(uint64_t *avtimer_tick)
 	return 0;
 }
 EXPORT_SYMBOL(avcs_core_query_timer);
+
+/*
+ * avcs_core_query_timer_offset:
+ *       derive offset between system clock & avtimer clock
+ *
+ * @ avoffset: offset between system clock & avtimer clock
+ * @ clock_id: clock id to get the system time
+ *
+ */
+int avcs_core_query_timer_offset(int64_t *av_offset, int32_t clock_id)
+{
+	uint32_t avtimer_msw = 0, avtimer_lsw = 0;
+	uint64_t avtimer_tick_temp, avtimer_tick, sys_time = 0;
+	struct timespec ts;
+
+	if (!atomic_read(&avtimer.adsp_ready)) {
+		pr_debug("%s:In SSR, return\n", __func__);
+		return -ENETRESET;
+	}
+
+	if ((avtimer.p_avtimer_lsw == NULL) ||
+	    (avtimer.p_avtimer_msw == NULL)) {
+		return -EINVAL;
+	}
+
+	memset(&ts, 0, sizeof(struct timespec));
+	avtimer_lsw = ioread32(avtimer.p_avtimer_lsw);
+	avtimer_msw = ioread32(avtimer.p_avtimer_msw);
+
+	switch (clock_id) {
+	case CLOCK_MONOTONIC_RAW:
+		getrawmonotonic(&ts);
+		break;
+	case CLOCK_BOOTTIME:
+		get_monotonic_boottime(&ts);
+		break;
+	case CLOCK_MONOTONIC:
+		ktime_get_ts(&ts);
+		break;
+	case CLOCK_REALTIME:
+		ktime_get_real_ts(&ts);
+		break;
+	default:
+		pr_debug("%s: unsupported clock id %d\n", __func__, clock_id);
+		return -EINVAL;
+	}
+
+	sys_time = ts.tv_sec * 1000000LL + div64_u64(ts.tv_nsec, 1000);
+	avtimer_tick_temp = (uint64_t)((uint64_t)avtimer_msw << 32) |
+						 avtimer_lsw;
+
+	avtimer_tick = mul_u64_u32_div(avtimer_tick_temp, avtimer.clk_mult,
+					avtimer.clk_div);
+	*av_offset = sys_time - avtimer_tick;
+	pr_debug("%s: sys_time: %llu, offset %lld, avtimer tick %lld\n",
+		 __func__, sys_time, *av_offset, avtimer_tick);
+
+	return 0;
+}
+EXPORT_SYMBOL(avcs_core_query_timer_offset);
 
 #if IS_ENABLED(CONFIG_AVTIMER_LEGACY)
 static void avcs_set_isp_fptr(bool enable)
@@ -556,6 +609,7 @@ static struct platform_driver dev_avtimer_driver = {
 	.driver = {
 		.name = "dev_avtimer",
 		.of_match_table = avtimer_machine_of_match,
+		.suppress_bind_attrs = true,
 	},
 };
 

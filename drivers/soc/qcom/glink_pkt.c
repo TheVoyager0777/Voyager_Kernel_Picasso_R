@@ -1,14 +1,6 @@
-/* Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/platform_device.h>
@@ -173,7 +165,7 @@ static ssize_t open_timeout_show(struct device *dev,
 	return ret;
 }
 
-static DEVICE_ATTR(open_timeout, 0664, open_timeout_show, open_timeout_store);
+static DEVICE_ATTR_RW(open_timeout);
 
 static int glink_pkt_rpdev_probe(struct rpmsg_device *rpdev)
 {
@@ -524,7 +516,7 @@ static int glink_pkt_tiocmset(struct glink_pkt_device *gpdev, unsigned int cmd,
 	to_smd_signal(val);
 	ret = rpmsg_get_sigs(gpdev->rpdev->ept, &lsigs, &rsigs);
 	if (ret < 0) {
-		GLINK_PKT_ERR("Get signals failed[%d]\n", ret);
+		GLINK_PKT_ERR("%s: Get signals failed[%d]\n", __func__, ret);
 		return ret;
 	}
 	switch (cmd) {
@@ -665,7 +657,7 @@ static int glink_pkt_parse_devicetree(struct device_node *np,
 	return 0;
 
 error:
-	GLINK_PKT_ERR("missing key: %s\n", key);
+	GLINK_PKT_ERR("%s: missing key: %s\n", __func__, key);
 	return ret;
 }
 
@@ -832,8 +824,8 @@ static int glink_pkt_probe(struct platform_device *pdev)
 	}
 	glink_pkt_class = class_create(THIS_MODULE, "glinkpkt");
 	if (IS_ERR(glink_pkt_class)) {
-		GLINK_PKT_ERR("class_create failed ret:%ld\n",
-			      PTR_ERR(glink_pkt_class));
+		ret = PTR_ERR(glink_pkt_class);
+		GLINK_PKT_ERR("class_create failed ret:%d\n", ret);
 		goto error_deinit;
 	}
 
@@ -874,7 +866,8 @@ static int __init glink_pkt_init(void)
 
 	ret = platform_driver_register(&glink_pkt_driver);
 	if (ret) {
-		GLINK_PKT_ERR("glink_pkt register failed %d\n", ret);
+		GLINK_PKT_ERR("%s: glink_pkt register failed %d\n",
+			__func__, ret);
 		return ret;
 	}
 	glink_pkt_ilctxt = ipc_log_context_create(GLINK_PKT_IPC_LOG_PAGE_CNT,

@@ -1,13 +1,6 @@
-/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/init.h>
@@ -339,8 +332,8 @@ int sdmx_open_session(int *session_handle)
 	/* Get and print the app version */
 	version_ret = sdmx_get_version(*session_handle, &version);
 	if (version_ret == SDMX_SUCCESS)
-		pr_info("%s: TZ SDMX version is %x.%x\n", __func__,
-			version >> 8, version & 0xFF);
+		pr_info("%s: TZ SDMX version is %x.%x\n", version >> 8,
+			__func__, version & 0xFF);
 	else
 		pr_err("%s: Error reading TZ SDMX version\n", __func__);
 

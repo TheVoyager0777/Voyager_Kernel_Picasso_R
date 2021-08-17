@@ -1,18 +1,10 @@
-/* Copyright (c) 2012-2017, 2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
  */
 #include <linux/slab.h>
 #include <linux/mutex.h>
 #include <linux/mfd/wcd9xxx/wcd9xxx_registers.h>
-#include "wcd9xxx-slimslave.h"
+#include <asoc/wcd9xxx-slimslave.h>
 
 struct wcd9xxx_slim_sch {
 	u16 rx_port_ch_reg_base;
@@ -324,27 +316,6 @@ err:
 }
 EXPORT_SYMBOL(wcd9xxx_cfg_slim_sch_rx);
 
-static void wcd9xxx_slim_tx_auto_recovery_cfg(struct wcd9xxx *wcd9xxx,
-					   u16 codec_port)
-{
-	int ret;
-
-	if (wcd9xxx->codec_type->id_major != TAVIL_MAJOR)
-		return;
-
-	ret = wcd9xxx_interface_reg_write(wcd9xxx,
-			SB_PGD_PORT_TX_OR_UR_CFG(codec_port),
-			0x02);
-	if (ret < 0)
-		pr_err("%s:auto_recovery set failure for port[%d] ret[%d]",
-			__func__, codec_port, ret);
-	else
-		pr_debug("%s: auto recovery register 0x%x value: 0x%x\n",
-			__func__, SB_PGD_PORT_TX_OR_UR_CFG(codec_port),
-			wcd9xxx_interface_reg_read(wcd9xxx,
-					SB_PGD_PORT_TX_OR_UR_CFG(codec_port)));
-}
-
 /* Enable slimbus slave device for RX path */
 int wcd9xxx_cfg_slim_sch_tx(struct wcd9xxx *wcd9xxx,
 			    struct list_head *wcd9xxx_ch_list,
@@ -396,8 +367,6 @@ int wcd9xxx_cfg_slim_sch_tx(struct wcd9xxx *wcd9xxx,
 		codec_port = tx->port;
 		pr_debug("%s: codec_port %d tx 0x%p, payload 0x%x\n",
 			 __func__, codec_port, tx, payload);
-
-		wcd9xxx_slim_tx_auto_recovery_cfg(wcd9xxx, codec_port);
 		/* write to interface device */
 		ret = wcd9xxx_interface_reg_write(wcd9xxx,
 				SB_PGD_TX_PORT_MULTI_CHANNEL_0(codec_port),

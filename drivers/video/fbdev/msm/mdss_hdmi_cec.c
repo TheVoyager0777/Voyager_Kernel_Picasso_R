@@ -1,14 +1,5 @@
-/* Copyright (c) 2010-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2010-2018, 2020, The Linux Foundation. All rights reserved. */
 
 #include <linux/io.h>
 #include <linux/list.h>
@@ -149,7 +140,7 @@ static void hdmi_cec_init_input_event(struct hdmi_cec_ctrl *cec_ctrl)
 
 	rc = input_register_device(cec_ctrl->input);
 	if (rc) {
-		DEV_ERR("%s: cec input device registeration failed\n",
+		DEV_ERR("%s: cec input device registration failed\n",
 				__func__);
 		input_free_device(cec_ctrl->input);
 		cec_ctrl->input = NULL;
@@ -333,7 +324,7 @@ bool hdmi_cec_is_wakeup_en(void *input)
 
 	if (!cec_ctrl) {
 		DEV_WARN("%s: HDMI CEC HW module not initialized.\n", __func__);
-		return 0;
+		return false;
 	}
 
 	return cec_ctrl->cec_wakeup_en;

@@ -1,13 +1,6 @@
-/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2018 - 2019, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _IPA_WDI3_H_
@@ -354,15 +347,33 @@ int ipa_wdi_release_smmu_mapping(u32 num_buffers,
  */
 int ipa_wdi_get_stats(struct IpaHwStatsWDIInfoData_t *stats);
 
+
+/**
+ * ipa_wdi_bw_monitor() - set wdi BW monitoring
+ * @info:	[inout] info blob from client populated by driver
+ *
+ * Returns:	0 on success, negative on failure
+ *
+ * @note Cannot be called from atomic context
+ *
+ */
+int ipa_wdi_bw_monitor(struct ipa_wdi_bw_info *info);
+
+/**
+ * ipa_wdi_sw_stats() - set wdi BW monitoring
+ * @info:	[inout] info blob from client populated by driver
+ *
+ * Returns:	0 on success, negative on failure
+ *
+ * @note Cannot be called from atomic context
+ *
+ */
+int ipa_wdi_sw_stats(struct ipa_wdi_tx_info *info);
+
 #else /* (CONFIG_IPA || CONFIG_IPA3) */
 
 static inline int ipa_wdi_init(struct ipa_wdi_init_in_params *in,
 	struct ipa_wdi_init_out_params *out)
-{
-	return -EPERM;
-}
-
-static inline int ipa3_get_wdi_version(void)
 {
 	return -EPERM;
 }
@@ -423,6 +434,16 @@ static inline int ipa_wdi_release_smmu_mapping(u32 num_buffers,
 }
 
 static inline int ipa_wdi_get_stats(struct IpaHwStatsWDIInfoData_t *stats)
+{
+	return -EPERM;
+}
+
+static inline int ipa_wdi_bw_monitor(struct ipa_wdi_bw_info *info)
+{
+	return -EPERM;
+}
+
+static inline int ipa_wdi_sw_stats(struct ipa_wdi_tx_info *info)
 {
 	return -EPERM;
 }

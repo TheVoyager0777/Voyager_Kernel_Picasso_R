@@ -1,15 +1,8 @@
-/* Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2014-2019, 2020, The Linux Foundation. All rights reserved.
  */
+
 /*
  * I2C controller driver for Qualcomm Technologies Inc platforms
  */
@@ -37,7 +30,7 @@
 #include <linux/msm-sps.h>
 #include <linux/msm-bus.h>
 #include <linux/msm-bus-board.h>
-#include <linux/i2c/i2c-msm-v2.h>
+#include <linux/i2c-msm-v2.h>
 
 #ifdef DEBUG
 static const enum msm_i2_debug_level DEFAULT_DBG_LVL = MSM_DBG;
@@ -659,7 +652,7 @@ static void i2c_msm_fifo_write_xfer_buf(struct i2c_msm_ctrl *ctrl)
 			int  i;
 
 			for (i = 0 ; i < len; ++i, ++p)
-				offset += snprintf(str + offset,
+				offset += scnprintf(str + offset,
 						   sizeof(str) - offset,
 						   "0x%x ", *p);
 			dev_info(ctrl->dev, "data: %s\n", str);
@@ -1598,15 +1591,15 @@ static int i2c_msm_clk_path_init_structs(struct i2c_msm_ctrl *ctrl)
 
 	i2c_msm_dbg(ctrl, MSM_PROF, "initializes path clock voting structs\n");
 
-	paths = devm_kzalloc(ctrl->dev, sizeof(*paths) * 2, GFP_KERNEL);
+	paths = kzalloc(sizeof(*paths) * 2, GFP_KERNEL);
 	if (!paths)
 		return -ENOMEM;
 
-	usecases = devm_kzalloc(ctrl->dev, sizeof(*usecases) * 2, GFP_KERNEL);
+	usecases = kzalloc(sizeof(*usecases) * 2, GFP_KERNEL);
 	if (!usecases)
 		goto path_init_err;
 
-	ctrl->rsrcs.clk_path_vote.pdata = devm_kzalloc(ctrl->dev,
+	ctrl->rsrcs.clk_path_vote.pdata = kzalloc(
 				       sizeof(*ctrl->rsrcs.clk_path_vote.pdata),
 				       GFP_KERNEL);
 	if (!ctrl->rsrcs.clk_path_vote.pdata)
@@ -1645,9 +1638,9 @@ static int i2c_msm_clk_path_init_structs(struct i2c_msm_ctrl *ctrl)
 	return 0;
 
 path_init_err:
-	devm_kfree(ctrl->dev, paths);
-	devm_kfree(ctrl->dev, usecases);
-	devm_kfree(ctrl->dev, ctrl->rsrcs.clk_path_vote.pdata);
+	kfree(paths);
+	kfree(usecases);
+	kfree(ctrl->rsrcs.clk_path_vote.pdata);
 	ctrl->rsrcs.clk_path_vote.pdata = NULL;
 	return -ENOMEM;
 }
@@ -1707,7 +1700,7 @@ static void i2c_msm_clk_path_init(struct i2c_msm_ctrl *ctrl)
 					i2c_msm_clk_path_init_structs(ctrl)) {
 		ctrl->rsrcs.clk_path_vote.mstr_id = 0;
 		return;
-	};
+	}
 
 	/* on failure try again later */
 	if (i2c_msm_clk_path_postponed_register(ctrl))
@@ -2051,7 +2044,7 @@ i2c_msm_qup_choose_mode(struct i2c_msm_ctrl *ctrl)
 		(tx_cnt_sum < fifo->output_fifo_sz)))
 		return I2C_MSM_XFER_MODE_FIFO;
 
-	if (ctrl->rsrcs.disable_dma || (rx_cnt_sum < 96 && tx_cnt_sum < 96))
+	if (ctrl->rsrcs.disable_dma)
 		return I2C_MSM_XFER_MODE_BLOCK;
 
 	return I2C_MSM_XFER_MODE_DMA;
@@ -2388,7 +2381,7 @@ i2c_msm_frmwrk_xfer(struct i2c_adapter *adap, struct i2c_msg msgs[], int num)
 		break;
 	default:
 		ret = -EINTR;
-	};
+	}
 
 	i2c_msm_prof_evnt_add(ctrl, MSM_PROF, I2C_MSM_SCAN_SUM,
 		((xfer->rx_cnt & 0xff) | ((xfer->rx_ovrhd_cnt & 0xff) << 16)),
@@ -2553,7 +2546,7 @@ static int i2c_msm_rsrcs_mem_init(struct platform_device *pdev,
 				   resource_size(ctrl->rsrcs.mem));
 	if (!ctrl->rsrcs.base) {
 		dev_err(ctrl->dev,
-			"error failed ioremap(base:0x%llx size:0x%llx\n)",
+			"error failed ioremap(base:0x%llx size:0x%llx\n)\n",
 			(u64) ctrl->rsrcs.mem->start,
 			(u64) resource_size(ctrl->rsrcs.mem));
 		release_mem_region(ctrl->rsrcs.mem->start,
@@ -2768,7 +2761,6 @@ static int i2c_msm_pm_resume(struct device *dev)
  */
 static int i2c_msm_pm_sys_suspend_noirq(struct device *dev)
 {
-	int ret = 0;
 	struct i2c_msm_ctrl *ctrl = dev_get_drvdata(dev);
 	enum i2c_msm_power_state prev_state = ctrl->pwr_state;
 
@@ -2794,7 +2786,7 @@ static int i2c_msm_pm_sys_suspend_noirq(struct device *dev)
 		pm_runtime_enable(dev);
 	}
 
-	return ret;
+	return 0;
 }
 
 /*
@@ -2989,7 +2981,6 @@ clk_err:
 	i2c_msm_rsrcs_mem_teardown(ctrl);
 mem_err:
 	dev_err(ctrl->dev, "error probe() failed with err:%d\n", ret);
-	devm_kfree(&pdev->dev, ctrl);
 	return ret;
 }
 
@@ -3027,7 +3018,6 @@ static struct platform_driver i2c_msm_driver = {
 	.remove = i2c_msm_remove,
 	.driver = {
 		.name           = "i2c-msm-v2",
-		.owner          = THIS_MODULE,
 		.pm             = &i2c_msm_pm_ops,
 		.of_match_table = i2c_msm_dt_match,
 	},
@@ -3037,7 +3027,7 @@ static int i2c_msm_init(void)
 {
 	return platform_driver_register(&i2c_msm_driver);
 }
-module_init(i2c_msm_init);
+subsys_initcall(i2c_msm_init);
 
 static void i2c_msm_exit(void)
 {

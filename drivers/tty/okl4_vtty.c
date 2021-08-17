@@ -54,6 +54,7 @@
 
 /* FIXME: Jira ticket SDK-138 - philipd. */
 #define MAX_VTTYS 8
+#define MAX_MSG_SIZE 32
 
 struct vtty_port {
 	bool exists;
@@ -413,8 +414,8 @@ static int vtty_proc_show(struct seq_file *m, void *v)
 {
 	int i;
 
-	seq_puts(m, "okl4vttyinfo:1.0 driver:1.0\n");
-	for (i = 0; i < sizeof(ports)/sizeof(ports[0]); i++) {
+    seq_puts(m, "okl4vttyinfo:1.0 driver:1.0\n");
+	for (i = 0; i < ARRAY_SIZE(ports); i++) {
 		struct vtty_port *port = &ports[i];
 
 		if (!port->exists)
@@ -425,19 +426,6 @@ static int vtty_proc_show(struct seq_file *m, void *v)
 
 	return 0;
 }
-
-static int vtty_proc_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, vtty_proc_show, NULL);
-}
-
-static const struct file_operations vtty_proc_fops = {
-	.owner		= THIS_MODULE,
-	.open		= vtty_proc_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
-};
 
 static const struct tty_operations vtty_ops = {
 	.install = vtty_install,
@@ -450,7 +438,7 @@ static const struct tty_operations vtty_ops = {
 	.chars_in_buffer = vtty_chars_in_buffer,
 	.throttle = vtty_throttle,
 	.unthrottle = vtty_unthrottle,
-	.proc_fops = &vtty_proc_fops,
+	.proc_show = vtty_proc_show,
 };
 
 static void
@@ -591,7 +579,7 @@ vtty_probe(struct platform_device *pdev)
 
 	vtty_port->pipe_tx_kcap = reg[0];
 	vtty_port->pipe_rx_kcap = reg[1];
-	vtty_port->max_msg_size = 32;
+	vtty_port->max_msg_size = MAX_MSG_SIZE;
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0) {
@@ -634,7 +622,7 @@ vtty_probe(struct platform_device *pdev)
 
 	tty_dev = tty_register_device(vtty_driver, vtty_id, &pdev->dev);
 	if (IS_ERR(tty_dev)) {
-		dev_err(&pdev->dev, "%s: can't register "DEVICE_NAME"%d: %ld",
+		dev_err(&pdev->dev, "%s: can't register "DEVICE_NAME"%d: %ld\n",
 			__func__, vtty_id, PTR_ERR(tty_dev));
 		err = PTR_ERR(tty_dev);
 		goto fail_tty_register;
@@ -700,7 +688,6 @@ MODULE_DEVICE_TABLE(of, vtty_match);
 static struct platform_driver driver = {
 	.driver = {
 		.name = DRIVER_NAME,
-		.owner = THIS_MODULE,
 		.of_match_table = vtty_match,
 	},
 	.probe		= vtty_probe,
@@ -810,7 +797,7 @@ vconsole_write(struct console *co, const char *p, unsigned count)
 {
 	struct vtty_port *port = &ports[co->index];
 	size_t bytes_remaining = count;
-	char buf[port->max_msg_size + sizeof(u32)];
+	char buf[MAX_MSG_SIZE + sizeof(u32)];
 	cycles_t last_sent_start = get_cycles();
 	static int pipe_full = 0;
 

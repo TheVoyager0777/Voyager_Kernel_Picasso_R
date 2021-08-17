@@ -1,13 +1,6 @@
-/* Copyright (c) 2011-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2016-2020, The Linux Foundation. All rights reserved.
  */
 
 #ifndef _SLIM_MSM_H
@@ -266,7 +259,6 @@ struct msm_slim_iommu {
 	struct device			*cb_dev;
 	struct dma_iommu_mapping	*iommu_map;
 	bool				s1_bypass;
-	bool				atomic_ctx;
 };
 
 struct msm_slim_ctrl {
@@ -275,6 +267,11 @@ struct msm_slim_ctrl {
 	struct device		*dev;
 	struct msm_slim_iommu	iommu_desc;
 	void __iomem		*base;
+	struct msm_slim_sps_bam	lpass;
+	struct resource		*lpass_mem;
+	u32			lpass_phy_base;
+	void __iomem		*lpass_virt_base;
+	bool			lpass_mem_usage;
 	struct resource		*slew_mem;
 	struct resource		*bam_mem;
 	u32			curr_bw;
@@ -327,6 +324,8 @@ struct msm_slim_ctrl {
 	u32			current_rx_buf[10];
 	int			current_count;
 	atomic_t		ssr_in_progress;
+	atomic_t		init_in_progress;
+	struct completion	qmi_up;
 };
 
 struct msm_sat_chan {

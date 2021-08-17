@@ -1,13 +1,5 @@
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/init.h>
@@ -27,6 +19,8 @@
 #include <asm/dma.h>
 #include <dsp/msm_audio_ion.h>
 #include <dsp/q6voice.h>
+
+#define DRV_NAME "msm-pcm-host-voice-v2"
 
 #define HPCM_MAX_Q_LEN 2
 #define HPCM_MIN_VOC_PKT_SIZE 320
@@ -1443,15 +1437,16 @@ static int msm_asoc_pcm_new(struct snd_soc_pcm_runtime *rtd)
 	return 0;
 }
 
-static int msm_pcm_hpcm_probe(struct snd_soc_platform *platform)
+static int msm_pcm_hpcm_probe(struct snd_soc_component *component)
 {
-	snd_soc_add_platform_controls(platform, msm_hpcm_controls,
+	snd_soc_add_component_controls(component, msm_hpcm_controls,
 				ARRAY_SIZE(msm_hpcm_controls));
 
 	return 0;
 }
 
-static struct snd_soc_platform_driver msm_soc_platform = {
+static struct snd_soc_component_driver msm_soc_component = {
+	.name		= DRV_NAME,
 	.ops		= &msm_pcm_ops,
 	.pcm_new	= msm_asoc_pcm_new,
 	.probe		= msm_pcm_hpcm_probe,
@@ -1461,12 +1456,13 @@ static int msm_pcm_probe(struct platform_device *pdev)
 {
 
 	pr_info("%s: dev name %s\n", __func__, dev_name(&pdev->dev));
-	return snd_soc_register_platform(&pdev->dev, &msm_soc_platform);
+	return snd_soc_register_component(&pdev->dev, &msm_soc_component,
+					  NULL, 0);
 }
 
 static int msm_pcm_remove(struct platform_device *pdev)
 {
-	snd_soc_unregister_platform(&pdev->dev);
+	snd_soc_unregister_component(&pdev->dev);
 	return 0;
 }
 
@@ -1481,6 +1477,7 @@ static struct platform_driver msm_pcm_driver = {
 		.name = "msm-voice-host-pcm",
 		.owner = THIS_MODULE,
 		.of_match_table = msm_voice_host_pcm_dt_match,
+		.suppress_bind_attrs = true,
 	},
 	.probe = msm_pcm_probe,
 	.remove = msm_pcm_remove,

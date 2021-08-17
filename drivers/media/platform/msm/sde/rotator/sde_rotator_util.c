@@ -1,14 +1,6 @@
-/* Copyright (c) 2012, 2015-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2012, 2015-2020, The Linux Foundation. All rights reserved.
  */
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
@@ -1222,8 +1214,6 @@ static const struct dma_buf_ops sde_rot_dmabuf_ops = {
 	.map_dma_buf	= sde_rot_dmabuf_map_tiny,
 	.unmap_dma_buf	= sde_rot_dmabuf_unmap,
 	.release	= sde_rot_dmabuf_release,
-	.map_atomic	= sde_rot_dmabuf_no_map,
-	.unmap_atomic	= sde_rot_dmabuf_no_unmap,
 	.map		= sde_rot_dmabuf_no_map,
 	.unmap		= sde_rot_dmabuf_no_unmap,
 	.mmap		= sde_rot_dmabuf_no_mmap,

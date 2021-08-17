@@ -1,15 +1,5 @@
-/* Copyright (c) 2012-2018, 2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2018, 2020-2021, The Linux Foundation. All rights reserved. */
 
 #include <linux/module.h>
 #include <linux/interrupt.h>
@@ -504,7 +494,7 @@ next:
 	/* set DMA FIFO read watermark to 15/16 full */
 	MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x50, 0x30);
 
-	wmb();
+	wmb(); /* ensure write is finished before progressing */
 }
 
 void mdss_dsi_set_tx_power_mode(int mode, struct mdss_panel_data *pdata)
@@ -681,7 +671,7 @@ static void mdss_dsi_wait_clk_lane_to_stop(struct mdss_dsi_ctrl_pdata *ctrl)
 	/* force clk lane tx stop -- bit 20 */
 	mdss_dsi_cfg_lane_ctrl(ctrl, BIT(20), 1);
 
-	if (mdss_dsi_poll_clk_lane(ctrl) == false)
+	if (!mdss_dsi_poll_clk_lane(ctrl))
 		pr_err("%s: clk lane recovery failed\n", __func__);
 
 	/* clear clk lane tx stop -- bit 20 */
@@ -814,6 +804,7 @@ static void mdss_dsi_ctl_phy_reset(struct mdss_dsi_ctrl_pdata *ctrl, u32 event)
 	 * Check clk lane stop state after every 200 us
 	 */
 	u32 loop = 10, u_dly = 200;
+
 	pr_debug("%s: MDSS DSI CTRL and PHY reset. ctrl-num = %d\n",
 					__func__, ctrl->ndx);
 
@@ -862,10 +853,10 @@ static void mdss_dsi_ctl_phy_reset(struct mdss_dsi_ctrl_pdata *ctrl, u32 event)
 		/* DSI_SW_RESET */
 		MIPI_OUTP(ctrl0->ctrl_base + 0x118, 0x1);
 		MIPI_OUTP(ctrl1->ctrl_base + 0x118, 0x1);
-		wmb();
+		wmb(); /* ensure write is finished before progressing */
 		MIPI_OUTP(ctrl0->ctrl_base + 0x118, 0x0);
 		MIPI_OUTP(ctrl1->ctrl_base + 0x118, 0x0);
-		wmb();
+		wmb(); /* ensure write is finished before progressing */
 
 		/* Remove "Force On" all dynamic clocks */
 		MIPI_OUTP(ctrl0->ctrl_base + 0x11c, 0x00); /* DSI_CLK_CTRL */
@@ -894,9 +885,8 @@ static void mdss_dsi_ctl_phy_reset(struct mdss_dsi_ctrl_pdata *ctrl, u32 event)
 			ln1 = MIPI_INP(ctrl1->ctrl_base + 0x00a8);
 			if ((ln0 == 0x1f1f) && (ln1 == 0x1f1f))
 				break;
-			else
-				/* Check clk lane stopState for every 200us */
-				udelay(u_dly);
+			/* Check clk lane stopState for every 200us */
+			udelay(u_dly);
 		}
 		if (i == loop) {
 			if ((ctrl0->shared_data->phy_rev == DSI_PHY_REV_12NM) &&
@@ -994,9 +984,8 @@ static void mdss_dsi_ctl_phy_reset(struct mdss_dsi_ctrl_pdata *ctrl, u32 event)
 			ln0 = MIPI_INP(ctrl->ctrl_base + 0x00a8);
 			if (ln0 == 0x1f1f)
 				break;
-			else
-				/* Check clk lane stopState for every 200us */
-				udelay(u_dly);
+			/* Check clk lane stopState for every 200us */
+			udelay(u_dly);
 		}
 		if (i == loop) {
 			if ((ctrl->shared_data->phy_rev == DSI_PHY_REV_12NM) &&
@@ -1113,7 +1102,7 @@ void mdss_dsi_controller_cfg(int enable,
 		dsi_ctrl &= ~0x01;
 
 	MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x0004, dsi_ctrl);
-	wmb();
+	wmb(); /* ensure write is finished before progressing */
 }
 
 void mdss_dsi_restore_intr_mask(struct mdss_dsi_ctrl_pdata *ctrl)
@@ -1169,7 +1158,7 @@ void mdss_dsi_op_mode_config(int mode,
 	MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x0110, intr_ctrl);
 	MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x0004, dsi_ctrl);
 	MIPI_OUTP((ctrl_pdata->ctrl_base) + 0x003c, dma_ctrl);
-	wmb();
+	wmb(); /* ensure write is finished before progressing */
 }
 
 void mdss_dsi_cmd_bta_sw_trigger(struct mdss_panel_data *pdata)
@@ -1606,7 +1595,7 @@ static void mdss_dsi_schedule_dma_cmd(struct mdss_dsi_ctrl_pdata *ctrl)
 	MIPI_OUTP(ctrl->ctrl_io.base + 0x100, val); /* DMA_SCHEDULE_LINE */
 	wmb();
 
-	pr_debug("%s schedule at line %x", __func__, val);
+	pr_debug("%s schedule at line %x\n", __func__, val);
 	MDSS_XLOG(ctrl->ndx, val);
 }
 
@@ -1631,7 +1620,7 @@ static void mdss_dsi_wait4active_region(struct mdss_dsi_ctrl_pdata *ctrl)
 			retry_count++;
 		} else
 			break;
-	};
+	}
 
 	if (retry_count == MAX_BTA_WAIT_RETRY)
 		MDSS_XLOG_TOUT_HANDLER("mdp", "dsi0_ctrl",
@@ -1751,21 +1740,21 @@ int mdss_dsi_cmd_reg_tx(u32 data,
 	char *bp;
 
 	bp = (char *)&data;
-	pr_debug("%s: ", __func__);
+	pr_debug("%s:\n", __func__);
 	for (i = 0; i < 4; i++)
-		pr_debug("%x ", *bp++);
+		pr_debug("%x\n", *bp++);
 
 	pr_debug("\n");
 
 	MIPI_OUTP(ctrl_base + 0x0084, 0x04);/* sw trigger */
 	MIPI_OUTP(ctrl_base + 0x0004, 0x135);
 
-	wmb();
+	wmb(); /* ensure write is finished before progressing */
 
 	MIPI_OUTP(ctrl_base + 0x03c, data);
-	wmb();
+	wmb(); /* ensure write is finished before progressing */
 	MIPI_OUTP(ctrl_base + 0x090, 0x01);	/* trigger */
-	wmb();
+	wmb(); /* ensure write is finished before progressing */
 
 	udelay(300);
 
@@ -2241,6 +2230,7 @@ skip_max_pkt_size:
 		pr_debug("%s: rx ACK_ERR_PACLAGE\n", __func__);
 		rp->len = 0;
 		rp->read_cnt = 0;
+	/* fall-through */
 	case DTYPE_GEN_READ1_RESP:
 	case DTYPE_DCS_READ1_RESP:
 		mdss_dsi_short_read1_resp(rp);
@@ -2333,14 +2323,14 @@ static int mdss_dsi_cmd_dma_tx(struct mdss_dsi_ctrl_pdata *ctrl,
 	/* send cmd to its panel */
 	MIPI_OUTP((ctrl->ctrl_base) + 0x048, ctrl->dma_addr);
 	MIPI_OUTP((ctrl->ctrl_base) + 0x04c, len);
-	wmb();
+	wmb(); /* ensure write is finished before progressing */
 
 	/* schedule dma cmds at start of blanking region */
 	mdss_dsi_schedule_dma_cmd(ctrl);
 
 	/* DSI_CMD_MODE_DMA_SW_TRIGGER */
 	MIPI_OUTP((ctrl->ctrl_base) + 0x090, 0x01);
-	wmb();
+	wmb(); /* ensure write is finished before progressing */
 	MDSS_XLOG(ctrl->dma_addr, len);
 
 	if (ctrl->do_unicast) {
@@ -2901,11 +2891,11 @@ int mdss_dsi_cmdlist_commit(struct mdss_dsi_ctrl_pdata *ctrl, int from_mdp)
 
 	if (!(req->flags & CMD_REQ_DMA_TPG)) {
 		/*
-		* mdss interrupt is generated in mdp core clock domain
-		* mdp clock need to be enabled to receive dsi interrupt
-		* also, axi bus bandwidth need since dsi controller will
-		* fetch dcs commands from axi bus
-		*/
+		 * mdss interrupt is generated in mdp core clock domain
+		 * mdp clock need to be enabled to receive dsi interrupt
+		 * also, axi bus bandwidth need since dsi controller will
+		 * fetch dcs commands from axi bus
+		 */
 		rc = mdss_dsi_bus_bandwidth_vote(ctrl->shared_data, true);
 		if (rc) {
 			pr_err("%s: Bus bw vote failed\n", __func__);
@@ -3081,9 +3071,8 @@ static int dsi_event_thread(void *data)
 			mutex_unlock(&ctrl->mutex);
 		}
 
-		if (todo & DSI_EV_DSI_FIFO_EMPTY) {
+		if (todo & DSI_EV_DSI_FIFO_EMPTY)
 			__dsi_fifo_error_handler(ctrl, false);
-		}
 
 		if (todo & DSI_EV_DLNx_FIFO_OVERFLOW) {
 			mutex_lock(&dsi_mtx);
@@ -3398,7 +3387,7 @@ irqreturn_t mdss_dsi_isr(int irq, void *ptr)
 			(struct mdss_dsi_ctrl_pdata *)ptr;
 
 	if (!ctrl->ctrl_base) {
-		pr_err("%s:%d DSI base adr no Initialized",
+		pr_err("%s:%d DSI base adr no Initialized\n",
 						__func__, __LINE__);
 		return IRQ_HANDLED;
 	}

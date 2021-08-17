@@ -89,7 +89,7 @@ static int partition_enable_opps(struct devfreq_cooling_device *dfc,
 		int ret = 0;
 		unsigned int freq = dfc->freq_table[i];
 		bool want_enable = (i >= cdev_max_state) &&
-				      (i <= cdev_min_state) ? true : false;
+				      (i <= cdev_min_state);
 
 		opp = dev_pm_opp_find_freq_exact(dev, freq, !want_enable);
 

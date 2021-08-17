@@ -1,13 +1,7 @@
-/* Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2015-2019, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/of.h>
@@ -17,9 +11,9 @@
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
 #include "msm-pcm-routing-v2.h"
-#include "sdm660-common.h"
-#include "sdm660-external.h"
-#include "codecs/core.h"
+#include <asoc/sdm660-common.h>
+#include <asoc/sdm660-external.h>
+#include <asoc/core.h>
 #include "codecs/wcd9335.h"
 #include <linux/pm_qos.h>
 

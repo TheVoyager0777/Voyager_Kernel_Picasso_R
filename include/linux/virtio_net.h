@@ -62,8 +62,6 @@ static inline int virtio_net_hdr_to_skb(struct sk_buff *skb,
 			return -EINVAL;
 	}
 
-	skb_reset_mac_header(skb);
-
 	if (hdr->flags & VIRTIO_NET_HDR_F_NEEDS_CSUM) {
 		u16 start = __virtio16_to_cpu(little_endian, hdr->csum_start);
 		u16 off = __virtio16_to_cpu(little_endian, hdr->csum_offset);
@@ -79,17 +77,14 @@ static inline int virtio_net_hdr_to_skb(struct sk_buff *skb,
 		 * probe and drop if does not match one of the above types.
 		 */
 		if (gso_type && skb->network_header) {
-			struct flow_keys keys;
+			struct flow_keys_basic keys;
 
-			if (!skb->protocol) {
-				__be16 protocol = dev_parse_header_protocol(skb);
-
+			if (!skb->protocol)
 				virtio_net_hdr_set_proto(skb, hdr);
-				if (protocol && protocol != skb->protocol)
-					return -EINVAL;
-			}
 retry:
-			if (!skb_flow_dissect_flow_keys(skb, &keys, 0)) {
+			if (!skb_flow_dissect_flow_keys_basic(skb, &keys,
+							      NULL, 0, 0, 0,
+							      0)) {
 				/* UFO does not specify ipv4 or 6: try both */
 				if (gso_type & SKB_GSO_UDP &&
 				    skb->protocol == htons(ETH_P_IP)) {

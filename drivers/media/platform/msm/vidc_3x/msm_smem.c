@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
@@ -110,7 +111,7 @@ static int msm_dma_get_device_address(struct dma_buf *dbuf, unsigned long align,
 		}
 
 		mapping_info->dev = cb->dev;
-		mapping_info->mapping = cb->mapping;
+		mapping_info->domain = cb->domain;
 		mapping_info->table = table;
 		mapping_info->attach = attach;
 		mapping_info->buf = dbuf;
@@ -158,7 +159,7 @@ static int msm_dma_put_device_address(u32 flags,
 	trace_msm_smem_buffer_iommu_op_end("UNMAP", 0, 0, 0, 0, 0);
 
 	mapping_info->dev = NULL;
-	mapping_info->mapping = NULL;
+	mapping_info->domain = NULL;
 	mapping_info->table = NULL;
 	mapping_info->attach = NULL;
 	mapping_info->buf = NULL;
@@ -190,8 +191,6 @@ void msm_smem_put_dma_buf(void *dma_buf)
 	}
 
 	dma_buf_put((struct dma_buf *)dma_buf);
-
-	return;
 }
 bool msm_smem_compare_buffers(int fd, void *dma_buf)
 {
@@ -429,15 +428,8 @@ static int alloc_dma_mem(size_t size, u32 align, u32 flags,
 			goto fail_shared_mem_alloc;
 		}
 
-		if ((secure_flag == ION_FLAG_CP_PIXEL) && res->cma_status)
-			secure_flag = ION_FLAG_CP_CAMERA_ENCODE;
-
 		ion_flags |= ION_FLAG_SECURE | secure_flag;
-		if (res->cma_status) {
-			heap_mask = ION_HEAP(ION_VIDEO_HEAP_ID);
-		} else {
-			heap_mask = ION_HEAP(ION_SECURE_HEAP_ID);
-		}
+		heap_mask = ION_HEAP(ION_SECURE_HEAP_ID);
 
 		if (res->slave_side_cp) {
 			heap_mask = ION_HEAP(ION_CP_MM_HEAP_ID);
@@ -510,8 +502,6 @@ fail_shared_mem_alloc:
 
 static int free_dma_mem(struct msm_smem *mem)
 {
-	int rc = 0;
-
 	dprintk(VIDC_DBG,
 		"%s: dma_buf = %pK, device_addr = %x, size = %d, kvaddr = %pK, buffer_type = %#x\n",
 		__func__, mem->dma_buf, mem->device_addr, mem->size,
@@ -539,7 +529,7 @@ static int free_dma_mem(struct msm_smem *mem)
 			-1, mem->size, -1, mem->flags, -1);
 	}
 
-	return rc;
+	return 0;
 }
 
 int msm_smem_alloc(size_t size, u32 align, u32 flags,

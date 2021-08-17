@@ -55,6 +55,9 @@ extern unsigned int nr_cpu_ids;
  *     cpu_online_mask  - has bit 'cpu' set iff cpu available to scheduler
  *     cpu_active_mask  - has bit 'cpu' set iff cpu available to migration
  *     cpu_isolated_mask- has bit 'cpu' set iff cpu isolated
+ *     cpu_lp_mask      - has bit 'cpu' set iff cpu is part of little cluster
+ *     cpu_perf_mask    - has bit 'cpu' set iff cpu is part of big cluster
+ *     cpu_prime_mask   - has bit 'cpu' set iff cpu is part of prime cluster
  *
  *  If !CONFIG_HOTPLUG_CPU, present == possible, and active == online.
  *
@@ -97,6 +100,9 @@ extern struct cpumask __cpu_isolated_mask;
 #define cpu_present_mask  ((const struct cpumask *)&__cpu_present_mask)
 #define cpu_active_mask   ((const struct cpumask *)&__cpu_active_mask)
 #define cpu_isolated_mask ((const struct cpumask *)&__cpu_isolated_mask)
+extern const struct cpumask *const cpu_lp_mask;
+extern const struct cpumask *const cpu_perf_mask;
+extern const struct cpumask *const cpu_prime_mask;
 
 #if NR_CPUS > 1
 #define num_online_cpus()	cpumask_weight(cpu_online_mask)
@@ -130,18 +136,28 @@ extern struct cpumask __cpu_isolated_mask;
 #define cpu_isolated(cpu)	((cpu) != 0)
 #endif
 
+static inline void cpu_max_bits_warn(unsigned int cpu, unsigned int bits)
+{
+#ifdef CONFIG_DEBUG_PER_CPU_MAPS
+	WARN_ON_ONCE(cpu >= bits);
+#endif /* CONFIG_DEBUG_PER_CPU_MAPS */
+}
+
 /* verify cpu argument to cpumask_* operators */
 static inline unsigned int cpumask_check(unsigned int cpu)
 {
-#ifdef CONFIG_DEBUG_PER_CPU_MAPS
-	WARN_ON_ONCE(cpu >= nr_cpumask_bits);
-#endif /* CONFIG_DEBUG_PER_CPU_MAPS */
+	cpu_max_bits_warn(cpu, nr_cpumask_bits);
 	return cpu;
 }
 
 #if NR_CPUS == 1
 /* Uniprocessor.  Assume all masks are "1". */
 static inline unsigned int cpumask_first(const struct cpumask *srcp)
+{
+	return 0;
+}
+
+static inline unsigned int cpumask_last(const struct cpumask *srcp)
 {
 	return 0;
 }
@@ -162,6 +178,13 @@ static inline unsigned int cpumask_next_and(int n,
 					    const struct cpumask *andp)
 {
 	return n+1;
+}
+
+static inline unsigned int cpumask_next_wrap(int n, const struct cpumask *mask,
+					     int start, bool wrap)
+{
+	/* cpu0 unless stop condition, wrap and at cpu0, then nr_cpumask_bits */
+	return (wrap && n == 0);
 }
 
 /* cpu must be a valid cpu, ie 0, so there's no other choice. */
@@ -194,6 +217,17 @@ static inline unsigned int cpumask_local_spread(unsigned int i, int node)
 static inline unsigned int cpumask_first(const struct cpumask *srcp)
 {
 	return find_first_bit(cpumask_bits(srcp), nr_cpumask_bits);
+}
+
+/**
+ * cpumask_last - get the last CPU in a cpumask
+ * @srcp:	- the cpumask pointer
+ *
+ * Returns	>= nr_cpumask_bits if no CPUs set.
+ */
+static inline unsigned int cpumask_last(const struct cpumask *srcp)
+{
+	return find_last_bit(cpumask_bits(srcp), nr_cpumask_bits);
 }
 
 unsigned int cpumask_next(int n, const struct cpumask *srcp);
@@ -641,7 +675,7 @@ static inline int cpulist_parse(const char *buf, struct cpumask *dstp)
 /**
  * cpumask_size - size to allocate for a 'struct cpumask' in bytes
  */
-static inline size_t cpumask_size(void)
+static inline unsigned int cpumask_size(void)
 {
 	return BITS_TO_LONGS(nr_cpumask_bits) * sizeof(long);
 }

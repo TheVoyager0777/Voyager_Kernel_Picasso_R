@@ -1,7 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * FTS Capacitive touch screen controller (FingerTipS)
  *
- * Copyright (C) 2016-2018, STMicroelectronics Limited.
+ * Copyright (C) 2016-2019, STMicroelectronics Limited.
  * Authors: AMG(Analog Mems Group) <marco.cali@st.com>
  *
  *
@@ -794,7 +795,7 @@ int production_test_ms_raw(char *path_limits, int stop_on_fail,
 	struct TestToDo *todo)
 {
 	int ret, count_fail = 0;
-	struct MutualSenseFrame msRawFrame;
+	struct MutualSenseFrame msRawFrame = {0};
 
 	int *thresholds = NULL;
 	int trows, tcolumns;
@@ -916,19 +917,15 @@ ERROR:
 			msRawFrame.header.sense_node),
 		msRawFrame.header.force_node,
 		msRawFrame.header.sense_node);
-	if (msRawFrame.node_data != NULL)
-		kfree(msRawFrame.node_data);
-	if (thresholds != NULL)
-		kfree(thresholds);
+	kfree(msRawFrame.node_data);
+	kfree(thresholds);
 	logError(0, "%s MS RAW DATA TEST: FAIL fails_count = %d\n\n",
 		tag, count_fail);
 	return (ERROR_PROD_TEST_DATA | ERROR_TEST_CHECK_FAIL);
 
 ERROR_LIMITS:
-	if (msRawFrame.node_data != NULL)
-		kfree(msRawFrame.node_data);
-	if (thresholds != NULL)
-		kfree(thresholds);
+	kfree(msRawFrame.node_data);
+	kfree(thresholds);
 	return ret;
 }
 
@@ -987,17 +984,13 @@ ERROR:
 			msRawFrame.header.sense_node),
 		msRawFrame.header.force_node,
 		msRawFrame.header.sense_node);
-	if (msRawFrame.node_data != NULL)
-		kfree(msRawFrame.node_data);
-	if (thresholds != NULL)
-		kfree(thresholds);
+	kfree(msRawFrame.node_data);
+	kfree(thresholds);
 	logError(0, "%s MS KEY RAW TEST:......FAIL\n\n", tag);
 	return (ERROR_PROD_TEST_DATA | ERROR_TEST_CHECK_FAIL);
 ERROR_LIMITS:
-	if (msRawFrame.node_data != NULL)
-		kfree(msRawFrame.node_data);
-	if (thresholds != NULL)
-		kfree(thresholds);
+	kfree(msRawFrame.node_data);
+	kfree(thresholds);
 	return ret;
 }
 
@@ -1486,46 +1479,28 @@ ERROR:
 		msCompData.header.sense_node);
 	logError(0, "%s MS CX testes finished! fails_count = %d\n\n",
 		tag, count_fail);
-	if (thresholds != NULL)
-		kfree(thresholds);
-	if (thresholds_min != NULL)
-		kfree(thresholds_min);
-	if (thresholds_max != NULL)
-		kfree(thresholds_max);
-	if (adjhor != NULL)
-		kfree(adjhor);
-	if (adjvert != NULL)
-		kfree(adjvert);
-	if (total_cx != NULL)
-		kfree(total_cx);
-	if (total_adjhor != NULL)
-		kfree(total_adjhor);
-	if (total_adjvert != NULL)
-		kfree(total_adjvert);
-	if (msCompData.node_data != NULL)
-		kfree(msCompData.node_data);
+	kfree(thresholds);
+	kfree(thresholds_min);
+	kfree(thresholds_max);
+	kfree(adjhor);
+	kfree(adjvert);
+	kfree(total_cx);
+	kfree(total_adjhor);
+	kfree(total_adjvert);
+	kfree(msCompData.node_data);
 
 	return (ERROR_TEST_CHECK_FAIL | ERROR_PROD_TEST_DATA);
 
 ERROR_LIMITS:
-	if (thresholds != NULL)
-		kfree(thresholds);
-	if (thresholds_min != NULL)
-		kfree(thresholds_min);
-	if (thresholds_max != NULL)
-		kfree(thresholds_max);
-	if (adjhor != NULL)
-		kfree(adjhor);
-	if (adjvert != NULL)
-		kfree(adjvert);
-	if (total_cx != NULL)
-		kfree(total_cx);
-	if (total_adjhor != NULL)
-		kfree(total_adjhor);
-	if (total_adjvert != NULL)
-		kfree(total_adjvert);
-	if (msCompData.node_data != NULL)
-		kfree(msCompData.node_data);
+	kfree(thresholds);
+	kfree(thresholds_min);
+	kfree(thresholds_max);
+	kfree(adjhor);
+	kfree(adjvert);
+	kfree(total_cx);
+	kfree(total_adjhor);
+	kfree(total_adjvert);
+	kfree(msCompData.node_data);
 	return ret;
 }
 
@@ -1767,28 +1742,18 @@ ERROR:
 		msCompData.header.sense_node);
 	logError(0, "%s MS Key CX testes finished!..............", tag);
 	logError(0, "...FAILED  fails_count = %d\n\n", count_fail);
-	if (thresholds != NULL)
-		kfree(thresholds);
-	if (thresholds_min != NULL)
-		kfree(thresholds_min);
-	if (thresholds_max != NULL)
-		kfree(thresholds_max);
-	if (msCompData.node_data != NULL)
-		kfree(msCompData.node_data);
-	if (total_cx != NULL)
-		kfree(total_cx);
+	kfree(thresholds);
+	kfree(thresholds_min);
+	kfree(thresholds_max);
+	kfree(msCompData.node_data);
+	kfree(total_cx);
 	return  (ERROR_TEST_CHECK_FAIL | ERROR_PROD_TEST_DATA);
 ERROR_LIMITS:
-	if (thresholds != NULL)
-		kfree(thresholds);
-	if (thresholds_min != NULL)
-		kfree(thresholds_min);
-	if (thresholds_max != NULL)
-		kfree(thresholds_max);
-	if (msCompData.node_data != NULL)
-		kfree(msCompData.node_data);
-	if (total_cx != NULL)
-		kfree(total_cx);
+	kfree(thresholds);
+	kfree(thresholds_min);
+	kfree(thresholds_max);
+	kfree(msCompData.node_data);
+	kfree(total_cx);
 	return ret;
 }
 
@@ -2075,12 +2040,9 @@ int production_test_ss_raw(char *path_limits,
 	return (ERROR_TEST_CHECK_FAIL | ERROR_PROD_TEST_DATA);
 
 ERROR_LIMITS:
-	if (ssRawFrame.force_data != NULL)
-		kfree(ssRawFrame.force_data);
-	if (ssRawFrame.sense_data != NULL)
-		kfree(ssRawFrame.sense_data);
-	if (thresholds != NULL)
-		kfree(thresholds);
+	kfree(ssRawFrame.force_data);
+	kfree(ssRawFrame.sense_data);
+	kfree(thresholds);
 	return ret;
 
 }
@@ -3555,70 +3517,40 @@ ERROR:
 		logError(0, "%s SS IX CX testes finished!.................",
 			tag);
 		logError(0, "FAILED  fails_count = %d\n\n", count_fail);
-		if (thresholds != NULL)
-			kfree(thresholds);
-		if (thresholds_min != NULL)
-			kfree(thresholds_min);
-		if (thresholds_max != NULL)
-			kfree(thresholds_max);
-		if (adjhor != NULL)
-			kfree(adjhor);
-		if (adjvert != NULL)
-			kfree(adjvert);
-		if (ix1_w != NULL)
-			kfree(ix1_w);
-		if (ix2_w != NULL)
-			kfree(ix2_w);
-		if (total_ix != NULL)
-			kfree(total_ix);
-		if (total_cx != NULL)
-			kfree(total_cx);
-		if (total_adjhor != NULL)
-			kfree(total_adjhor);
-		if (total_adjvert != NULL)
-			kfree(total_adjvert);
-		if (ssCompData.ix2_fm != NULL)
-			kfree(ssCompData.ix2_fm);
-		if (ssCompData.ix2_sn != NULL)
-			kfree(ssCompData.ix2_sn);
-		if (ssCompData.cx2_fm != NULL)
-			kfree(ssCompData.cx2_fm);
-		if (ssCompData.cx2_sn != NULL)
-			kfree(ssCompData.cx2_sn);
+		kfree(thresholds);
+		kfree(thresholds_min);
+		kfree(thresholds_max);
+		kfree(adjhor);
+		kfree(adjvert);
+		kfree(ix1_w);
+		kfree(ix2_w);
+		kfree(total_ix);
+		kfree(total_cx);
+		kfree(total_adjhor);
+		kfree(total_adjvert);
+		kfree(ssCompData.ix2_fm);
+		kfree(ssCompData.ix2_sn);
+		kfree(ssCompData.cx2_fm);
+		kfree(ssCompData.cx2_sn);
 		ret = (ERROR_TEST_CHECK_FAIL | ERROR_PROD_TEST_DATA);
 	}
 	return ret;
 ERROR_LIMITS:
-	if (thresholds != NULL)
-		kfree(thresholds);
-	if (thresholds_min != NULL)
-		kfree(thresholds_min);
-	if (thresholds_max != NULL)
-		kfree(thresholds_max);
-	if (adjhor != NULL)
-		kfree(adjhor);
-	if (adjvert != NULL)
-		kfree(adjvert);
-	if (ix1_w != NULL)
-		kfree(ix1_w);
-	if (ix2_w != NULL)
-		kfree(ix2_w);
-	if (total_ix != NULL)
-		kfree(total_ix);
-	if (total_cx != NULL)
-		kfree(total_cx);
-	if (total_adjhor != NULL)
-		kfree(total_adjhor);
-	if (total_adjvert != NULL)
-		kfree(total_adjvert);
-	if (ssCompData.ix2_fm != NULL)
-		kfree(ssCompData.ix2_fm);
-	if (ssCompData.ix2_sn != NULL)
-		kfree(ssCompData.ix2_sn);
-	if (ssCompData.cx2_fm != NULL)
-		kfree(ssCompData.cx2_fm);
-	if (ssCompData.cx2_sn != NULL)
-		kfree(ssCompData.cx2_sn);
+	kfree(thresholds);
+	kfree(thresholds_min);
+	kfree(thresholds_max);
+	kfree(adjhor);
+	kfree(adjvert);
+	kfree(ix1_w);
+	kfree(ix2_w);
+	kfree(total_ix);
+	kfree(total_cx);
+	kfree(total_adjhor);
+	kfree(total_adjvert);
+	kfree(ssCompData.ix2_fm);
+	kfree(ssCompData.ix2_sn);
+	kfree(ssCompData.cx2_fm);
+	kfree(ssCompData.cx2_sn);
 	return ret;
 }
 
@@ -3884,8 +3816,7 @@ int parseProductionTestLimits(char *path, char *label,
 		tag, __func__, ERROR_LABEL_NOT_FOUND);
 	ret = ERROR_LABEL_NOT_FOUND;
 END:
-	if (buf != NULL)
-		kfree(buf);
+	kfree(buf);
 #ifndef LIMITS_H_FILE
 	release_firmware(fw);
 #endif

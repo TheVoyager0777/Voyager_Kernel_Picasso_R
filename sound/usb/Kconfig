@@ -11,6 +11,7 @@ if SND_USB && USB
 
 config SND_USB_AUDIO
 	tristate "USB Audio/MIDI driver"
+	select SND_HWDEP
 	select SND_RAWMIDI
 	select SND_PCM
 	select BITREVERSE
@@ -167,7 +168,8 @@ config SND_USB_AUDIO_QMI
 	help
 	  Starts USB Audio QMI server to communicate with remote entity
 	  to perform operations like enable or disable particular audio
-	  stream on a connected USB device.
+	  stream on a connected USB device, subsystem restart and
+	  device disconnect.
 
 endif	# SND_USB
 

@@ -4,7 +4,7 @@
  * FTS Capacitive touch screen controller (FingerTipS)
  *
  * Copyright (C) 2017, STMicroelectronics
- * Copyright (C) 2021 XiaoMi, Inc.
+ * Copyright (C) 2020 XiaoMi, Inc.
  * Authors: AMG(Analog Mems Group)
  *
  * 		marco.cali@st.com
@@ -39,7 +39,6 @@
 #include "fts_lib/ftsSoftware.h"
 #include "fts_lib/ftsHardware.h"
 #include <linux/completion.h>
-#include "../xiaomi/xiaomi_touch.h"
 /****************** CONFIGURATION SECTION ******************/
 /** @defgroup conf_section	 Driver Configuration Section
 * Settings of the driver code in order to suit the HW set up and the application behavior
@@ -48,14 +47,15 @@
 
 /**** CODE CONFIGURATION ****/
 #define FTS_TS_DRV_NAME                     "fts"			/*driver name*/
-#define FTS_TS_DRV_VERSION                  "5.2.4.1"			/*driver version string format*/
-#define FTS_TS_DRV_VER						0x05020401		/*driver version u32 format*/
-#define VENDOR_TAG                                   "[ FTS ]"
+#define FTS_TS_DRV_VERSION                  "5.2.4"			/*driver version string format*/
+#define FTS_TS_DRV_VER						0x05020400		/*driver version u32 format*/
 
 #define PINCTRL_STATE_ACTIVE		"pmx_ts_active"
 #define PINCTRL_STATE_SUSPEND		"pmx_ts_suspend"
 #define PINCTRL_STATE_RELEASE		"pmx_ts_release"
 
+#define KEY_GOTO					0x162
+#define BTN_INFO					0x152
 
 #define DRIVER_TEST
 
@@ -119,7 +119,7 @@
 #define DISTANCE_MIN						0
 #define DISTANCE_MAX						127
 
-#define TOUCH_ID_MAX                        12
+#define TOUCH_ID_MAX                        10
 
 #define AREA_MIN                            PRESSURE_MIN
 #define AREA_MAX                            PRESSURE_MAX
@@ -153,6 +153,8 @@ do {\
 
 #define TSP_BUF_SIZE						PAGE_SIZE
 
+#define CONFIG_FTS_TOUCH_COUNT_DUMP
+
 #ifdef CONFIG_FTS_TOUCH_COUNT_DUMP
 #define TOUCH_COUNT_FILE_MAXSIZE 50
 #endif
@@ -160,9 +162,6 @@ do {\
 /**
  * Struct which contains information about the HW platform and set up
  */
-#define GRIP_MODE_DEBUG
-#define GRIP_RECT_NUM 12
-#define GRIP_PARAMETER_NUM 8
 #define FTS_LOCKDOWN_SIZE 8
 #define FTS_RESULT_INVALID 0
 #define FTS_RESULT_PASS 2
@@ -215,6 +214,11 @@ typedef void (*event_dispatch_handler_t)
  (struct fts_ts_info *info, unsigned char *data);
 
 #ifdef CONFIG_SECURE_TOUCH
+struct fts_secure_delay {
+	bool palm_pending;
+	int palm_value;
+};
+
 struct fts_secure_info {
 	bool secure_inited;
 	atomic_t st_1st_complete;
@@ -222,6 +226,8 @@ struct fts_secure_info {
 	atomic_t st_pending_irqs;
 	struct completion st_irq_processed;
 	struct completion st_powerdown;
+	struct fts_secure_delay scr_delay;
+	struct mutex palm_lock;
 	void *fts_info;
 };
 #endif
@@ -270,14 +276,13 @@ struct fts_ts_info {
 	struct input_dev *input_dev;
 
 	struct work_struct work;
-	struct work_struct sleep_work;
 	struct work_struct suspend_work;
 	struct work_struct resume_work;
-	struct work_struct mode_handler_work;
 	struct work_struct cmd_update_work;
+	struct work_struct sleep_work;
 	struct workqueue_struct *event_wq;
-	struct workqueue_struct *touch_feature_wq;
 	struct workqueue_struct *irq_wq;
+	struct workqueue_struct *touch_feature_wq;
 
 #ifndef FW_UPDATE_ON_PROBE
 	struct delayed_work fwu_work;
@@ -331,9 +336,12 @@ struct fts_ts_info {
 #ifdef CONFIG_TOUCHSCREEN_ST_DEBUG_FS
 	struct dentry *debugfs;
 #endif
+	int dbclick_count;
+#ifdef CONFIG_FTS_TOUCH_COUNT_DUMP
 	struct class *fts_tp_class;
 	struct device *fts_touch_dev;
 	char *current_clicknum_file;
+#endif
 #ifdef CONFIG_SECURE_TOUCH
 	struct fts_secure_info *secure_info;
 #endif
@@ -357,10 +365,10 @@ struct fts_ts_info {
 	bool fod_pressed;
 	bool p_sensor_changed;
 	bool p_sensor_switch;
+	bool palm_sensor_changed;
+	bool palm_sensor_switch;
 	bool tp_pm_suspend;
 	struct completion pm_resume_completion;
-	bool gamemode_enable;
-	struct work_struct grip_mode_work;
 };
 
 struct fts_mode_switch {
@@ -377,14 +385,19 @@ extern int fts_proc_init(void);
 extern int fts_proc_remove(void);
 #ifdef CONFIG_FTS_FOD_AREA_REPORT
 #define CENTER_X 540
-#define CENTER_Y 1800
+#define CENTER_Y 2005
 #define CIRCLE_R 87
 #define FOD_LX 420
-#define FOD_LY 1683
-#define FOD_X_SIDE 240
-#define FOD_Y_SIDE 254
+#define FOD_LY 1885
+#define FOD_SIDE 242
 bool fts_is_infod(void);
 void fts_get_pointer(int *touch_flag, int *x, int *y);
 #endif
 void fts_restore_regvalues(void);
+
+#ifdef CONFIG_TOUCHSCREEN_XIAOMI_TOUCHFEATURE
+int fts_palm_sensor_cmd(int input);
+int fts_p_sensor_cmd(int input);
+bool fts_touchmode_edgefilter(unsigned int touch_id, int x, int y);
+#endif
 #endif

@@ -1,4 +1,5 @@
-/* Copyright (c) 2013-2016, 2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2016, 2018, 2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -695,7 +696,7 @@ int32_t msm_camera_spi_send_burst(struct msm_camera_i2c_client *client,
 	uint8_t header_len = sizeof(pg->opcode) + pg->addr_len + pg->dummy_len;
 	struct msm_spi_write_burst_packet tx_buf;
 
-	if (info->burst_len == 0 || info->burst_len == 0
+	if (info->burst_len == 0
 		|| info->chunk_size == 0) {
 		pr_err("%s %d Invalid argument\n", __func__, __LINE__);
 		return rc;

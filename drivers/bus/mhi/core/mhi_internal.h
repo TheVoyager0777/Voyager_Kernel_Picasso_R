@@ -1,14 +1,5 @@
-/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- */
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved. */
 
 #ifndef _MHI_INT_H
 #define _MHI_INT_H
@@ -261,6 +252,7 @@ struct mhi_event_ctxt {
 	u32 intmodt : 16;
 	u32 ertype;
 	u32 msivec;
+
 	u64 rbase __packed __aligned(4);
 	u64 rlen __packed __aligned(4);
 	u64 rp __packed __aligned(4);
@@ -274,6 +266,7 @@ struct mhi_chan_ctxt {
 	u32 reserved : 16;
 	u32 chtype;
 	u32 erindex;
+
 	u64 rbase __packed __aligned(4);
 	u64 rlen __packed __aligned(4);
 	u64 rp __packed __aligned(4);
@@ -284,6 +277,7 @@ struct mhi_cmd_ctxt {
 	u32 reserved0;
 	u32 reserved1;
 	u32 reserved2;
+
 	u64 rbase __packed __aligned(4);
 	u64 rlen __packed __aligned(4);
 	u64 rp __packed __aligned(4);
@@ -535,15 +529,15 @@ enum MHI_XFER_TYPE {
 #define MHI_DEV_WAKE_DB (127)
 #define MHI_MAX_MTU (0xffff)
 
-#define MHI_TIMESYNC_DB_SETUP(er_index) (((MHI_TIMESYNC_CHAN_DB << \
-	TIMESYNC_CFG_CHAN_DB_ID_SHIFT) & TIMESYNC_CFG_CHAN_DB_ID_MASK) | \
-	((1 << TIMESYNC_CFG_ENABLED_SHIFT) & TIMESYNC_CFG_ENABLED_MASK) | \
-	(((er_index) << TIMESYNC_CFG_ER_ID_SHIFT) & TIMESYNC_CFG_ER_ID_MASK))
+#define MHI_TIMESYNC_DB_SETUP(er_index) ((MHI_TIMESYNC_CHAN_DB << \
+	TIMESYNC_CFG_CHAN_DB_ID_SHIFT) & TIMESYNC_CFG_CHAN_DB_ID_MASK | \
+	(1 << TIMESYNC_CFG_ENABLED_SHIFT) & TIMESYNC_CFG_ENABLED_MASK | \
+	((er_index) << TIMESYNC_CFG_ER_ID_SHIFT) & TIMESYNC_CFG_ER_ID_MASK)
 
-#define MHI_BW_SCALE_SETUP(er_index) (((MHI_BW_SCALE_CHAN_DB << \
-	BW_SCALE_CFG_CHAN_DB_ID_SHIFT) & BW_SCALE_CFG_CHAN_DB_ID_MASK) | \
-	((1 << BW_SCALE_CFG_ENABLED_SHIFT) & BW_SCALE_CFG_ENABLED_MASK) | \
-	(((er_index) << BW_SCALE_CFG_ER_ID_SHIFT) & BW_SCALE_CFG_ER_ID_MASK))
+#define MHI_BW_SCALE_SETUP(er_index) ((MHI_BW_SCALE_CHAN_DB << \
+	BW_SCALE_CFG_CHAN_DB_ID_SHIFT) & BW_SCALE_CFG_CHAN_DB_ID_MASK | \
+	(1 << BW_SCALE_CFG_ENABLED_SHIFT) & BW_SCALE_CFG_ENABLED_MASK | \
+	((er_index) << BW_SCALE_CFG_ER_ID_SHIFT) & BW_SCALE_CFG_ER_ID_MASK)
 
 #define MHI_BW_SCALE_RESULT(status, seq) ((status & 0xF) << 8 | (seq & 0xFF))
 #define MHI_BW_SCALE_NACK 0xF
@@ -671,6 +665,9 @@ struct mhi_event {
 			     struct mhi_event *mhi_event,
 			     u32 event_quota);
 	struct mhi_controller *mhi_cntrl;
+	struct mhi_tre last_cached_tre;
+	u64 last_dev_rp;
+	bool force_uncached;
 };
 
 struct mhi_chan {
@@ -699,13 +696,15 @@ struct mhi_chan {
 	bool auto_start;
 	bool wake_capable; /* channel should wake up system */
 	/* functions that generate the transfer ring elements */
-	int (*gen_tre)(struct mhi_controller *, struct mhi_chan *, void *,
-		       void *, size_t, enum MHI_FLAGS);
-	int (*queue_xfer)(struct mhi_device *, struct mhi_chan *, void *,
-			  size_t, enum MHI_FLAGS);
+	int (*gen_tre)(struct mhi_controller *mhi_cntrl,
+		       struct mhi_chan *mhi_chan, void *buf, void *cb,
+		       size_t len, enum MHI_FLAGS flags);
+	int (*queue_xfer)(struct mhi_device *mhi_dev,
+			  struct mhi_chan *mhi_chan, void *buf,
+			  size_t len, enum MHI_FLAGS flags);
 	/* xfer call back */
 	struct mhi_device *mhi_dev;
-	void (*xfer_cb)(struct mhi_device *, struct mhi_result *);
+	void (*xfer_cb)(struct mhi_device *mhi_dev, struct mhi_result *result);
 	struct mutex mutex;
 	struct completion completion;
 	rwlock_t lock;
@@ -806,7 +805,7 @@ static inline void mhi_trigger_resume(struct mhi_controller *mhi_cntrl)
 {
 	mhi_cntrl->runtime_get(mhi_cntrl, mhi_cntrl->priv_data);
 	mhi_cntrl->runtime_put(mhi_cntrl, mhi_cntrl->priv_data);
-	pm_wakeup_event(&mhi_cntrl->mhi_dev->dev, 0);
+	pm_wakeup_hard_event(&mhi_cntrl->mhi_dev->dev);
 }
 
 /* queue transfer buffer */
@@ -885,6 +884,53 @@ static inline void mhi_free_coherent(struct mhi_controller *mhi_cntrl,
 	atomic_sub(size, &mhi_cntrl->alloc_size);
 	dma_free_coherent(mhi_cntrl->dev, size, vaddr, dma_handle);
 }
+
+static inline void *mhi_alloc_uncached(struct mhi_controller *mhi_cntrl,
+				       size_t size,
+				       dma_addr_t *dma_handle,
+				       gfp_t gfp)
+{
+	void *buf = dma_alloc_attrs(mhi_cntrl->dev, size, dma_handle, gfp,
+			DMA_ATTR_FORCE_NON_COHERENT);
+
+	if (buf)
+		atomic_add(size, &mhi_cntrl->alloc_size);
+
+	return buf;
+}
+static inline void mhi_free_uncached(struct mhi_controller *mhi_cntrl,
+				     size_t size,
+				     void *vaddr,
+				     dma_addr_t dma_handle)
+{
+	atomic_sub(size, &mhi_cntrl->alloc_size);
+	dma_free_attrs(mhi_cntrl->dev, size, vaddr, dma_handle,
+			DMA_ATTR_FORCE_NON_COHERENT);
+}
+
+static inline void *mhi_alloc_contig_coherent(
+					struct mhi_controller *mhi_cntrl,
+					size_t size, dma_addr_t *dma_handle,
+					gfp_t gfp)
+{
+	void *buf = dma_alloc_attrs(mhi_cntrl->dev, size, dma_handle, gfp,
+					DMA_ATTR_FORCE_CONTIGUOUS);
+
+	if (buf)
+		atomic_add(size, &mhi_cntrl->alloc_size);
+
+	return buf;
+}
+static inline void mhi_free_contig_coherent(
+					struct mhi_controller *mhi_cntrl,
+					size_t size, void *vaddr,
+					dma_addr_t dma_handle)
+{
+	atomic_sub(size, &mhi_cntrl->alloc_size);
+	dma_free_attrs(mhi_cntrl->dev, size, vaddr, dma_handle,
+					DMA_ATTR_FORCE_CONTIGUOUS);
+}
+
 struct mhi_device *mhi_alloc_device(struct mhi_controller *mhi_cntrl);
 static inline void mhi_dealloc_device(struct mhi_controller *mhi_cntrl,
 				      struct mhi_device *mhi_dev)
@@ -896,7 +942,7 @@ void mhi_create_devices(struct mhi_controller *mhi_cntrl);
 int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 			 struct image_info **image_info, size_t alloc_size);
 void mhi_free_bhie_table(struct mhi_controller *mhi_cntrl,
-			 struct image_info *image_info);
+			 struct image_info **image_info);
 
 int mhi_map_single_no_bb(struct mhi_controller *mhi_cntrl,
 			 struct mhi_buf_info *buf_info);

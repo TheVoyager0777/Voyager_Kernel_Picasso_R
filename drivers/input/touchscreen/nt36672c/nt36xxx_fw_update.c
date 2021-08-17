@@ -900,6 +900,7 @@ nvt_write_disp_off_retry:
 }
 #endif /* #if NVT_TOUCH_ESD_DISP_RECOVERY */
 
+
 /*******************************************************
 Description:
 	Novatek touchscreen Download_Firmware with HW CRC
@@ -1118,8 +1119,8 @@ return:
 *******************************************************/
 void Boot_Update_Firmware(struct work_struct *work)
 {
-	mutex_lock(&ts->lock);
 	nvt_match_fw();
+	mutex_lock(&ts->lock);
 	if (nvt_get_dbgfw_status()) {
 		if (nvt_update_firmware(DEFAULT_DEBUG_FW_NAME) < 0) {
 			NVT_ERR("use built-in fw");
@@ -1129,7 +1130,6 @@ void Boot_Update_Firmware(struct work_struct *work)
 		nvt_update_firmware(ts->fw_name);
 	}
 	nvt_get_fw_info();
-	ts->first_load_done = true;
 	mutex_unlock(&ts->lock);
 }
 #endif /* BOOT_UPDATE_FIRMWARE */

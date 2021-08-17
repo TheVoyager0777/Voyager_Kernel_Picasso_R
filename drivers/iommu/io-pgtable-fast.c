@@ -1,19 +1,14 @@
-/* Copyright (c) 2016-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2016-2017, 2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2016-2017, The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt)	"io-pgtable-fast: " fmt
 
 #include <linux/iommu.h>
 #include <linux/kernel.h>
+#include <linux/io-pgtable.h>
 #include <linux/scatterlist.h>
 #include <linux/sizes.h>
 #include <linux/slab.h>
@@ -22,8 +17,6 @@
 #include <linux/mm.h>
 #include <asm/cacheflush.h>
 #include <linux/vmalloc.h>
-
-#include "io-pgtable.h"
 
 #define AV8L_FAST_MAX_ADDR_BITS		48
 
@@ -303,6 +296,28 @@ static size_t av8l_fast_unmap(struct io_pgtable_ops *ops, unsigned long iova,
 	return __av8l_fast_unmap(ops, iova, size, false);
 }
 
+static int av8l_fast_map_sg(struct io_pgtable_ops *ops,
+			unsigned long iova, struct scatterlist *sgl,
+			unsigned int nents, int prot, size_t *size)
+{
+	struct scatterlist *sg;
+	int i;
+
+	for_each_sg(sgl, sg, nents, i) {
+		av8l_fast_map(ops, iova, sg_phys(sg), sg->length, prot);
+		iova += sg->length;
+	}
+
+	return nents;
+}
+
+int av8l_fast_map_sg_public(struct io_pgtable_ops *ops,
+			    unsigned long iova, struct scatterlist *sgl,
+			    unsigned int nents, int prot, size_t *size)
+{
+	return av8l_fast_map_sg(ops, iova, sgl, nents, prot, size);
+}
+
 #if defined(CONFIG_ARM64)
 #define FAST_PGDNDX(va) (((va) & 0x7fc0000000) >> 27)
 #elif defined(CONFIG_ARM)
@@ -349,13 +364,6 @@ phys_addr_t av8l_fast_iova_to_phys_public(struct io_pgtable_ops *ops,
 					  unsigned long iova)
 {
 	return av8l_fast_iova_to_phys(ops, iova);
-}
-
-static int av8l_fast_map_sg(struct io_pgtable_ops *ops, unsigned long iova,
-			    struct scatterlist *sg, unsigned int nents,
-			    int prot, size_t *size)
-{
-	return -ENODEV;
 }
 
 static bool av8l_fast_iova_coherent(struct io_pgtable_ops *ops,

@@ -992,7 +992,7 @@ static int ath10k_usb_probe(struct usb_interface *interface,
 	struct usb_device *dev = interface_to_usbdev(interface);
 	int ret, vendor_id, product_id;
 	enum ath10k_hw_rev hw_rev;
-	struct ath10k_bus_params bus_params;
+	u32 chip_id;
 
 	/* Assumption: All USB based chipsets (so far) are QCA9377 based.
 	 * If there will be newer chipsets that does not use the hw reg
@@ -1019,30 +1019,24 @@ static int ath10k_usb_probe(struct usb_interface *interface,
 
 	ar_usb = ath10k_usb_priv(ar);
 	ret = ath10k_usb_create(ar, interface);
-	if (ret)
-		goto err;
 	ar_usb->ar = ar;
 
 	ar->dev_id = product_id;
 	ar->id.vendor = vendor_id;
 	ar->id.device = product_id;
 
-	bus_params.dev_type = ATH10K_DEV_TYPE_HL;
 	/* TODO: don't know yet how to get chip_id with USB */
-	bus_params.chip_id = 0;
-	ret = ath10k_core_register(ar, &bus_params);
+	chip_id = 0;
+	ret = ath10k_core_register(ar, chip_id);
 	if (ret) {
 		ath10k_warn(ar, "failed to register driver core: %d\n", ret);
-		goto err_usb_destroy;
+		goto err;
 	}
 
 	/* TODO: remove this once USB support is fully implemented */
 	ath10k_warn(ar, "Warning: ath10k USB support is incomplete, don't expect anything to work!\n");
 
 	return 0;
-
-err_usb_destroy:
-	ath10k_usb_destroy(ar);
 
 err:
 	ath10k_core_destroy(ar);

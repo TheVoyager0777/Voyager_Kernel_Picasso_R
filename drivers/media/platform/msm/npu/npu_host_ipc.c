@@ -1,16 +1,7 @@
-/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
  */
-
-#define pr_fmt(fmt) KBUILD_MODNAME ": " fmt
 
 /* -------------------------------------------------------------------------
  * Includes
@@ -143,7 +134,8 @@ static int npu_host_ipc_init_hfi(struct npu_device *npu_dev)
 	kfree(q_tbl_addr);
 	/* Write in the NPU's address for where IPC starts */
 	REGW(npu_dev, (uint32_t)REG_NPU_HOST_CTRL_VALUE,
-		(uint32_t)IPC_MEM_OFFSET_FROM_SSTCM);
+		(uint32_t)(npu_dev->tcm_io.phy_addr +
+		IPC_MEM_OFFSET_FROM_SSTCM));
 	/* Set value bit */
 	reg_val = REGR(npu_dev, (uint32_t)REG_NPU_HOST_CTRL_STATUS);
 	REGW(npu_dev, (uint32_t)REG_NPU_HOST_CTRL_STATUS, reg_val |
@@ -174,10 +166,8 @@ static int npu_host_ipc_send_cmd_hfi(struct npu_device *npu_dev,
 			status = INTERRUPT_RAISE_NPU(npu_dev);
 	}
 
-	if (status == 0)
-		pr_debug("Cmd Msg put on Command Queue - SUCCESSS\n");
-	else
-		pr_err("Cmd Msg put on Command Queue - FAILURE\n");
+	if (status)
+		NPU_ERR("Cmd Msg put on Command Queue - FAILURE\n");
 
 	return status;
 }
@@ -227,7 +217,7 @@ static int ipc_queue_read(struct npu_device *npu_dev,
 		 */
 		queue.qhdr_rx_req = 1;
 		*is_tx_req_set = 0;
-		status = -EPERM;
+		status = -EIO;
 		goto exit;
 	}
 
@@ -238,14 +228,17 @@ static int ipc_queue_read(struct npu_device *npu_dev,
 	MEMR(npu_dev, (void *)((size_t)read_ptr), packet, 4);
 	packet_size = *((uint32_t *)packet);
 
-	pr_debug("target_que: %d, packet_size: %d\n",
+	NPU_DBG("target_que: %d, packet_size: %d\n",
 			target_que,
 			packet_size);
 
-	if (packet_size == 0) {
-		status = -EPERM;
+	if ((packet_size == 0) ||
+		(packet_size > NPU_IPC_BUF_LENGTH)) {
+		NPU_ERR("Invalid packet size %d\n", packet_size);
+		status = -EINVAL;
 		goto exit;
 	}
+
 	new_read_idx = queue.qhdr_read_idx + packet_size;
 
 	if (new_read_idx < (queue.qhdr_q_size)) {
@@ -316,7 +309,7 @@ static int ipc_queue_write(struct npu_device *npu_dev,
 	packet_size = (*(uint32_t *)packet);
 	if (packet_size == 0) {
 		/* assign failed status and return */
-		status = -EPERM;
+		status = -EINVAL;
 		goto exit;
 	}
 
@@ -374,8 +367,6 @@ static int ipc_queue_write(struct npu_device *npu_dev,
 	/* Update qhdr_write_idx */
 	queue.qhdr_write_idx = new_write_idx;
 
-	*is_rx_req_set = (queue.qhdr_rx_req == 1) ? 1 : 0;
-
 	/* Update Write pointer -- queue.qhdr_write_idx */
 exit:
 	/* Update TX request -- queue.qhdr_tx_req */
@@ -385,6 +376,13 @@ exit:
 	MEMW(npu_dev, (void *)((size_t)(offset + (uint32_t)(
 		(size_t)&(queue.qhdr_write_idx) - (size_t)&queue))),
 		&queue.qhdr_write_idx, sizeof(queue.qhdr_write_idx));
+
+	/* check if irq is required after write_idx is updated */
+	MEMR(npu_dev, (void *)((size_t)(offset + (uint32_t)(
+		(size_t)&(queue.qhdr_rx_req) - (size_t)&queue))),
+		(uint8_t *)&queue.qhdr_rx_req,
+		sizeof(queue.qhdr_rx_req));
+	*is_rx_req_set = (queue.qhdr_rx_req == 1) ? 1 : 0;
 
 	return status;
 }
@@ -413,4 +411,14 @@ int npu_host_ipc_pre_init(struct npu_device *npu_dev)
 int npu_host_ipc_post_init(struct npu_device *npu_dev)
 {
 	return 0;
+}
+
+int npu_host_get_ipc_queue_size(struct npu_device *npu_dev, uint32_t q_idx)
+{
+	if (q_idx >= ARRAY_SIZE(npu_q_setup)) {
+		NPU_ERR("Invalid ipc queue index %d\n", q_idx);
+		return -EINVAL;
+	}
+
+	return npu_q_setup[q_idx].size;
 }

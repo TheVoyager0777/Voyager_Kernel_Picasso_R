@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2020-2021, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/clk.h>
@@ -18,6 +10,7 @@
 #include <linux/of_device.h>
 #include <linux/of.h>
 #include <linux/regmap.h>
+#include <linux/nvmem-consumer.h>
 
 #include <dt-bindings/clock/qcom,gcc-sdm429w.h>
 
@@ -30,7 +23,6 @@
 #include "reset.h"
 #include "vdd-level-sdm429w.h"
 
-#define F(f, s, h, m, n) { (f), (s), (2 * (h) - 1), (m), (n) }
 #define F_SLEW(f, s, h, m, n, sf) { (f), (s), (2 * (h) - 1), (m), (n), (sf) }
 
 static DEFINE_VDD_REGULATORS(vdd_cx, VDD_NUM, 1, vdd_corner);
@@ -254,6 +246,15 @@ static const struct parent_map gcc_parent_map_14[] = {
 	{ P_CORE_BI_PLL_TEST_SE, 7 },
 };
 
+static const struct parent_map gcc_parent_map_14_gfx3d[] = {
+	{ P_BI_TCXO, 0 },
+	{ P_GPLL0_OUT_MAIN, 5 },
+	{ P_GPLL3_OUT_MAIN, 2 },
+	{ P_GPLL6_OUT_AUX, 6 },
+	{ P_GPLL4_OUT_AUX, 4 },
+	{ P_CORE_BI_PLL_TEST_SE, 7 },
+};
+
 static const char * const gcc_parent_names_14[] = {
 	"bi_tcxo",
 	"gpll0_out_main",
@@ -361,6 +362,7 @@ static const char * const gcc_parent_names_20[] = {
 
 static struct clk_alpha_pll gpll0_sleep_clk_src = {
 	.offset = 0x21000,
+	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr = {
 		.enable_reg = 0x45008,
 		.enable_mask = BIT(23),
@@ -369,7 +371,7 @@ static struct clk_alpha_pll gpll0_sleep_clk_src = {
 			.name = "gpll0_sleep_clk_src",
 			.parent_names = (const char *[]){ "bi_tcxo" },
 			.num_parents = 1,
-			.ops = &clk_pll_sleep_vote_ops,
+			.ops = &clk_alpha_pll_ops,
 		},
 	},
 };
@@ -381,13 +383,14 @@ static struct clk_alpha_pll gpll0_out_main = {
 	.soft_vote = &soft_vote_gpll0,
 	.soft_vote_mask = PLL_SOFT_VOTE_PRIMARY,
 	.flags = SUPPORTS_FSM_MODE,
+	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr = {
 		.enable_reg = 0x45000,
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data){
 			.name = "gpll0_out_main",
 			.parent_names = (const char *[])
-					{ "gpll0_sleep_clk_src" },
+					{ "bi_tcxo" },
 			.num_parents = 1,
 			.ops = &clk_alpha_pll_ops,
 		},
@@ -410,6 +413,7 @@ static struct clk_alpha_pll gpll0_ao_out_main = {
 	.soft_vote = &soft_vote_gpll0,
 	.soft_vote_mask = PLL_SOFT_VOTE_CPU,
 	.flags = SUPPORTS_FSM_MODE,
+	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr = {
 		.enable_reg = 0x45000,
 		.enable_mask = BIT(0),
@@ -423,10 +427,10 @@ static struct clk_alpha_pll gpll0_ao_out_main = {
 };
 
 /* 750MHz configuration */
-static const struct alpha_pll_config gpll3_config = {
+static struct alpha_pll_config gpll3_config = {
 	.l = 0x27,
 	.alpha = 0x0,
-	.alpha_u = 0x10,
+	.alpha_hi = 0x10,
 	.alpha_en_mask = BIT(24),
 	.post_div_mask = 0xf << 8,
 	.post_div_val = 0x1 << 8,
@@ -446,6 +450,7 @@ static struct clk_alpha_pll gpll3_out_main = {
 	.flags = SUPPORTS_SLEW,
 	.vco_table = gpll3_vco,
 	.num_vco = ARRAY_SIZE(gpll3_vco),
+	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr = {
 		.hw.init = &(struct clk_init_data){
 			.name = "gpll3_out_main",
@@ -463,6 +468,7 @@ static struct clk_alpha_pll gpll3_out_main = {
 
 static struct clk_alpha_pll gpll4_out_main = {
 	.offset = 0x24000,
+	.regs = clk_alpha_pll_regs[CLK_ALPHA_PLL_TYPE_DEFAULT],
 	.clkr = {
 		.enable_reg = 0x45000,
 		.enable_mask = BIT(5),
@@ -978,6 +984,16 @@ static const struct freq_tbl ftbl_cpp_clk_src[] = {
 	{ }
 };
 
+static const struct freq_tbl ftbl_cpp_clk_src_qm215[] = {
+	F( 133330000, P_GPLL0_OUT_MAIN, 6, 0, 0),
+	F( 160000000, P_GPLL0_OUT_MAIN, 5, 0, 0),
+	F( 266670000, P_GPLL0_OUT_MAIN, 3, 0, 0),
+	F( 308570000, P_GPLL6_OUT_MAIN, 3.5, 0, 0),
+	F( 320000000, P_GPLL0_OUT_MAIN, 2.5, 0, 0),
+	F( 360000000, P_GPLL6_OUT_MAIN, 3, 0, 0),
+	{ }
+};
+
 static struct clk_rcg2 cpp_clk_src = {
 	.cmd_rcgr = 0x58018,
 	.mnd_width = 0,
@@ -1249,6 +1265,14 @@ static const struct freq_tbl ftbl_usb_hs_system_clk_src[] = {
 	{ }
 };
 
+static const struct freq_tbl ftbl_usb_hs_system_clk_src_qm215[] = {
+	F( 80000000, P_GPLL0_OUT_MAIN, 10, 0, 0),
+	F( 100000000, P_GPLL0_OUT_MAIN, 8, 0, 0),
+	F( 133330000, P_GPLL0_OUT_MAIN, 6, 0, 0),
+	F( 177780000, P_GPLL0_OUT_MAIN, 4.5, 0, 0),
+	{ }
+};
+
 static struct clk_rcg2 usb_hs_system_clk_src = {
 	.cmd_rcgr = 0x41010,
 	.mnd_width = 0,
@@ -1284,6 +1308,22 @@ static const struct freq_tbl ftbl_vfe0_clk_src[] = {
 	F(360000000, P_GPLL6_OUT_MAIN, 3, 0, 0),
 	F(400000000, P_GPLL0_OUT_MAIN, 2, 0, 0),
 	F(432000000, P_GPLL6_OUT_MAIN, 2.5, 0, 0),
+	{ }
+};
+
+static const struct freq_tbl ftbl_vfe0_clk_src_qm215[] = {
+	F(  50000000, P_GPLL0_OUT_MAIN, 16, 0, 0),
+	F(  80000000, P_GPLL0_OUT_MAIN, 10, 0, 0),
+	F( 100000000, P_GPLL0_OUT_MAIN, 8, 0, 0),
+	F( 133333333, P_GPLL0_OUT_MAIN, 6, 0, 0),
+	F( 160000000, P_GPLL0_OUT_MAIN, 5, 0, 0),
+	F( 177780000, P_GPLL0_OUT_MAIN, 4.5, 0, 0),
+	F( 200000000, P_GPLL0_OUT_MAIN, 4, 0, 0),
+	F( 266670000, P_GPLL0_OUT_MAIN, 3, 0, 0),
+	F( 308570000, P_GPLL6_OUT_MAIN, 3.5, 0, 0),
+	F( 320000000, P_GPLL0_OUT_MAIN, 2.5, 0, 0),
+	F( 329140000, P_GPLL4_OUT_MAIN, 3.5, 0, 0),
+	F( 360000000, P_GPLL6_OUT_MAIN, 3, 0, 0),
 	{ }
 };
 
@@ -1507,6 +1547,14 @@ static const struct freq_tbl ftbl_csi0phytimer_clk_src[] = {
 	{ }
 };
 
+static const struct freq_tbl ftbl_csi0phytimer_clk_src_qm215[] = {
+	F( 100000000, P_GPLL0_OUT_MAIN, 8, 0, 0),
+	F( 160000000, P_GPLL0_OUT_MAIN, 5, 0, 0),
+	F( 200000000, P_GPLL0_OUT_MAIN, 4, 0, 0),
+	F( 266670000, P_GPLL0_OUT_MAIN, 3, 0, 0),
+	{ }
+};
+
 static struct clk_rcg2 csi0phytimer_clk_src = {
 	.cmd_rcgr = 0x4e000,
 	.mnd_width = 0,
@@ -1668,6 +1716,22 @@ static const struct freq_tbl ftbl_gfx3d_clk_src[] = {
 	{ }
 };
 
+static struct freq_tbl ftbl_oxili_gfx3d_clk_src_qm215[] = {
+	F_SLEW( 19200000, P_BI_TCXO, 1, 0, 0, FIXED_FREQ_SRC),
+	F_SLEW( 50000000, P_GPLL0_OUT_MAIN, 16, 0, 0, FIXED_FREQ_SRC),
+	F_SLEW( 80000000, P_GPLL0_OUT_MAIN, 10, 0, 0, FIXED_FREQ_SRC),
+	F_SLEW( 100000000, P_GPLL0_OUT_MAIN, 8, 0, 0, FIXED_FREQ_SRC),
+	F_SLEW( 160000000, P_GPLL0_OUT_MAIN, 5, 0, 0, FIXED_FREQ_SRC),
+	F_SLEW( 200000000, P_GPLL0_OUT_MAIN, 4, 0, 0, FIXED_FREQ_SRC),
+	F_SLEW( 228570000, P_GPLL0_OUT_MAIN, 3.5, 0, 0, FIXED_FREQ_SRC),
+	F_SLEW( 240000000, P_GPLL6_OUT_AUX, 4.5, 0, 0, FIXED_FREQ_SRC),
+	F_SLEW( 266670000, P_GPLL0_OUT_MAIN, 3, 0, 0, FIXED_FREQ_SRC),
+	F_SLEW( 270000000, P_GPLL6_OUT_AUX, 4, 0, 0, FIXED_FREQ_SRC),
+	F_SLEW( 320000000, P_GPLL0_OUT_MAIN, 2.5, 0, 0, FIXED_FREQ_SRC),
+	F_SLEW( 400000000, P_GPLL0_OUT_MAIN, 2, 0, 0, FIXED_FREQ_SRC),
+	{ }
+};
+
 static struct clk_rcg2 gfx3d_clk_src = {
 	.cmd_rcgr = 0x59000,
 	.mnd_width = 0,
@@ -1675,7 +1739,6 @@ static struct clk_rcg2 gfx3d_clk_src = {
 	.parent_map = gcc_parent_map_14,
 	.freq_tbl = ftbl_gfx3d_clk_src,
 	.flags = FORCE_ENABLE_RCG,
-	.enable_safe_config = true,
 	.clkr.hw.init = &(struct clk_init_data){
 		.name = "gfx3d_clk_src",
 		.parent_names = gcc_parent_names_14,
@@ -1828,6 +1891,16 @@ static const struct freq_tbl ftbl_vcodec0_clk_src[] = {
 	{ }
 };
 
+static const struct freq_tbl ftbl_vcodec0_clk_src_qm215[] = {
+	F( 160000000, P_GPLL0_OUT_MAIN, 5, 0, 0),
+	F( 200000000, P_GPLL0_OUT_MAIN, 4, 0, 0),
+	F( 270000000, P_GPLL6_OUT_MAIN, 4, 0, 0),
+	F( 308570000, P_GPLL6_OUT_MAIN, 3.5, 0, 0),
+	F( 329140000, P_GPLL4_OUT_MAIN, 3.5, 0, 0),
+	F( 360000000, P_GPLL6_OUT_MAIN, 3, 0, 0),
+	{ }
+};
+
 static struct clk_rcg2 vcodec0_clk_src = {
 	.cmd_rcgr = 0x4c000,
 	.mnd_width = 8,
@@ -1878,6 +1951,63 @@ static struct clk_branch gcc_bimc_gfx_clk = {
 		.enable_mask = BIT(0),
 		.hw.init = &(struct clk_init_data){
 			.name = "gcc_bimc_gfx_clk",
+			.ops = &clk_branch2_ops,
+		},
+	},
+};
+
+static struct clk_branch gcc_gfx_tbu_clk = {
+	.halt_reg = 0x12010,
+	.halt_check = BRANCH_VOTED,
+	.clkr = {
+		.enable_reg = 0x3600C,
+		.enable_mask = BIT(3),
+		.hw.init = &(struct clk_init_data){
+			.name = "gcc_gfx_tbu_clk",
+			.ops = &clk_branch2_ops,
+		},
+	},
+};
+
+static struct clk_branch gcc_gfx_tcu_clk = {
+	.halt_reg = 0x12020,
+	.halt_check = BRANCH_VOTED,
+	.clkr = {
+		.enable_reg = 0x3600C,
+		.enable_mask = BIT(2),
+		.hw.init = &(struct clk_init_data){
+			.name = "gcc_gfx_tcu_clk",
+			.ops = &clk_branch2_ops,
+		},
+	},
+};
+
+static struct clk_branch gcc_gtcu_ahb_clk = {
+	.halt_reg = 0x12044,
+	.halt_check = BRANCH_VOTED,
+	.clkr = {
+		.enable_reg = 0x3600C,
+		.enable_mask = BIT(13),
+		.hw.init = &(struct clk_init_data){
+			.name = "gcc_gtcu_ahb_clk",
+			.ops = &clk_branch2_ops,
+		},
+	},
+};
+
+static struct clk_branch gcc_oxili_gmem_clk = {
+	.halt_reg = 0x59024,
+	.halt_check = BRANCH_HALT_DELAY,
+	.clkr = {
+		.enable_reg = 0x59024,
+		.enable_mask = BIT(0),
+		.hw.init = &(struct clk_init_data){
+			.name = "gcc_oxili_gmem_clk",
+			.parent_names = (const char *[]){
+				"gfx3d_clk_src",
+			},
+			.num_parents = 1,
+			.flags = CLK_SET_RATE_PARENT,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -3664,7 +3794,7 @@ static struct clk_branch gcc_venus0_vcodec0_clk = {
 };
 
 static struct clk_branch gcc_apss_tcu_clk = {
-	.halt_reg = 0x5b004,
+	.halt_reg = 0x12018,
 	.halt_check = BRANCH_VOTED,
 	.clkr = {
 		.enable_reg = 0x4500c,
@@ -3818,6 +3948,10 @@ static struct clk_regmap *gcc_sdm429w_clocks[] = {
 	[CPP_CLK_SRC] = &cpp_clk_src.clkr,
 	[CRYPTO_CLK_SRC] = &crypto_clk_src.clkr,
 	[GCC_BIMC_GFX_CLK] = &gcc_bimc_gfx_clk.clkr,
+	[GCC_GFX_TCU_CLK] = &gcc_gfx_tcu_clk.clkr,
+	[GCC_GFX_TBU_CLK] = &gcc_gfx_tbu_clk.clkr,
+	[GCC_GTCU_AHB_CLK] = &gcc_gtcu_ahb_clk.clkr,
+	[GCC_OXILI_GMEM_CLK] = &gcc_oxili_gmem_clk.clkr,
 	[GCC_BLSP1_AHB_CLK] = &gcc_blsp1_ahb_clk.clkr,
 	[GCC_BLSP1_QUP1_I2C_APPS_CLK] = &gcc_blsp1_qup1_i2c_apps_clk.clkr,
 	[GCC_BLSP1_QUP1_SPI_APPS_CLK] = &gcc_blsp1_qup1_spi_apps_clk.clkr,
@@ -3993,8 +4127,149 @@ static const struct qcom_cc_desc gcc_sdm429w_desc = {
 	.num_resets = ARRAY_SIZE(gcc_sdm429w_resets),
 };
 
+static void get_speed_bin(struct platform_device *pdev, int *bin)
+{
+	struct resource *res;
+	void __iomem *base;
+	u32 config_efuse;
+
+	*bin = 0;
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "gpu-bin");
+	if (!res) {
+		dev_info(&pdev->dev,
+			"No GPU speed binning available. Defaulting to 0.\n");
+		return;
+	}
+
+	base = ioremap(res->start, resource_size(res));
+	if (!base) {
+		dev_warn(&pdev->dev,
+			"Unable to ioremap efuse reg address. Defaulting to 0.\n");
+		return;
+	}
+
+	config_efuse = readl_relaxed(base);
+	iounmap(base);
+	*bin = (config_efuse >> 31) & 0x1;
+
+	dev_info(&pdev->dev, "GPU speed bin: %d\n", *bin);
+}
+
+static struct clk_init_data vcodec0_clk_src_init = {
+	.name = "vcodec0_clk_src",
+	.parent_names = gcc_parent_names_7,
+	.num_parents = 5,
+	.ops = &clk_rcg2_ops,
+	.vdd_class = &vdd_cx,
+	.num_rate_max = VDD_NUM,
+	.rate_max = (unsigned long[VDD_NUM]) {
+		[VDD_LOW] = 200000000,
+		[VDD_LOW_L1] = 270000000,
+		[VDD_NOMINAL] = 308570000,
+		[VDD_NOMINAL_L1] = 329140000,
+		[VDD_HIGH] = 360000000},
+};
+
+static void fixup_for_qm215(struct platform_device *pdev,
+	struct regmap *regmap, int speed_bin)
+{
+	gpll3_config.l = 0x30;
+	gpll3_config.alpha_hi = 0x70;
+
+	vfe0_clk_src.clkr.hw.init->rate_max[VDD_LOW] = 160000000;
+	vfe0_clk_src.clkr.hw.init->rate_max[VDD_LOW_L1] = 266670000;
+	vfe0_clk_src.clkr.hw.init->rate_max[VDD_NOMINAL] = 320000000;
+	vfe0_clk_src.clkr.hw.init->rate_max[VDD_NOMINAL_L1] = 329140000;
+	vfe0_clk_src.clkr.hw.init->rate_max[VDD_HIGH] = 360000000;
+	vfe0_clk_src.freq_tbl = ftbl_vfe0_clk_src_qm215;
+
+	vfe1_clk_src.clkr.hw.init->rate_max[VDD_LOW] = 160000000;
+	vfe1_clk_src.clkr.hw.init->rate_max[VDD_LOW_L1] = 266670000;
+	vfe1_clk_src.clkr.hw.init->rate_max[VDD_NOMINAL] = 320000000;
+	vfe1_clk_src.clkr.hw.init->rate_max[VDD_NOMINAL_L1] = 329140000;
+	vfe1_clk_src.clkr.hw.init->rate_max[VDD_HIGH] = 360000000;
+	vfe1_clk_src.freq_tbl = ftbl_vfe0_clk_src_qm215;
+
+	cpp_clk_src.clkr.hw.init->rate_max[VDD_LOW] = 160000000;
+	cpp_clk_src.clkr.hw.init->rate_max[VDD_LOW_L1] = 266670000;
+	cpp_clk_src.clkr.hw.init->rate_max[VDD_NOMINAL] = 320000000;
+	cpp_clk_src.clkr.hw.init->rate_max[VDD_NOMINAL_L1] = 360000000;
+	cpp_clk_src.clkr.hw.init->rate_max[VDD_HIGH] = 0;
+	cpp_clk_src.freq_tbl = ftbl_cpp_clk_src_qm215;
+
+	vcodec0_clk_src.freq_tbl = ftbl_vcodec0_clk_src_qm215;
+	vcodec0_clk_src.parent_map = gcc_parent_map_7;
+	vcodec0_clk_src.clkr.hw.init = &vcodec0_clk_src_init;
+
+	gfx3d_clk_src.parent_map = gcc_parent_map_14_gfx3d;
+	gfx3d_clk_src.freq_tbl = ftbl_oxili_gfx3d_clk_src_qm215;
+
+	if (speed_bin) {
+		gcc_oxili_gfx3d_clk.clkr.hw.init->rate_max[VDD_LOW] =
+			270000000;
+		gcc_oxili_gfx3d_clk.clkr.hw.init->rate_max[VDD_LOW_L1] =
+			400000000;
+		gcc_oxili_gfx3d_clk.clkr.hw.init->rate_max[VDD_NOMINAL] =
+			484800000;
+		gcc_oxili_gfx3d_clk.clkr.hw.init->rate_max[VDD_NOMINAL_L1] =
+			523200000;
+		gcc_oxili_gfx3d_clk.clkr.hw.init->rate_max[VDD_HIGH] =
+			650000000;
+	} else {
+		gcc_oxili_gfx3d_clk.clkr.hw.init->rate_max[VDD_LOW] =
+			270000000;
+		gcc_oxili_gfx3d_clk.clkr.hw.init->rate_max[VDD_LOW_L1] =
+			400000000;
+		gcc_oxili_gfx3d_clk.clkr.hw.init->rate_max[VDD_NOMINAL] =
+			484800000;
+		gcc_oxili_gfx3d_clk.clkr.hw.init->rate_max[VDD_NOMINAL_L1] =
+			523200000;
+		gcc_oxili_gfx3d_clk.clkr.hw.init->rate_max[VDD_HIGH] =
+			598000000;
+	}
+
+	gpll3_out_main.clkr.hw.init->rate_max[VDD_LOW_L1] = 0;
+	gpll3_out_main.clkr.hw.init->rate_max[VDD_NOMINAL] = 1400000000;
+
+	csi0phytimer_clk_src.clkr.hw.init->rate_max[VDD_LOW] = 100000000;
+	csi0phytimer_clk_src.clkr.hw.init->rate_max[VDD_LOW_L1] = 200000000;
+	csi0phytimer_clk_src.clkr.hw.init->rate_max[VDD_NOMINAL] = 266670000;
+	csi0phytimer_clk_src.freq_tbl = ftbl_csi0phytimer_clk_src_qm215;
+
+	csi1phytimer_clk_src.clkr.hw.init->rate_max[VDD_LOW] = 100000000;
+	csi1phytimer_clk_src.clkr.hw.init->rate_max[VDD_LOW_L1] = 200000000;
+	csi1phytimer_clk_src.clkr.hw.init->rate_max[VDD_NOMINAL] = 266670000;
+	csi1phytimer_clk_src.freq_tbl = ftbl_csi0phytimer_clk_src_qm215;
+
+	sdcc1_apps_clk_src.clkr.hw.init->rate_max[VDD_LOW] = 200000000;
+	sdcc1_apps_clk_src.clkr.hw.init->rate_max[VDD_NOMINAL] = 400000000;
+
+	usb_hs_system_clk_src.clkr.hw.init->rate_max[VDD_LOW] = 800000000;
+	usb_hs_system_clk_src.clkr.hw.init->rate_max[VDD_NOMINAL] = 133333000;
+	usb_hs_system_clk_src.clkr.hw.init->rate_max[VDD_HIGH] = 177780000;
+	usb_hs_system_clk_src.freq_tbl = ftbl_usb_hs_system_clk_src_qm215;
+
+	/*
+	 * Below clocks are not available on QM215, thus mark them NULL.
+	 */
+	gcc_sdm429w_desc.clks[BLSP1_QUP1_I2C_APPS_CLK_SRC] = NULL;
+	gcc_sdm429w_desc.clks[BLSP1_QUP1_SPI_APPS_CLK_SRC] = NULL;
+	gcc_sdm429w_desc.clks[BLSP2_QUP4_I2C_APPS_CLK_SRC] = NULL;
+	gcc_sdm429w_desc.clks[BLSP2_QUP4_SPI_APPS_CLK_SRC] = NULL;
+	gcc_sdm429w_desc.clks[GCC_BLSP1_QUP1_I2C_APPS_CLK] = NULL;
+	gcc_sdm429w_desc.clks[GCC_BLSP1_QUP1_SPI_APPS_CLK] = NULL;
+	gcc_sdm429w_desc.clks[GCC_BLSP2_QUP4_I2C_APPS_CLK] = NULL;
+	gcc_sdm429w_desc.clks[GCC_BLSP2_QUP4_SPI_APPS_CLK] = NULL;
+	gcc_sdm429w_desc.clks[GCC_OXILI_AON_CLK] = NULL;
+	gcc_sdm429w_desc.clks[GCC_OXILI_TIMER_CLK] = NULL;
+	gcc_sdm429w_desc.clks[ESC1_CLK_SRC] = NULL;
+	gcc_sdm429w_desc.clks[GCC_MDSS_ESC1_CLK] = NULL;
+}
+
 static const struct of_device_id gcc_sdm429w_match_table[] = {
 	{ .compatible = "qcom,gcc-sdm429w" },
+	{ .compatible = "qcom,gcc-qm215" },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, gcc_sdm429w_match_table);
@@ -4003,14 +4278,19 @@ static int gcc_sdm429w_probe(struct platform_device *pdev)
 {
 	struct regmap *regmap;
 	struct clk *clk;
-	int ret;
+	int ret, speed_bin;
+	bool qm215;
 
-	clk = devm_clk_get(&pdev->dev, "bi_tcxo");
+	qm215 = of_device_is_compatible(pdev->dev.of_node,
+						"qcom,gcc-qm215");
+
+	clk = clk_get(&pdev->dev, "bi_tcxo");
 	if (IS_ERR(clk)) {
 		if (PTR_ERR(clk) != -EPROBE_DEFER)
 			dev_err(&pdev->dev, "Unable to get bi_tcxo clock\n");
 		return PTR_ERR(clk);
 	}
+	clk_put(clk);
 
 	vdd_cx.regulator[0] = devm_regulator_get(&pdev->dev, "vdd_cx");
 	if (IS_ERR(vdd_cx.regulator[0])) {
@@ -4022,6 +4302,16 @@ static int gcc_sdm429w_probe(struct platform_device *pdev)
 	regmap = qcom_cc_map(pdev, &gcc_sdm429w_desc);
 	if (IS_ERR(regmap))
 		return PTR_ERR(regmap);
+
+	if (qm215) {
+		speed_bin = 0;
+		get_speed_bin(pdev, &speed_bin);
+		fixup_for_qm215(pdev, regmap, speed_bin);
+
+		/* Configure Sleep and Wakeup cycles for GMEM clock */
+		regmap_update_bits(regmap, gcc_oxili_gmem_clk.clkr.enable_reg,
+				0xff0, 0xff0);
+	}
 
 	clk_alpha_pll_configure(&gpll3_out_main, regmap, &gpll3_config);
 
@@ -4043,7 +4333,7 @@ static int gcc_sdm429w_probe(struct platform_device *pdev)
 
 	dev_info(&pdev->dev, "Registered GCC clocks\n");
 
-	return ret;
+	return 0;
 }
 
 static struct platform_driver gcc_sdm429w_driver = {
@@ -4092,6 +4382,7 @@ static const struct qcom_cc_desc mdss_sdm429w_desc = {
 
 static const struct of_device_id mdss_sdm429w_match_table[] = {
 	{ .compatible = "qcom,gcc-mdss-sdm429w" },
+	{ .compatible = "qcom,gcc-mdss-8917" },
 	{}
 };
 MODULE_DEVICE_TABLE(of, mdss_sdm429w_match_table);
@@ -4104,19 +4395,21 @@ static int mdss_sdm429w_probe(struct platform_device *pdev)
 	void __iomem *base;
 	int ret;
 
-	clk = devm_clk_get(&pdev->dev, "pclk0_src");
+	clk = clk_get(&pdev->dev, "pclk0_src");
 	if (IS_ERR(clk)) {
 		if (PTR_ERR(clk) != -EPROBE_DEFER)
 			dev_err(&pdev->dev, "Unable to get pclk0_src clock\n");
 		return PTR_ERR(clk);
 	}
+	clk_put(clk);
 
-	clk = devm_clk_get(&pdev->dev, "byte0_src");
+	clk = clk_get(&pdev->dev, "byte0_src");
 	if (IS_ERR(clk)) {
 		if (PTR_ERR(clk) != -EPROBE_DEFER)
 			dev_err(&pdev->dev, "Unable to get byte0_src clock\n");
 		return PTR_ERR(clk);
 	}
+	clk_put(clk);
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (res == NULL) {

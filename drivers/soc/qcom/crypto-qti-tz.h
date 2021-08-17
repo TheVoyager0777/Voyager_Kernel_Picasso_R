@@ -1,13 +1,6 @@
-/* Copyright (c) 2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2020, The Linux Foundation. All rights reserved.
  */
 
 #include <soc/qcom/qseecomi.h>
@@ -15,8 +8,6 @@
 #ifndef _CRYPTO_QTI_TZ_H
 #define _CRYPTO_QTI_TZ_H
 
-#define TZ_ES_INVALIDATE_ICE_KEY 0x3
-#define TZ_ES_CONFIG_SET_ICE_KEY 0x4
 #define TZ_ES_CONFIG_SET_ICE_KEY_CE_TYPE 0x5
 #define TZ_ES_INVALIDATE_ICE_KEY_CE_TYPE 0x6
 #define TZ_ES_RETRIEVE_RAW_SECRET_CE_TYPE 0x7
@@ -25,10 +16,6 @@
 	TZ_SYSCALL_CREATE_SMC_ID(TZ_OWNER_SIP, TZ_SVC_ES, \
 	TZ_ES_CONFIG_SET_ICE_KEY_CE_TYPE)
 
-#define TZ_ES_CONFIG_SET_ICE_KEY_ID \
-	TZ_SYSCALL_CREATE_SMC_ID(TZ_OWNER_SIP, TZ_SVC_ES, \
-	TZ_ES_CONFIG_SET_ICE_KEY)
-
 #define TZ_ES_INVALIDATE_ICE_KEY_CE_TYPE_ID \
 	TZ_SYSCALL_CREATE_SMC_ID(TZ_OWNER_SIP, \
 	TZ_SVC_ES, TZ_ES_INVALIDATE_ICE_KEY_CE_TYPE)
@@ -36,20 +23,6 @@
 #define TZ_ES_RETRIEVE_RAW_SECRET_CE_TYPE_ID \
 	TZ_SYSCALL_CREATE_SMC_ID(TZ_OWNER_SIP, \
 	TZ_SVC_ES, TZ_ES_RETRIEVE_RAW_SECRET_CE_TYPE)
-
-#define TZ_ES_INVALIDATE_ICE_KEY_ID \
-	TZ_SYSCALL_CREATE_SMC_ID(TZ_OWNER_SIP, \
-	TZ_SVC_ES, TZ_ES_INVALIDATE_ICE_KEY)
-
-#define TZ_ES_INVALIDATE_ICE_KEY_PARAM_ID \
-	TZ_SYSCALL_CREATE_PARAM_ID_1( \
-	TZ_SYSCALL_PARAM_TYPE_VAL)
-
-#define TZ_ES_CONFIG_SET_ICE_KEY_PARAM_ID \
-	TZ_SYSCALL_CREATE_PARAM_ID_5( \
-	TZ_SYSCALL_PARAM_TYPE_VAL, \
-	TZ_SYSCALL_PARAM_TYPE_BUF_RW, TZ_SYSCALL_PARAM_TYPE_VAL, \
-	TZ_SYSCALL_PARAM_TYPE_VAL, TZ_SYSCALL_PARAM_TYPE_VAL)
 
 #define TZ_ES_INVALIDATE_ICE_KEY_CE_TYPE_PARAM_ID \
 	TZ_SYSCALL_CREATE_PARAM_ID_2( \

@@ -1,14 +1,8 @@
-/* Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+
+/*
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #define pr_fmt(fmt) "%s: " fmt, KBUILD_MODNAME
@@ -31,7 +25,7 @@
 #define REG_VALID 0x0
 #define REG_DATA_LO 0x4
 #define REG_DATA_HI 0x8
-
+#define BUF_SIZE 200
 #define GET_ADDR(REG, UNIT_NO) (REG + (UNIT_DIST * UNIT_NO))
 
 enum master_smem_id {
@@ -106,6 +100,7 @@ static ssize_t msm_rpmh_master_stats_print_data(char *prvbuf, ssize_t length,
 				struct msm_rpmh_master_stats *record,
 				const char *name)
 {
+	int sleep_status;
 	uint64_t accumulated_duration = record->accumulated_duration;
 	/*
 	 * If a master is in sleep when reading the sleep stats from SMEM
@@ -113,19 +108,22 @@ static ssize_t msm_rpmh_master_stats_print_data(char *prvbuf, ssize_t length,
 	 * This ensures that the displayed stats are real when used for
 	 * the purpose of computing battery utilization.
 	 */
-	if (record->last_entered > record->last_exited)
+	sleep_status = 0;
+	if (record->last_entered > record->last_exited) {
 		accumulated_duration +=
 				(arch_counter_get_cntvct()
 				- record->last_entered);
-
-	return snprintf(prvbuf, length, "%s\n\tVersion:0x%x\n"
+		sleep_status = 1;
+        }
+	return scnprintf(prvbuf, length, "%s\n\tVersion:0x%x\n"
 			"\tSleep Count:0x%x\n"
 			"\tSleep Last Entered At:0x%llx\n"
 			"\tSleep Last Exited At:0x%llx\n"
-			"\tSleep Accumulated Duration:0x%llx\n\n",
+			"\tSleep Accumulated Duration:0x%llx\n"
+			"\tSleep Status:%d\n\n",
 			name, record->version_id, record->counts,
 			record->last_entered, record->last_exited,
-			accumulated_duration);
+			accumulated_duration, sleep_status);
 }
 
 static ssize_t msm_rpmh_master_stats_show(struct kobject *kobj,
@@ -208,9 +206,6 @@ static int msm_rpmh_master_stats_probe(struct platform_device *pdev)
 	struct kobject *rpmh_master_stats_kobj = NULL;
 	int ret = -ENOMEM;
 
-	if (!pdev)
-		return -EINVAL;
-
 	prvdata = devm_kzalloc(&pdev->dev, sizeof(*prvdata), GFP_KERNEL);
 	if (!prvdata)
 		return ret;
@@ -256,9 +251,6 @@ fail_sysfs:
 static int msm_rpmh_master_stats_remove(struct platform_device *pdev)
 {
 	struct rpmh_master_stats_prv_data *prvdata;
-
-	if (!pdev)
-		return -EINVAL;
 
 	prvdata = (struct rpmh_master_stats_prv_data *)
 				platform_get_drvdata(pdev);

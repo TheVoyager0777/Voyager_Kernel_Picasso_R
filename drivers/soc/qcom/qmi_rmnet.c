@@ -1,14 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <soc/qcom/qmi_rmnet.h>
@@ -20,8 +13,6 @@
 #include <net/tcp.h>
 #include "qmi_rmnet_i.h"
 #include <trace/events/dfc.h>
-#include <linux/module.h>
-#include <linux/moduleparam.h>
 #include <linux/ip.h>
 #include <linux/ipv6.h>
 #include <linux/alarmtimer.h>
@@ -30,6 +21,8 @@
 #define NLMSG_FLOW_DEACTIVATE 2
 #define NLMSG_CLIENT_SETUP 4
 #define NLMSG_CLIENT_DELETE 5
+#define NLMSG_SCALE_FACTOR 6
+#define NLMSG_WQ_FREQUENCY 7
 
 #define FLAG_DFC_MASK 0x000F
 #define FLAG_POWERSAVE_MASK 0x0010
@@ -48,8 +41,6 @@ int dfc_qmap;
 #define IS_ANCILLARY(type) ((type) != AF_INET && (type) != AF_INET6)
 
 unsigned int rmnet_wq_frequency __read_mostly = 1000;
-module_param(rmnet_wq_frequency, uint, 0644);
-MODULE_PARM_DESC(rmnet_wq_frequency, "Frequency of PS check in ms");
 
 #define PS_WORK_ACTIVE_BIT 0
 #define PS_INTERVAL (((!rmnet_wq_frequency) ?                             \
@@ -72,7 +63,7 @@ struct qmi_elem_info data_ep_id_type_v01_ei[] = {
 		.data_type	= QMI_SIGNED_4_BYTE_ENUM,
 		.elem_len	= 1,
 		.elem_size	= sizeof(enum data_ep_type_enum_v01),
-		.is_array	= NO_ARRAY,
+		.array_type	= NO_ARRAY,
 		.tlv_type	= QMI_COMMON_TLV_TYPE,
 		.offset		= offsetof(struct data_ep_id_type_v01,
 					   ep_type),
@@ -82,7 +73,7 @@ struct qmi_elem_info data_ep_id_type_v01_ei[] = {
 		.data_type	= QMI_UNSIGNED_4_BYTE,
 		.elem_len	= 1,
 		.elem_size	= sizeof(u32),
-		.is_array	= NO_ARRAY,
+		.array_type	= NO_ARRAY,
 		.tlv_type	= QMI_COMMON_TLV_TYPE,
 		.offset		= offsetof(struct data_ep_id_type_v01,
 					   iface_id),
@@ -92,7 +83,7 @@ struct qmi_elem_info data_ep_id_type_v01_ei[] = {
 		.data_type	= QMI_EOTI,
 		.elem_len	= 0,
 		.elem_size	= 0,
-		.is_array	= NO_ARRAY,
+		.array_type	= NO_ARRAY,
 		.tlv_type	= QMI_COMMON_TLV_TYPE,
 		.offset		= 0,
 		.ei_array	= NULL,
@@ -260,7 +251,7 @@ static void qmi_rmnet_watchdog_fn(struct timer_list *t)
 	bearer->watchdog_expire_cnt++;
 	bearer->bytes_in_flight = 0;
 	if (!bearer->grant_size) {
-		bearer->grant_size = DEFAULT_GRANT;
+		bearer->grant_size = DEFAULT_CALL_GRANT;
 		bearer->grant_thresh = qmi_rmnet_grant_per(bearer->grant_size);
 		dfc_bearer_flow_ctl(bearer->qos->vnd_dev, bearer, bearer->qos);
 	} else {
@@ -335,7 +326,7 @@ static struct rmnet_bearer_map *__qmi_rmnet_bearer_get(
 
 		bearer->bearer_id = bearer_id;
 		bearer->flow_ref = 1;
-		bearer->grant_size = DEFAULT_GRANT;
+                bearer->grant_size = DEFAULT_CALL_GRANT;
 		bearer->grant_thresh = qmi_rmnet_grant_per(bearer->grant_size);
 		bearer->mq_idx = INVALID_MQ;
 		bearer->ack_mq_idx = INVALID_MQ;
@@ -570,27 +561,6 @@ static void qmi_rmnet_query_flows(struct qmi_info *qmi)
 	}
 }
 
-static int qmi_rmnet_set_scale_factor(const char *val,
-				      const struct kernel_param *kp)
-{
-	int ret;
-	unsigned int num = 0;
-
-	ret = kstrtouint(val, 10, &num);
-	if (ret != 0 || num == 0)
-		return -EINVAL;
-
-	return param_set_uint(val, kp);
-}
-
-static const struct kernel_param_ops qmi_rmnet_scale_ops = {
-	.set	= qmi_rmnet_set_scale_factor,
-	.get	= param_get_uint,
-};
-
-module_param_cb(qmi_rmnet_scale_factor, &qmi_rmnet_scale_ops,
-		&qmi_rmnet_scale_factor, 0664);
-
 struct rmnet_bearer_map *qmi_rmnet_get_bearer_noref(struct qos_info *qos_info,
 						    u8 bearer_id)
 {
@@ -779,6 +749,14 @@ void qmi_rmnet_change_link(struct net_device *dev, void *port, void *tcm_pt)
 			qmi_rmnet_work_exit(port);
 		}
 		qmi_rmnet_delete_client(port, qmi, tcm);
+		break;
+	case NLMSG_SCALE_FACTOR:
+		if (!tcm->tcm_ifindex)
+			return;
+		qmi_rmnet_scale_factor = tcm->tcm_ifindex;
+		break;
+	case NLMSG_WQ_FREQUENCY:
+		rmnet_wq_frequency = tcm->tcm_ifindex;
 		break;
 	default:
 		pr_debug("%s(): No handler\n", __func__);
@@ -1365,5 +1343,4 @@ bool qmi_rmnet_ignore_grant(void *port)
 	return qmi->ps_ignore_grant;
 }
 EXPORT_SYMBOL(qmi_rmnet_ignore_grant);
-
 #endif

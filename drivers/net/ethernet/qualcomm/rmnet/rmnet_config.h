@@ -1,13 +1,5 @@
-/* Copyright (c) 2013-2014, 2016-2020 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 */
+/* Copyright (c) 2013-2014, 2016-2019 The Linux Foundation. All rights reserved.
  *
  * RMNET Data configuration engine
  *
@@ -23,11 +15,7 @@
 #define RMNET_MAX_VEID 4
 
 struct rmnet_endpoint {
-	union {
-		u8 mux_id;
-		__be32 ifa_address;
-		struct in6_addr in6addr;
-	};
+	u8 mux_id;
 	struct net_device *egress_dev;
 	struct hlist_node hlnode;
 };
@@ -35,11 +23,6 @@ struct rmnet_endpoint {
 struct rmnet_agg_stats {
 	u64 ul_agg_reuse;
 	u64 ul_agg_alloc;
-};
-
-struct rmnet_ip_route_endpoint {
-	struct in6_addr addr;
-	struct net_device *egress_dev;
 };
 
 struct rmnet_port_priv_stats {
@@ -202,12 +185,8 @@ int rmnet_is_real_dev_registered(const struct net_device *real_dev);
 struct rmnet_port *rmnet_get_port(struct net_device *real_dev);
 struct rmnet_endpoint *rmnet_get_endpoint(struct rmnet_port *port, u8 mux_id);
 int rmnet_add_bridge(struct net_device *rmnet_dev,
-		     struct net_device *slave_dev);
+		     struct net_device *slave_dev,
+		     struct netlink_ext_ack *extack);
 int rmnet_del_bridge(struct net_device *rmnet_dev,
 		     struct net_device *slave_dev);
-
-struct rmnet_endpoint *rmnet_get_ip6_route_endpoint(struct rmnet_port *port,
-						    struct in6_addr *addr);
-struct rmnet_endpoint *rmnet_get_ip4_route_endpoint(struct rmnet_port *port,
-						    __be32 *ifa_address);
 #endif /* _RMNET_CONFIG_H_ */

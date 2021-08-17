@@ -58,7 +58,7 @@ static bool prefer_mbim = true;
 #else
 static bool prefer_mbim;
 #endif
-module_param(prefer_mbim, bool, S_IRUGO | S_IWUSR);
+module_param(prefer_mbim, bool, 0644);
 MODULE_PARM_DESC(prefer_mbim, "Prefer MBIM setting on dual NCM/MBIM functions");
 
 static void cdc_ncm_txpath_bh(unsigned long param);
@@ -281,10 +281,10 @@ static ssize_t cdc_ncm_store_tx_timer_usecs(struct device *d,  struct device_att
 	return len;
 }
 
-static DEVICE_ATTR(min_tx_pkt, S_IRUGO | S_IWUSR, cdc_ncm_show_min_tx_pkt, cdc_ncm_store_min_tx_pkt);
-static DEVICE_ATTR(rx_max, S_IRUGO | S_IWUSR, cdc_ncm_show_rx_max, cdc_ncm_store_rx_max);
-static DEVICE_ATTR(tx_max, S_IRUGO | S_IWUSR, cdc_ncm_show_tx_max, cdc_ncm_store_tx_max);
-static DEVICE_ATTR(tx_timer_usecs, S_IRUGO | S_IWUSR, cdc_ncm_show_tx_timer_usecs, cdc_ncm_store_tx_timer_usecs);
+static DEVICE_ATTR(min_tx_pkt, 0644, cdc_ncm_show_min_tx_pkt, cdc_ncm_store_min_tx_pkt);
+static DEVICE_ATTR(rx_max, 0644, cdc_ncm_show_rx_max, cdc_ncm_store_rx_max);
+static DEVICE_ATTR(tx_max, 0644, cdc_ncm_show_tx_max, cdc_ncm_store_tx_max);
+static DEVICE_ATTR(tx_timer_usecs, 0644, cdc_ncm_show_tx_timer_usecs, cdc_ncm_store_tx_timer_usecs);
 
 static ssize_t ndp_to_end_show(struct device *d, struct device_attribute *attr, char *buf)
 {
@@ -335,7 +335,7 @@ static ssize_t cdc_ncm_show_##name(struct device *d, struct device_attribute *at
 	struct cdc_ncm_ctx *ctx = (struct cdc_ncm_ctx *)dev->data[0]; \
 	return sprintf(buf, format "\n", tocpu(ctx->ncm_parm.name));	\
 } \
-static DEVICE_ATTR(name, S_IRUGO, cdc_ncm_show_##name, NULL)
+static DEVICE_ATTR(name, 0444, cdc_ncm_show_##name, NULL)
 
 NCM_PARM_ATTR(bmNtbFormatsSupported, "0x%04x", le16_to_cpu);
 NCM_PARM_ATTR(dwNtbInMaxSize, "%u", le32_to_cpu);
@@ -971,8 +971,7 @@ void cdc_ncm_unbind(struct usbnet *dev, struct usb_interface *intf)
 
 	atomic_set(&ctx->stop, 1);
 
-	if (hrtimer_active(&ctx->tx_timer))
-		hrtimer_cancel(&ctx->tx_timer);
+	hrtimer_cancel(&ctx->tx_timer);
 
 	tasklet_kill(&ctx->bh);
 
@@ -1128,10 +1127,7 @@ cdc_ncm_fill_tx_frame(struct usbnet *dev, struct sk_buff *skb, __le32 sign)
 	 * accordingly. Otherwise, we should check here.
 	 */
 	if (ctx->drvflags & CDC_NCM_FLAG_NDP_TO_END)
-		delayed_ndp_size = ctx->max_ndp_size +
-			max_t(u32,
-			      ctx->tx_ndp_modulus,
-			      ctx->tx_modulus + ctx->tx_remainder) - 1;
+		delayed_ndp_size = ALIGN(ctx->max_ndp_size, ctx->tx_ndp_modulus);
 	else
 		delayed_ndp_size = 0;
 
@@ -1312,8 +1308,7 @@ cdc_ncm_fill_tx_frame(struct usbnet *dev, struct sk_buff *skb, __le32 sign)
 	if (!(dev->driver_info->flags & FLAG_SEND_ZLP) &&
 	    skb_out->len > ctx->min_tx_pkt) {
 		padding_count = ctx->tx_curr_size - skb_out->len;
-		if (!WARN_ON(padding_count > ctx->tx_curr_size))
-			skb_put_zero(skb_out, padding_count);
+		skb_put_zero(skb_out, padding_count);
 	} else if (skb_out->len < ctx->tx_curr_size &&
 		   (skb_out->len % dev->maxpacket) == 0) {
 		skb_put_u8(skb_out, 0);	/* force short packet */
@@ -1591,15 +1586,6 @@ cdc_ncm_speed_change(struct usbnet *dev,
 	uint32_t rx_speed = le32_to_cpu(data->DLBitRRate);
 	uint32_t tx_speed = le32_to_cpu(data->ULBitRate);
 
-	/* if the speed hasn't changed, don't report it.
-	 * RTL8156 shipped before 2021 sends notification about every 32ms.
-	 */
-	if (dev->rx_speed == rx_speed && dev->tx_speed == tx_speed)
-		return;
-
-	dev->rx_speed = rx_speed;
-	dev->tx_speed = tx_speed;
-
 	/*
 	 * Currently the USB-NET API does not support reporting the actual
 	 * device speed. Do print it instead.
@@ -1643,8 +1629,10 @@ static void cdc_ncm_status(struct usbnet *dev, struct urb *urb)
 		 * USB_CDC_NOTIFY_NETWORK_CONNECTION notification shall be
 		 * sent by device after USB_CDC_NOTIFY_SPEED_CHANGE.
 		 */
-		if (netif_carrier_ok(dev->net) != !!event->wValue)
-			usbnet_link_change(dev, !!event->wValue, 0);
+		netif_info(dev, link, dev->net,
+			   "network connection: %sconnected\n",
+			   !!event->wValue ? "" : "dis");
+		usbnet_link_change(dev, !!event->wValue, 0);
 		break;
 
 	case USB_CDC_NOTIFY_SPEED_CHANGE:

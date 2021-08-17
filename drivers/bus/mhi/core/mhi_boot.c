@@ -1,14 +1,5 @@
-/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved. */
 
 #include <linux/debugfs.h>
 #include <linux/delay.h>
@@ -78,7 +69,7 @@ static int mhi_find_next_file_offset(struct mhi_controller *mhi_cntrl,
 	struct mhi_buf *mhi_buf = mhi_cntrl->rddm_image->mhi_buf;
 
 	if (info->rem_seg_len >= table_info->size) {
-		info->file_offset += (size_t)table_info->size;
+		info->file_offset += table_info->size;
 		info->rem_seg_len -= table_info->size;
 		return 0;
 	}
@@ -113,7 +104,7 @@ void mhi_dump_sfr(struct mhi_controller *mhi_cntrl)
 	struct rddm_header *rddm_header =
 		(struct rddm_header *)mhi_buf->buf;
 	struct rddm_table_info *table_info;
-	struct file_info info = {NULL};
+	struct file_info info = {0};
 	u32 table_size, n;
 
 	if (rddm_header->header_size > sizeof(*rddm_header) ||
@@ -192,7 +183,7 @@ static int __mhi_download_rddm_in_panic(struct mhi_controller *mhi_cntrl)
 	int ret;
 	u32 rx_status;
 	enum mhi_ee ee;
-	const u32 delayus = 2000;
+	const u32 delayus = 5000;
 	u32 retry = (mhi_cntrl->timeout_ms * 1000) / delayus;
 	const u32 rddm_timeout_us = 200000;
 	int rddm_retry = rddm_timeout_us / delayus; /* time to enter rddm */
@@ -284,6 +275,10 @@ int mhi_download_rddm_img(struct mhi_controller *mhi_cntrl, bool in_panic)
 {
 	void __iomem *base = mhi_cntrl->bhie;
 	u32 rx_status;
+
+	/* device supports RDDM but controller wants to skip ramdumps */
+	if (!mhi_cntrl->rddm_supported || !mhi_cntrl->rddm_image)
+		return -EINVAL;
 
 	if (in_panic)
 		return __mhi_download_rddm_in_panic(mhi_cntrl);
@@ -437,17 +432,22 @@ invalid_pm_state:
 }
 
 void mhi_free_bhie_table(struct mhi_controller *mhi_cntrl,
-			 struct image_info *image_info)
+			 struct image_info **image_info)
 {
 	int i;
-	struct mhi_buf *mhi_buf = image_info->mhi_buf;
+	struct mhi_buf *mhi_buf = (*image_info)->mhi_buf;
 
-	for (i = 0; i < image_info->entries; i++, mhi_buf++)
-		mhi_free_coherent(mhi_cntrl, mhi_buf->len, mhi_buf->buf,
+	if (mhi_cntrl->img_pre_alloc)
+		return;
+
+	for (i = 0; i < (*image_info)->entries; i++, mhi_buf++)
+		mhi_free_contig_coherent(mhi_cntrl, mhi_buf->len, mhi_buf->buf,
 				  mhi_buf->dma_addr);
 
-	kfree(image_info->mhi_buf);
-	kfree(image_info);
+	kfree((*image_info)->mhi_buf);
+	kfree(*image_info);
+
+	*image_info = NULL;
 }
 
 int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
@@ -460,6 +460,9 @@ int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 	int i;
 	struct image_info *img_info;
 	struct mhi_buf *mhi_buf;
+
+	if (mhi_cntrl->img_pre_alloc)
+		return 0;
 
 	MHI_CNTRL_LOG("Allocating bytes:%zu seg_size:%zu total_seg:%u\n",
 			alloc_size, seg_size, segments);
@@ -484,7 +487,7 @@ int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 			vec_size = sizeof(struct bhi_vec_entry) * i;
 
 		mhi_buf->len = vec_size;
-		mhi_buf->buf = mhi_alloc_coherent(mhi_cntrl, vec_size,
+		mhi_buf->buf = mhi_alloc_contig_coherent(mhi_cntrl, vec_size,
 					&mhi_buf->dma_addr, GFP_KERNEL);
 		if (!mhi_buf->buf)
 			goto error_alloc_segment;
@@ -503,7 +506,7 @@ int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 
 error_alloc_segment:
 	for (--i, --mhi_buf; i >= 0; i--, mhi_buf--)
-		mhi_free_coherent(mhi_cntrl, mhi_buf->len, mhi_buf->buf,
+		mhi_free_contig_coherent(mhi_cntrl, mhi_buf->len, mhi_buf->buf,
 				  mhi_buf->dma_addr);
 
 error_alloc_mhi_buf:
@@ -575,7 +578,7 @@ void mhi_fw_load_handler(struct mhi_controller *mhi_cntrl)
 	ret = request_firmware(&firmware, fw_name, mhi_cntrl->dev);
 	if (ret) {
 		if (!mhi_cntrl->fw_image_fallback) {
-			MHI_CNTRL_ERR("Error loading fw, ret:%d\n", ret);
+			MHI_ERR("Error loading fw, ret:%d\n", ret);
 			return;
 		}
 
@@ -583,7 +586,7 @@ void mhi_fw_load_handler(struct mhi_controller *mhi_cntrl)
 		ret = request_firmware(&firmware, mhi_cntrl->fw_image_fallback,
 				mhi_cntrl->dev);
 		if (ret) {
-			MHI_CNTRL_ERR("Error loading fw_fb, ret:%d\n", ret);
+			MHI_ERR("Error loading fw_fb, ret:%d\n", ret);
 			return;
 		}
 
@@ -660,6 +663,8 @@ fw_load_ee_pthru:
 
 	if (!ret || MHI_PM_IN_ERROR_STATE(mhi_cntrl->pm_state)) {
 		MHI_CNTRL_ERR("MHI did not enter BHIE\n");
+		mhi_cntrl->status_cb(mhi_cntrl, mhi_cntrl->priv_data,
+				     MHI_CB_BOOTUP_TIMEOUT);
 		goto error_read;
 	}
 
@@ -669,6 +674,11 @@ fw_load_ee_pthru:
 			       /* last entry is vec table */
 			       &image_info->mhi_buf[image_info->entries - 1]);
 
+	if (ret) {
+		mhi_cntrl->status_cb(mhi_cntrl, mhi_cntrl->priv_data,
+				     MHI_CB_BOOTUP_TIMEOUT);
+	}
+
 	MHI_CNTRL_LOG("amss fw_load ret:%d\n", ret);
 
 	release_firmware(firmware);
@@ -676,8 +686,7 @@ fw_load_ee_pthru:
 	return;
 
 error_read:
-	mhi_free_bhie_table(mhi_cntrl, mhi_cntrl->fbc_image);
-	mhi_cntrl->fbc_image = NULL;
+	mhi_free_bhie_table(mhi_cntrl, &mhi_cntrl->fbc_image);
 
 release_fw:
 	release_firmware(firmware);

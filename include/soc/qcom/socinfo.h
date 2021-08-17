@@ -1,16 +1,7 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
- * Copyright (c) 2009-2020, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2009-2021, The Linux Foundation. All rights reserved.
  * Copyright (C) 2021 XiaoMi, Inc.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
  */
 
 #ifndef _ARCH_ARM_MACH_MSM_SOCINFO_H_
@@ -60,68 +51,52 @@
 	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,msm8996-cdp")
 #define early_machine_is_sm8150()	\
 	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sm8150")
-#define early_machine_is_sm8150p()	\
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sm8150p")
-#define early_machine_is_sa8155()	\
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sa8155")
-#define early_machine_is_sa8155p()	\
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sa8155p")
+#define early_machine_is_sa8150()	\
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sa8150")
+#define early_machine_is_kona()	\
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,kona")
+#define early_machine_is_lito()	\
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,lito")
+#define early_machine_is_orchid()	\
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,orchid")
+#define early_machine_is_bengal()	\
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,bengal")
+#define early_machine_is_bengalp()	\
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,bengalp")
+#define early_machine_is_lagoon()	\
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,lagoon")
+#define early_machine_is_scuba()	\
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,scuba")
+#define early_machine_is_scubaiot()        \
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,scuba-iot")
+#define early_machine_is_scubapiot()        \
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,scubap-iot")
 #define early_machine_is_sdmshrike()	\
 	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sdmshrike")
 #define early_machine_is_sm6150()	\
 	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sm6150")
-#define early_machine_is_sm6150p()	\
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sm6150p")
-#define early_machine_is_sa8195p()	\
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sa8195p")
 #define early_machine_is_qcs405()	\
 	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,qcs405")
-#define early_machine_is_qcs403()	\
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,qcs403")
-#define early_machine_is_qcs401()	\
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,qcs401")
-#define early_machine_is_qcs404()       \
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,qcs404")
-#define early_machine_is_qcs407()       \
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,qcs407")
 #define early_machine_is_sdxprairie()	\
 	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sdxprairie")
-#define early_machine_is_mdm9607()      \
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,mdm9607")
 #define early_machine_is_sdmmagpie()	\
 	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sdmmagpie")
-#define early_machine_is_sdmmagpiep()	\
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sdmmagpiep")
-#define early_machine_is_sa6155p()	\
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sa6155p")
-#define early_machine_is_sa4155p()	\
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sa4155p")
-#define early_machine_is_sa6155()	\
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sa6155")
-#define early_machine_is_trinket()	\
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,trinket")
-#define early_machine_is_qcs610()      \
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,qcs610")
-#define early_machine_is_qcs410()      \
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,qcs410")
-#define early_machine_is_atoll()	\
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,atoll")
-#define early_machine_is_atollp()	\
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,atollp")
-#define early_machine_is_atoll_ab()	\
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,atoll-ab")
 #define early_machine_is_sdm660()	\
 	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sdm660")
-#define early_machine_is_sda660()	\
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sda660")
-#define early_machine_is_sdm429w()       \
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sdm429w")
-#define early_machine_is_sda429w()       \
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sda429w")
-#define early_machine_is_trinket_iot()       \
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,trinket-iot")
-#define early_machine_is_trinketp_iot()       \
-	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,trinketp-iot")
+#define early_machine_is_bengal_iot()	\
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,bengal-iot")
+#define early_machine_is_bengalp_iot()	\
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,bengalp-iot")
+#define early_machine_is_msm8937()	\
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,msm8937")
+#define early_machine_is_msm8917()	\
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,msm8917")
+#define early_machine_is_sdm439()	\
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sdm439")
+#define early_machine_is_sdm429()	\
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,sdm429")
+#define early_machine_is_qm215()	\
+	of_flat_dt_is_compatible(of_get_flat_dt_root(), "qcom,qm215")
 #else
 #define of_board_is_sim()		0
 #define of_board_is_rumi()		0
@@ -141,36 +116,29 @@
 #define early_machine_is_apq8084()	0
 #define early_machine_is_msm8996()	0
 #define early_machine_is_sm8150()	0
-#define early_machine_is_sm8150p()	0
-#define early_machine_is_sa8155()	0
-#define early_machine_is_sa8155p()	0
+#define early_machine_is_sa8150()	0
+#define early_machine_is_kona()		0
+#define early_machine_is_lito()		0
+#define early_machine_is_orchid()	0
+#define early_machine_is_bengal()	0
+#define early_machine_is_bengalp()	0
+#define early_machine_is_lagoon()	0
+#define early_machine_is_scuba()	0
+#define early_machine_is_scubaiot()	0
+#define early_machine_is_scubapiot()	0
 #define early_machine_is_sdmshrike()	0
 #define early_machine_is_sm6150()	0
-#define early_machine_is_sa8195p()	0
-#define early_machine_is_sm6150p()	0
 #define early_machine_is_qcs405()	0
-#define early_machine_is_qcs403()	0
-#define early_machine_is_qcs401()	0
-#define early_machine_is_qcs404()       0
-#define early_machine_is_qcs407()       0
 #define early_machine_is_sdxprairie()	0
-#define early_machine_is_mdm9607()      0
 #define early_machine_is_sdmmagpie()	0
-#define early_machine_is_sdmmagpiep()	0
-#define early_machine_is_sa6155p()	0
-#define early_machine_is_sa4155p()	0
-#define early_machine_is_sa6155()	0
-#define early_machine_is_trinket()	0
-#define early_machine_is_qcs610()       0
-#define early_machine_is_qcs410()       0
-#define early_machine_is_atoll()	0
-#define early_machine_is_atollp()	0
 #define early_machine_is_sdm660()	0
-#define early_machine_is_sda660()	0
-#define early_machine_is_sdm429w()	0
-#define early_machine_is_sda429w()	0
-#define early_machine_is_trinket_iot()	0
-#define early_machine_is_trinketp_iot()	0
+#define early_machine_is_bengal_iot()	0
+#define early_machine_is_bengalp_iot()	0
+#define early_machine_is_msm8937()	0
+#define early_machine_is_msm8917()	0
+#define early_machine_is_sdm439()	0
+#define early_machine_is_sdm429()	0
+#define early_machine_is_qm215()	0
 #endif
 
 #define PLATFORM_SUBTYPE_MDM	1
@@ -179,7 +147,7 @@
 
 #define SMEM_IMAGE_VERSION_TABLE	469
 #define SMEM_HW_SW_BUILD_ID		137
-#define SMEM_ID_VENDOR1                 135
+#define SMEM_ID_VENDOR1         	135
 enum msm_cpu {
 	MSM_CPU_UNKNOWN = 0,
 	MSM_CPU_8960,
@@ -192,38 +160,30 @@ enum msm_cpu {
 	MSM_CPU_8916,
 	MSM_CPU_8084,
 	MSM_CPU_8996,
+	MSM_CPU_SDM660,
 	MSM_CPU_SM8150,
-	MSM_CPU_SM8150P,
-	MSM_CPU_SA8155,
-	MSM_CPU_SA8155P,
-	MSM_CPU_SA8195P,
+	MSM_CPU_SA8150,
+	MSM_CPU_KONA,
+	MSM_CPU_LITO,
+	MSM_CPU_ORCHID,
+	MSM_CPU_BENGAL,
+	MSM_CPU_BENGALP,
+	MSM_CPU_LAGOON,
+	MSM_CPU_SCUBA,
+	MSM_CPU_SCUBAIOT,
+	MSM_CPU_SCUBAPIOT,
 	MSM_CPU_SDMSHRIKE,
 	MSM_CPU_SM6150,
-	MSM_CPU_SM6150P,
 	MSM_CPU_QCS405,
-	MSM_CPU_QCS403,
-	MSM_CPU_QCS401,
-	MSM_CPU_QCS404,
-	MSM_CPU_QCS407,
 	SDX_CPU_SDXPRAIRIE,
-	MSM_CPU_9607,
 	MSM_CPU_SDMMAGPIE,
-	MSM_CPU_SDMMAGPIEP,
-	MSM_CPU_SA6155P,
-	MSM_CPU_SA4155P,
-	MSM_CPU_SA6155,
-	MSM_CPU_TRINKET,
-	MSM_CPU_QCS610,
-	MSM_CPU_QCS410,
-	MSM_CPU_ATOLL,
-	MSM_CPU_ATOLLP,
-	MSM_CPU_ATOLL_AB,
-	MSM_CPU_SDM660,
-	MSM_CPU_SDA660,
-	MSM_CPU_SDM429W,
-	MSM_CPU_SDA429W,
-	MSM_CPU_TRINKET_IOT,
-	MSM_CPU_TRINKETP_IOT,
+	MSM_CPU_BENGAL_IOT,
+	MSM_CPU_BENGALP_IOT,
+	MSM_CPU_8937,
+	MSM_CPU_8917,
+	MSM_CPU_SDM439,
+	MSM_CPU_SDM429,
+	MSM_CPU_QM215
 };
 
 struct msm_soc_info {
@@ -249,12 +209,10 @@ enum pmic_model {
 };
 
 #define HARDWARE_PLATFORM_UNKNOWN 0
-#define HARDWARE_PLATFORM_AQUILA  1
+#define HARDWARE_PLATFORM_VANGOGH  2
+#define HARDWARE_PLATFORM_PICASSO  3
+#define HARDWARE_PLATFORM_MONET    4
 
-#define HARDWARE_PLATFORM_DAVINCI  5
-#define HARDWARE_PLATFORM_TUCANA   6
-#define HARDWARE_PLATFORM_PHOENIX  7
-#define HARDWARE_PLATFORM_TOCO  8
 #define HW_MAJOR_VERSION_SHIFT 16
 #define HW_MAJOR_VERSION_MASK  0xFFFF0000
 #define HW_MINOR_VERSION_SHIFT 0
@@ -268,7 +226,6 @@ typedef enum {
   CountryCN = 0,
   CountryGlobal = 1,
   CountryIndia = 2,
-  TELCO_VDF = 3,
   INVALID,
 } CountryType;
 
@@ -277,7 +234,7 @@ uint32_t get_hw_country_version(void);
 uint32_t get_hw_version_major(void);
 uint32_t get_hw_version_minor(void);
 uint32_t get_hw_version_build(void);
-int get_platform_hwversion(char *buf, int len);
+
 enum msm_cpu socinfo_get_msm_cpu(void);
 uint32_t socinfo_get_id(void);
 uint32_t socinfo_get_version(void);

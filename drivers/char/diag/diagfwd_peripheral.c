@@ -1,13 +1,5 @@
-/* Copyright (c) 2015-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2015-2019, 2021, The Linux Foundation. All rights reserved.
  */
 #include <linux/slab.h>
 #include <linux/err.h>
@@ -1237,8 +1229,7 @@ static void __diag_fwd_open(struct diagfwd_info *fwd_info)
 	 * Keeping the buffers busy for Memory Device and Multi Mode.
 	 */
 
-	if (driver->logging_mode[DIAG_LOCAL_PROC] != DIAG_USB_MODE &&
-		driver->logging_mode[DIAG_LOCAL_PROC] != DIAG_PCIE_MODE) {
+	if (driver->logging_mode[DIAG_LOCAL_PROC] != DIAG_USB_MODE) {
 		if (fwd_info->buf_1) {
 			atomic_set(&fwd_info->buf_1->in_busy, 0);
 			fwd_info->buffer_status[BUF_1_INDEX] = 0;
@@ -1449,6 +1440,7 @@ void diagfwd_write_done(uint8_t peripheral, uint8_t type, int buf_num)
 			DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
 			"Buffer 1 for core PD is marked free, p: %d, t: %d, buf_num: %d\n",
 				fwd_info->peripheral, fwd_info->type, buf_num);
+			rpmsg_mark_buffers_free(peripheral, type, buf_num);
 		}
 	} else if (buf_num == 2 && fwd_info->buf_2) {
 		/*
@@ -1475,6 +1467,7 @@ void diagfwd_write_done(uint8_t peripheral, uint8_t type, int buf_num)
 			DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
 			"Buffer 2 for core PD is marked free, p: %d, t: %d, buf_num: %d\n",
 				fwd_info->peripheral, fwd_info->type, buf_num);
+			rpmsg_mark_buffers_free(peripheral, type, buf_num);
 		}
 	} else if (buf_num >= 3 && (buf_num % 2)) {
 		/*
@@ -1510,6 +1503,7 @@ void diagfwd_write_done(uint8_t peripheral, uint8_t type, int buf_num)
 			DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
 				"Buffer 1 for core PD is marked free, p: %d, t: %d, buf_num: %d\n",
 				fwd_info->peripheral, fwd_info->type, buf_num);
+			rpmsg_mark_buffers_free(peripheral, type, 1);
 		}
 	} else if (buf_num >= 4 && !(buf_num % 2)) {
 		/*
@@ -1545,7 +1539,8 @@ void diagfwd_write_done(uint8_t peripheral, uint8_t type, int buf_num)
 			DIAG_LOG(DIAG_DEBUG_PERIPHERALS,
 			"Buffer 2 for core PD is marked free, p: %d, t: %d, buf_num: %d\n",
 			fwd_info->peripheral, fwd_info->type, buf_num);
-			}
+			rpmsg_mark_buffers_free(peripheral, type, 2);
+		}
 	} else
 		pr_err("diag: In %s, invalid buf_num %d\n", __func__, buf_num);
 

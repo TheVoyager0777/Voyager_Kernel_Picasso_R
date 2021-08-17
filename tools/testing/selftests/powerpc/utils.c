@@ -11,9 +11,10 @@
 #include <link.h>
 #include <sched.h>
 #include <stdio.h>
+#include <string.h>
 #include <sys/stat.h>
-#include <sys/sysinfo.h>
 #include <sys/types.h>
+#include <sys/utsname.h>
 #include <unistd.h>
 
 #include "utils.h"
@@ -82,38 +83,41 @@ void *get_auxv_entry(int type)
 
 int pick_online_cpu(void)
 {
-	int ncpus, cpu = -1;
-	cpu_set_t *mask;
-	size_t size;
+	cpu_set_t mask;
+	int cpu;
 
-	ncpus = get_nprocs_conf();
-	size = CPU_ALLOC_SIZE(ncpus);
-	mask = CPU_ALLOC(ncpus);
-	if (!mask) {
-		perror("malloc");
+	CPU_ZERO(&mask);
+
+	if (sched_getaffinity(0, sizeof(mask), &mask)) {
+		perror("sched_getaffinity");
 		return -1;
 	}
 
-	CPU_ZERO_S(size, mask);
-
-	if (sched_getaffinity(0, size, mask)) {
-		perror("sched_getaffinity");
-		goto done;
-	}
-
 	/* We prefer a primary thread, but skip 0 */
-	for (cpu = 8; cpu < ncpus; cpu += 8)
-		if (CPU_ISSET_S(cpu, size, mask))
-			goto done;
+	for (cpu = 8; cpu < CPU_SETSIZE; cpu += 8)
+		if (CPU_ISSET(cpu, &mask))
+			return cpu;
 
 	/* Search for anything, but in reverse */
-	for (cpu = ncpus - 1; cpu >= 0; cpu--)
-		if (CPU_ISSET_S(cpu, size, mask))
-			goto done;
+	for (cpu = CPU_SETSIZE - 1; cpu >= 0; cpu--)
+		if (CPU_ISSET(cpu, &mask))
+			return cpu;
 
 	printf("No cpus in affinity mask?!\n");
+	return -1;
+}
 
-done:
-	CPU_FREE(mask);
-	return cpu;
+bool is_ppc64le(void)
+{
+	struct utsname uts;
+	int rc;
+
+	errno = 0;
+	rc = uname(&uts);
+	if (rc) {
+		perror("uname");
+		return false;
+	}
+
+	return strcmp(uts.machine, "ppc64le") == 0;
 }

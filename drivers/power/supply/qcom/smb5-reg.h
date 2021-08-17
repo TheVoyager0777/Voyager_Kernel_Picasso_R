@@ -1,14 +1,7 @@
-/* Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2018-2019 The Linux Foundation. All rights reserved.
  * Copyright (C) 2021 XiaoMi, Inc.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #ifndef __SMB5_CHARGER_REG_H
@@ -30,6 +23,7 @@
 #define PERPH_SUBTYPE_OFFSET	0x05
 #define SUBTYPE_MASK		GENMASK(7, 0)
 #define INT_RT_STS_OFFSET	0x10
+#define SDAM_TYPE		0x2E
 
 /********************************
  *  CHGR Peripheral Registers  *
@@ -191,6 +185,7 @@ enum {
 
 #define BATIF_ADC_CHANNEL_EN_REG		(BATIF_BASE + 0x82)
 #define IBATT_CHANNEL_EN_BIT			BIT(6)
+#define SMB_THM_CHANNEL_EN_BIT			BIT(5)
 #define CONN_THM_CHANNEL_EN_BIT			BIT(4)
 #define DIE_TEMP_CHANNEL_EN_BIT			BIT(2)
 #define MISC_THM_CHANNEL_EN_BIT			BIT(1)
@@ -271,6 +266,7 @@ enum {
 #define EN_PULLDOWN_USB_IN_BIT			BIT(0)
 
 #define TYPE_C_CFG_REG				(USBIN_BASE + 0x58)
+#define APSD_START_ON_CC_BIT			BIT(7)
 #define BC1P2_START_ON_CC_BIT			BIT(7)
 
 #define HVDCP_PULSE_COUNT_MAX_REG              (USBIN_BASE + 0x5B)
@@ -357,7 +353,8 @@ enum {
  *  TYPEC Peripheral Registers  *
  ********************************/
 #define TYPE_C_SNK_STATUS_REG			(TYPEC_BASE + 0x06)
-#define DETECTED_SRC_TYPE_MASK			GENMASK(6, 0)
+#define DETECTED_SRC_TYPE_MASK			GENMASK(3, 0)
+#define SNK_DAM_MASK				GENMASK(6, 4)
 #define SNK_DAM_500MA_BIT			BIT(6)
 #define SNK_DAM_1500MA_BIT			BIT(5)
 #define SNK_DAM_3000MA_BIT			BIT(4)
@@ -365,14 +362,9 @@ enum {
 #define SNK_RP_1P5_BIT				BIT(2)
 #define SNK_RP_3P0_BIT				BIT(1)
 #define SNK_RP_SHORT_BIT			BIT(0)
-#define TYPE_C_SNK_DEBUG_ACC_STATUS_REG		(TYPEC_BASE + 0x07)
-#define SNK_DEBUG_ACC_RPSTD_PRSTD_BIT		BIT(0)
-#define SNK_DEBUG_ACC_RPSTD_RPMID_BIT		BIT(1)
-#define SNK_DEBUG_ACC_RPSTD_RPHIGH_BIT		BIT(2)
-#define SNK_DEBUG_ACC_RPMID_RPMID_BIT		BIT(3)
-#define SNK_DEBUG_ACC_RPMID_RPHIGH_BIT		BIT(4)
-#define SNK_DEBUG_ACC_RPHIGH_RPHIGH_BIT		BIT(5)
-#define SNK_DEBUG_ACC_DETECTED_MASK		GENMASK(5, 0)
+
+#define TYPE_C_SNK_DEBUG_ACC_STATUS_REG			(TYPEC_BASE + 0x07)
+#define SNK_DEBUG_ACC_RPSTD_PRSTD_BIT			BIT(0)
 
 #define TYPE_C_SRC_STATUS_REG			(TYPEC_BASE + 0x08)
 #define DETECTED_SNK_TYPE_MASK			GENMASK(4, 0)
@@ -424,6 +416,7 @@ enum {
 #define TYPEC_CCOUT_BUFFER_EN_BIT		BIT(2)
 #define TYPEC_CCOUT_VALUE_BIT			BIT(1)
 #define TYPEC_CCOUT_SRC_BIT			BIT(0)
+
 #define TYPE_C_DEBUG_ACC_SNK_CFG		(TYPEC_BASE + 0x4A)
 #define TYPEC_DEBUG_ACC_SNK_SEL_ICL		BIT(2)
 #define TYPEC_DEBUG_ACC_SNK_DIS_AICL		BIT(3)
@@ -584,4 +577,8 @@ enum {
 /* SDAM regs */
 #define MISC_PBS_RT_STS_REG			(MISC_PBS_BASE + 0x10)
 #define PULSE_SKIP_IRQ_BIT			BIT(4)
+
+#define SDAM_QC_DET_STATUS_REG			0x58
+#define SDAM_QC_ADC_LSB_REG			0x54
+
 #endif /* __SMB5_CHARGER_REG_H */

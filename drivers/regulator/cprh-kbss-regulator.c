@@ -1,14 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #define pr_fmt(fmt) "%s: " fmt, __func__
@@ -916,7 +908,6 @@ static int cprh_msm8998_partial_binning_override(struct cpr3_regulator *vreg)
 {
 	struct cprh_kbss_fuses *fuse = vreg->platform_fuses;
 	struct cpr3_corner *corner;
-	struct cpr4_sdelta *sdelta;
 	int i;
 	u32 proc_freq;
 
@@ -926,17 +917,6 @@ static int cprh_msm8998_partial_binning_override(struct cpr3_regulator *vreg)
 		corner = &vreg->corner[vreg->corner_count - 1];
 		for (i = 0; i < vreg->corner_count - 1; i++) {
 			proc_freq = vreg->corner[i].proc_freq;
-			sdelta = vreg->corner[i].sdelta;
-			if (sdelta) {
-				if (sdelta->table)
-					devm_kfree(vreg->thread->ctrl->dev,
-						   sdelta->table);
-				if (sdelta->boost_table)
-					devm_kfree(vreg->thread->ctrl->dev,
-						   sdelta->boost_table);
-				devm_kfree(vreg->thread->ctrl->dev,
-					   sdelta);
-			}
 			vreg->corner[i] = *corner;
 			vreg->corner[i].proc_freq = proc_freq;
 		}
@@ -2143,7 +2123,6 @@ static struct platform_driver cprh_kbss_regulator_driver = {
 	.driver		= {
 		.name		= "qcom,cprh-kbss-regulator",
 		.of_match_table	= cprh_regulator_match_table,
-		.owner		= THIS_MODULE,
 	},
 	.probe		= cprh_kbss_regulator_probe,
 	.remove		= cprh_kbss_regulator_remove,

@@ -1,14 +1,5 @@
-/* Copyright (c) 2015-2018, 2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2015-2018, 2020, The Linux Foundation. All rights reserved. */
 
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
@@ -406,7 +397,7 @@ end:
 	return ret;
 }
 
-static ssize_t cec_rda_enable(struct device *dev,
+static ssize_t enable_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	ssize_t ret = 0;
@@ -422,17 +413,17 @@ static ssize_t cec_rda_enable(struct device *dev,
 	spin_lock_irqsave(&ctl->lock, flags);
 	if (ctl->enabled) {
 		pr_debug("cec is enabled\n");
-		ret = snprintf(buf, PAGE_SIZE, "%d\n", 1);
+		ret = scnprintf(buf, PAGE_SIZE, "%d\n", 1);
 	} else {
 		pr_err("cec is disabled\n");
-		ret = snprintf(buf, PAGE_SIZE, "%d\n", 0);
+		ret = scnprintf(buf, PAGE_SIZE, "%d\n", 0);
 	}
 	spin_unlock_irqrestore(&ctl->lock, flags);
 end:
 	return ret;
 }
 
-static ssize_t cec_wta_enable(struct device *dev,
+static ssize_t enable_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	int val;
@@ -486,7 +477,7 @@ end:
 	return ret;
 }
 
-static ssize_t cec_rda_enable_compliance(struct device *dev,
+static ssize_t enable_compliance_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	unsigned long flags;
@@ -499,7 +490,7 @@ static ssize_t cec_rda_enable_compliance(struct device *dev,
 	}
 
 	spin_lock_irqsave(&ctl->lock, flags);
-	ret = snprintf(buf, PAGE_SIZE, "%d\n",
+	ret = scnprintf(buf, PAGE_SIZE, "%d\n",
 		ctl->compliance_enabled);
 
 	spin_unlock_irqrestore(&ctl->lock, flags);
@@ -507,7 +498,7 @@ static ssize_t cec_rda_enable_compliance(struct device *dev,
 	return ret;
 }
 
-static ssize_t cec_wta_enable_compliance(struct device *dev,
+static ssize_t enable_compliance_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	int val;
@@ -554,7 +545,7 @@ end:
 	return ret;
 }
 
-static ssize_t cec_rda_logical_addr(struct device *dev,
+static ssize_t logical_addr_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	unsigned long flags;
@@ -567,13 +558,13 @@ static ssize_t cec_rda_logical_addr(struct device *dev,
 	}
 
 	spin_lock_irqsave(&ctl->lock, flags);
-	ret = snprintf(buf, PAGE_SIZE, "%d\n", ctl->logical_addr);
+	ret = scnprintf(buf, PAGE_SIZE, "%d\n", ctl->logical_addr);
 	spin_unlock_irqrestore(&ctl->lock, flags);
 
 	return ret;
 }
 
-static ssize_t cec_wta_logical_addr(struct device *dev,
+static ssize_t logical_addr_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	int logical_addr;
@@ -613,7 +604,7 @@ end:
 	return ret;
 }
 
-static ssize_t cec_rda_msg(struct device *dev,
+static ssize_t rd_msg_show(struct device *dev,
 	struct device_attribute *attr, char *buf)
 {
 	int i = 0;
@@ -670,7 +661,7 @@ end:
 	return ret;
 }
 
-static ssize_t cec_wta_msg(struct device *dev,
+static ssize_t wr_msg_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	ssize_t ret;
@@ -716,14 +707,11 @@ end:
 	return ret;
 }
 
-static DEVICE_ATTR(enable, 0644, cec_rda_enable,
-	cec_wta_enable);
-static DEVICE_ATTR(enable_compliance, 0644,
-	cec_rda_enable_compliance, cec_wta_enable_compliance);
-static DEVICE_ATTR(logical_addr, 0600,
-	cec_rda_logical_addr, cec_wta_logical_addr);
-static DEVICE_ATTR(rd_msg, 0444, cec_rda_msg, NULL);
-static DEVICE_ATTR(wr_msg, 0600, NULL, cec_wta_msg);
+static DEVICE_ATTR_RW(enable);
+static DEVICE_ATTR_RW(enable_compliance);
+static DEVICE_ATTR_RW(logical_addr);
+static DEVICE_ATTR_RO(rd_msg);
+static DEVICE_ATTR_WO(wr_msg);
 
 static struct attribute *cec_fs_attrs[] = {
 	&dev_attr_enable.attr,

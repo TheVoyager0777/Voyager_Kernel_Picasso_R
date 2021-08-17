@@ -80,9 +80,11 @@ enum {
 	NETIF_F_HW_ESP_BIT,		/* Hardware ESP transformation offload */
 	NETIF_F_HW_ESP_TX_CSUM_BIT,	/* ESP with TX checksum offload */
 	NETIF_F_RX_UDP_TUNNEL_PORT_BIT, /* Offload of RX port for UDP tunnels */
-	NETIF_F_HW_MACSEC_BIT,          /* Offload MACsec operations */
+	NETIF_F_HW_TLS_TX_BIT,		/* Hardware TLS TX offload */
+	NETIF_F_HW_TLS_RX_BIT,		/* Hardware TLS RX offload */
 
 	NETIF_F_GRO_HW_BIT,		/* Hardware Generic receive offload */
+	NETIF_F_HW_TLS_RECORD_BIT,	/* Offload TLS record */
 
 	/*
 	 * Add your fresh new feature above and remember to update
@@ -149,8 +151,10 @@ enum {
 #define NETIF_F_HW_ESP		__NETIF_F(HW_ESP)
 #define NETIF_F_HW_ESP_TX_CSUM	__NETIF_F(HW_ESP_TX_CSUM)
 #define	NETIF_F_RX_UDP_TUNNEL_PORT  __NETIF_F(RX_UDP_TUNNEL_PORT)
+#define NETIF_F_HW_TLS_RECORD	__NETIF_F(HW_TLS_RECORD)
 #define NETIF_F_GSO_UDP_L4	__NETIF_F(GSO_UDP_L4)
-#define NETIF_F_HW_MACSEC      __NETIF_F(HW_MACSEC)
+#define NETIF_F_HW_TLS_TX	__NETIF_F(HW_TLS_TX)
+#define NETIF_F_HW_TLS_RX	__NETIF_F(HW_TLS_RX)
 
 /* Finds the next feature with the highest number of the range of start till 0.
  */
@@ -238,7 +242,6 @@ static inline int find_next_netdev_feature(u64 feature, unsigned long start)
 				 NETIF_F_GSO_GRE_CSUM |			\
 				 NETIF_F_GSO_IPXIP4 |			\
 				 NETIF_F_GSO_IPXIP6 |			\
-				 NETIF_F_GSO_UDP_L4 |			\
 				 NETIF_F_GSO_UDP_TUNNEL |		\
 				 NETIF_F_GSO_UDP_TUNNEL_CSUM)
 

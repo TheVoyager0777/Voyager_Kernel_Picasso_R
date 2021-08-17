@@ -480,7 +480,7 @@ static int dccp_rcv_request_sent_state_process(struct sock *sk,
 			sk_wake_async(sk, SOCK_WAKE_IO, POLL_OUT);
 		}
 
-		if (sk->sk_write_pending || inet_csk_in_pingpong_mode(sk) ||
+		if (sk->sk_write_pending || icsk->icsk_ack.pingpong ||
 		    icsk->icsk_accept_queue.rskq_defer_accept) {
 			/* Save one ACK. Data will be ready after
 			 * several ticks, if write_pending is set.
@@ -534,6 +534,7 @@ static int dccp_rcv_respond_partopen_state_process(struct sock *sk,
 	case DCCP_PKT_DATA:
 		if (sk->sk_state == DCCP_RESPOND)
 			break;
+		/* fall through */
 	case DCCP_PKT_DATAACK:
 	case DCCP_PKT_ACK:
 		/*

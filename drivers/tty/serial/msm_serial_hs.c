@@ -1,22 +1,11 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* drivers/serial/msm_serial_hs.c
  *
  * MSM 7k High speed uart driver
  *
  * Copyright (c) 2008 Google Inc.
- * Copyright (c) 2007-2018, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2007-2018, 2020, The Linux Foundation. All rights reserved.
  * Modified: Nick Pelly <npelly@google.com>
- *
- * All source code in this file is licensed under the following license
- * except where indicated.
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
- * See the GNU General Public License for more details.
  *
  * Has optional support for uart power management independent of linux
  * suspend/resume:
@@ -90,15 +79,13 @@ enum {
 
 #define MSM_HS_DBG(x...) do { \
 	if (msm_uport->ipc_debug_mask >= DBG_LEV) { \
-		if (msm_uport->ipc_msm_hs_log_ctxt) \
-			ipc_log_string(msm_uport->ipc_msm_hs_log_ctxt, x); \
+		ipc_log_string(msm_uport->ipc_msm_hs_log_ctxt, x); \
 	} \
 } while (0)
 
 #define MSM_HS_INFO(x...) do { \
 	if (msm_uport->ipc_debug_mask >= INFO_LEV) {\
-		if (msm_uport->ipc_msm_hs_log_ctxt) \
-			ipc_log_string(msm_uport->ipc_msm_hs_log_ctxt, x); \
+		ipc_log_string(msm_uport->ipc_msm_hs_log_ctxt, x); \
 	} \
 } while (0)
 
@@ -123,10 +110,7 @@ enum {
 	} \
 } while (0)
 
-#define LOG_USR_MSG(ctx, x...) do { \
-	if (ctx) \
-		ipc_log_string(ctx, x); \
-} while (0)
+#define LOG_USR_MSG(ctx, x...) ipc_log_string(ctx, x)
 
 /*
  * There are 3 different kind of UART Core available on MSM.
@@ -440,7 +424,7 @@ static struct msm_hs_port *get_matching_hs_port(struct platform_device *pdev)
 	return msm_uport;
 }
 
-static ssize_t show_clock(struct device *dev, struct device_attribute *attr,
+static ssize_t clock_show(struct device *dev, struct device_attribute *attr,
 			  char *buf)
 {
 	int state = 1;
@@ -453,12 +437,12 @@ static ssize_t show_clock(struct device *dev, struct device_attribute *attr,
 	if (msm_uport) {
 		if (msm_uport->pm_state != MSM_HS_PM_ACTIVE)
 			state = 0;
-		ret = snprintf(buf, PAGE_SIZE, "%d\n", state);
+		ret = scnprintf(buf, PAGE_SIZE, "%d\n", state);
 	}
 	return ret;
 }
 
-static ssize_t set_clock(struct device *dev, struct device_attribute *attr,
+static ssize_t clock_store(struct device *dev, struct device_attribute *attr,
 			 const char *buf, size_t count)
 {
 	int state;
@@ -488,9 +472,9 @@ static ssize_t set_clock(struct device *dev, struct device_attribute *attr,
 	return ret;
 }
 
-static DEVICE_ATTR(clock, 0644, show_clock, set_clock);
+static DEVICE_ATTR_RW(clock);
 
-static ssize_t show_debug_mask(struct device *dev,
+static ssize_t debug_mask_show(struct device *dev,
 		struct device_attribute *attr, char *buf)
 {
 	ssize_t ret = 0;
@@ -500,12 +484,12 @@ static ssize_t show_debug_mask(struct device *dev,
 
 	/* This check should not fail */
 	if (msm_uport)
-		ret = snprintf(buf, sizeof(int), "%u\n",
+		ret = scnprintf(buf, sizeof(int), "%u\n",
 					msm_uport->ipc_debug_mask);
 	return ret;
 }
 
-static ssize_t set_debug_mask(struct device *dev,
+static ssize_t debug_mask_store(struct device *dev,
 			struct device_attribute *attr,
 			const char *buf, size_t count)
 {
@@ -527,8 +511,7 @@ static ssize_t set_debug_mask(struct device *dev,
 	return count;
 }
 
-static DEVICE_ATTR(debug_mask, 0644, show_debug_mask,
-							set_debug_mask);
+static DEVICE_ATTR_RW(debug_mask);
 
 static inline bool is_use_low_power_wakeup(struct msm_hs_port *msm_uport)
 {
@@ -680,7 +663,7 @@ static int msm_serial_loopback_enable_get(void *data, u64 *val)
 
 	return 0;
 }
-DEFINE_SIMPLE_ATTRIBUTE(loopback_enable_fops, msm_serial_loopback_enable_get,
+DEFINE_DEBUGFS_ATTRIBUTE(loopback_enable_fops, msm_serial_loopback_enable_get,
 			msm_serial_loopback_enable_set, "%llu\n");
 
 /*
@@ -694,7 +677,7 @@ static void msm_serial_debugfs_init(struct msm_hs_port *msm_uport,
 {
 	char node_name[15];
 
-	snprintf(node_name, sizeof(node_name), "loopback.%d", id);
+	scnprintf(node_name, sizeof(node_name), "loopback.%d", id);
 	msm_uport->loopback_dir = debugfs_create_file(node_name,
 						0644,
 						debug_base,
@@ -1378,9 +1361,10 @@ static void msm_hs_disconnect_rx(struct uart_port *uport)
 }
 
 /* Tx timeout callback function */
-void tx_timeout_handler(unsigned long arg)
+void tx_timeout_handler(struct timer_list *arg)
 {
-	struct msm_hs_port *msm_uport = (struct msm_hs_port *) arg;
+	struct msm_hs_port *msm_uport = from_timer(msm_uport, arg,
+		tx.tx_timeout_timer);
 	struct uart_port *uport = &msm_uport->uport;
 	int isr;
 
@@ -2703,9 +2687,8 @@ static int msm_hs_startup(struct uart_port *uport)
 
 	tx->dma_in_flight = false;
 	MSM_HS_DBG("%s():desc usage flag 0x%lx\n", __func__, rx->queued_flag);
-	setup_timer(&(tx->tx_timeout_timer),
-			tx_timeout_handler,
-			(unsigned long) msm_uport);
+	timer_setup(&(tx->tx_timeout_timer),
+			tx_timeout_handler, 0);
 
 	/* Enable reading the current CTS, no harm even if CTS is ignored */
 	msm_uport->imr_reg |= UARTDM_ISR_CURRENT_CTS_BMSK;
@@ -2785,7 +2768,7 @@ static int uartdm_init_port(struct uart_port *uport)
 
 	kthread_init_work(&tx->kwork, msm_serial_hs_tx_work);
 
-	rx->buffer = dma_alloc_coherent(uport->dev,
+	rx->buffer = dma_zalloc_coherent(uport->dev,
 				UART_DMA_DESC_NR * UARTDM_RX_BUF_SIZE,
 				 &rx->rbuffer, GFP_KERNEL);
 	if (!rx->buffer) {
@@ -2993,13 +2976,13 @@ static int msm_hs_sps_init_ep_conn(struct msm_hs_port *msm_uport,
 	/* Allocate maximum descriptor fifo size */
 	sps_config->desc.size =
 		(1 + UART_DMA_DESC_NR) * sizeof(struct sps_iovec);
-	sps_config->desc.base = dma_alloc_coherent(msm_uport->uport.dev,
+	sps_config->desc.base = dma_zalloc_coherent(msm_uport->uport.dev,
 						sps_config->desc.size,
 						&sps_config->desc.phys_base,
 						GFP_KERNEL);
 	if (!sps_config->desc.base) {
 		rc = -ENOMEM;
-		MSM_HS_ERR("msm_serial_hs: dma_alloc_coherent() failed\n");
+		MSM_HS_ERR("msm_serial_hs: dma_zalloc_coherent() failed\n");
 		goto get_config_err;
 	}
 	memset(sps_config->desc.base, 0x00, sps_config->desc.size);
@@ -3331,6 +3314,12 @@ static int msm_hs_probe(struct platform_device *pdev)
 	struct msm_serial_hs_platform_data *pdata = pdev->dev.platform_data;
 	unsigned long data;
 	char name[30];
+
+	ret = dma_set_mask_and_coherent(&pdev->dev, DMA_BIT_MASK(64));
+	if (ret) {
+		dev_err(&pdev->dev, "could not set DMA mask\n");
+		return ret;
+	}
 
 	if (pdev->dev.of_node) {
 		dev_dbg(&pdev->dev, "device tree enabled\n");

@@ -1,13 +1,7 @@
-/* Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/input.h>
@@ -19,10 +13,10 @@
 #include <dsp/q6afe-v2.h>
 #include <dsp/audio_notifier.h>
 #include "msm-pcm-routing-v2.h"
-#include "sdm660-common.h"
-#include "sdm660-internal.h"
-#include "sdm660-external.h"
-#include "codecs/msm-cdc-pinctrl.h"
+#include <asoc/sdm660-common.h>
+#include <asoc/sdm660-internal.h>
+#include <asoc/sdm660-external.h>
+#include <asoc/msm-cdc-pinctrl.h>
 #include "codecs/sdm660_cdc/msm-analog-cdc.h"
 #include "codecs/wsa881x.h"
 
@@ -230,7 +224,7 @@ struct msm_wsa881x_dev_info {
 static struct snd_soc_aux_dev *msm_aux_dev;
 static struct snd_soc_codec_conf *msm_codec_conf;
 
-static bool msm_swap_gnd_mic(struct snd_soc_codec *codec, bool active);
+static bool msm_swap_gnd_mic(struct snd_soc_component *component, bool active);
 
 static struct wcd_mbhc_config mbhc_cfg = {
 	.read_fw_bin = false,
@@ -2923,8 +2917,9 @@ static int msm_qos_ctl_get(struct snd_kcontrol *kcontrol,
 static int msm_qos_ctl_put(struct snd_kcontrol *kcontrol,
 			   struct snd_ctl_elem_value *ucontrol)
 {
-	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
-	struct snd_soc_card *card = codec->component.card;
+	struct snd_soc_component *component =
+				snd_soc_kcontrol_component(kcontrol);
+	struct snd_soc_card *card = component->card;
 	const char *fe_name = MSM_DAILINK_NAME(LowLatency);
 	struct snd_soc_pcm_runtime *rtd;
 	struct snd_pcm_substream *substream;
@@ -4861,11 +4856,12 @@ static int msm_prepare_us_euro(struct snd_soc_card *card)
 }
 
 
-static bool msm_usbc_swap_gnd_mic(struct snd_soc_codec *codec, bool active)
+static bool msm_usbc_swap_gnd_mic(struct snd_soc_component *component,
+					bool active)
 {
 	int value = 0;
 	bool ret = false;
-	struct snd_soc_card *card = codec->component.card;
+	struct snd_soc_card *card = component->card;
 	struct msm_asoc_mach_data *pdata = snd_soc_card_get_drvdata(card);
 	struct pinctrl_state *en2_pinctrl_active;
 	struct pinctrl_state *en2_pinctrl_sleep;
@@ -4919,7 +4915,7 @@ static bool msm_usbc_swap_gnd_mic(struct snd_soc_codec *codec, bool active)
 
 	/* if active and usbc_en2_gpio_p defined, swap using usbc_en2_gpio_p */
 	if (active) {
-		dev_dbg(codec->dev, "%s: enter\n", __func__);
+		dev_dbg(component->dev, "%s: enter\n", __func__);
 		if (pdata->usbc_en2_gpio_p) {
 			value = gpio_get_value_cansleep(pdata->usbc_en2_gpio);
 			if (value)
@@ -4947,9 +4943,9 @@ err_lookup_state:
 	return ret;
 }
 
-static bool msm_swap_gnd_mic(struct snd_soc_codec *codec, bool active)
+static bool msm_swap_gnd_mic(struct snd_soc_component *component, bool active)
 {
-	struct snd_soc_card *card = codec->component.card;
+	struct snd_soc_card *card = component->card;
 	struct msm_asoc_mach_data *pdata =
 				snd_soc_card_get_drvdata(card);
 	int value = 0;
@@ -4974,7 +4970,7 @@ static bool msm_swap_gnd_mic(struct snd_soc_codec *codec, bool active)
 		ret = true;
 	} else {
 		/* if usbc is defined, swap using usbc_en2 */
-		ret = msm_usbc_swap_gnd_mic(codec, active);
+		ret = msm_usbc_swap_gnd_mic(component, active);
 	}
 	return ret;
 }
@@ -5096,20 +5092,19 @@ static int msm_wsa881x_init(struct snd_soc_component *component)
 	u8 spkright_ports[WSA881X_MAX_SWR_PORTS] = {103, 104, 105, 107};
 	unsigned int ch_rate[WSA881X_MAX_SWR_PORTS] = {2400, 600, 300, 1200};
 	unsigned int ch_mask[WSA881X_MAX_SWR_PORTS] = {0x1, 0xF, 0x3, 0x3};
-	struct snd_soc_codec *codec = snd_soc_component_to_codec(component);
 	struct msm_asoc_mach_data *pdata;
 	struct snd_soc_dapm_context *dapm =
-			snd_soc_codec_get_dapm(codec);
+			snd_soc_component_get_dapm(component);
 
-	if (!codec) {
+	if (!component) {
 		pr_err("%s codec is NULL\n", __func__);
 		return -EINVAL;
 	}
 
 	if (!strcmp(component->name_prefix, "SpkrLeft")) {
-		dev_dbg(codec->dev, "%s: setting left ch map to codec %s\n",
-				__func__, codec->component.name);
-		wsa881x_set_channel_map(codec, &spkleft_ports[0],
+		dev_dbg(component->dev, "%s: setting left ch map to codec %s\n",
+				__func__, component->name);
+		wsa881x_set_channel_map(component, &spkleft_ports[0],
 				WSA881X_MAX_SWR_PORTS, &ch_mask[0],
 				&ch_rate[0], NULL);
 		if (dapm->component) {
@@ -5117,9 +5112,9 @@ static int msm_wsa881x_init(struct snd_soc_component *component)
 			snd_soc_dapm_ignore_suspend(dapm, "SpkrLeft SPKR");
 		}
 	} else if (!strcmp(component->name_prefix, "SpkrRight")) {
-		dev_dbg(codec->dev, "%s: setting right ch map to codec %s\n",
-				__func__, codec->component.name);
-		wsa881x_set_channel_map(codec, &spkright_ports[0],
+		dev_dbg(component->dev, "%s: setting right ch map to codec %s\n",
+				__func__, component->name);
+		wsa881x_set_channel_map(component, &spkright_ports[0],
 				WSA881X_MAX_SWR_PORTS, &ch_mask[0],
 				&ch_rate[0], NULL);
 		if (dapm->component) {
@@ -5127,8 +5122,8 @@ static int msm_wsa881x_init(struct snd_soc_component *component)
 			snd_soc_dapm_ignore_suspend(dapm, "SpkrRight SPKR");
 		}
 	} else {
-		dev_err(codec->dev, "%s: wrong codec name %s\n", __func__,
-				codec->component.name);
+		dev_err(component->dev, "%s: wrong codec name %s\n", __func__,
+				component->name);
 		return -EINVAL;
 	}
 
@@ -5136,7 +5131,7 @@ static int msm_wsa881x_init(struct snd_soc_component *component)
 	pdata = snd_soc_card_get_drvdata(component->card);
 	if (pdata && pdata->codec_root)
 		wsa881x_codec_info_create_codec_entry(pdata->codec_root,
-						      codec);
+						      component);
 	return 0;
 }
 

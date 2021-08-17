@@ -222,7 +222,7 @@ static int vtty_write(struct tty_struct *tty, const unsigned char *buf,
 		if (err) {
 			port->ops.free_msg_buf(port, mbuf, &pbuf);
 			dev_err(&port->service->dev,
-					"send failed: %d - resetting service",
+					"send failed: %d - resetting service\n",
 					err);
 			vs_service_reset(port->service, port->service);
 			return -EIO;

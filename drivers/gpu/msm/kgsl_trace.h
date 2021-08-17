@@ -1,14 +1,6 @@
-/* Copyright (c) 2011-2021, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2011-2020, The Linux Foundation. All rights reserved.
  */
 
 #if !defined(_KGSL_TRACE_H) || defined(TRACE_HEADER_MULTI_READ)
@@ -17,15 +9,16 @@
 #undef TRACE_SYSTEM
 #define TRACE_SYSTEM kgsl
 #undef TRACE_INCLUDE_PATH
-#define TRACE_INCLUDE_PATH ../../drivers/gpu/msm/
+#define TRACE_INCLUDE_PATH .
 #undef TRACE_INCLUDE_FILE
 #define TRACE_INCLUDE_FILE kgsl_trace
 
 #include <linux/tracepoint.h>
-#include "kgsl_device.h"
-#include "adreno_drawctxt.h"
 
-struct kgsl_device;
+#include "kgsl.h"
+#include "kgsl_drawobj.h"
+#include "kgsl_sharedmem.h"
+
 struct kgsl_ringbuffer_issueibcmds;
 struct kgsl_device_waittimestamp;
 
@@ -887,7 +880,7 @@ TRACE_EVENT(kgsl_register_event,
 			__entry->func = func;
 		),
 		TP_printk(
-			"ctx=%u ts=%u cb=%pF",
+			"ctx=%u ts=%u cb=%pS",
 			__entry->id, __entry->timestamp, __entry->func)
 );
 
@@ -910,7 +903,7 @@ TRACE_EVENT(kgsl_fire_event,
 			__entry->func = func;
 		),
 		TP_printk(
-			"ctx=%u ts=%u type=%s age=%u cb=%pF",
+			"ctx=%u ts=%u type=%s age=%u cb=%pS",
 			__entry->id, __entry->ts,
 			__print_symbolic(__entry->type, KGSL_EVENT_TYPES),
 			__entry->age, __entry->func)
@@ -935,7 +928,7 @@ TRACE_EVENT(kgsl_active_count,
 	),
 
 	TP_printk(
-		"d_name=%s active_cnt=%u func=%pf",
+		"d_name=%s active_cnt=%u func=%ps",
 		__get_str(device_name), __entry->count, (void *) __entry->ip
 	)
 );
@@ -1206,6 +1199,27 @@ DEFINE_EVENT(hfi_msg_template, kgsl_hfi_receive,
 	TP_ARGS(id, size, seqnum)
 );
 
+TRACE_EVENT(kgsl_opp_notify,
+	TP_PROTO(
+		unsigned long min_freq,
+		unsigned long max_freq
+	),
+	TP_ARGS(
+		min_freq,
+		max_freq
+	),
+	TP_STRUCT__entry(
+		__field(unsigned long, min_freq)
+		__field(unsigned long, max_freq)
+	),
+	TP_fast_assign(
+		__entry->min_freq = min_freq;
+		__entry->max_freq = max_freq;
+	),
+	TP_printk("min freq=%ld max freq=%ld",
+		__entry->min_freq, __entry->max_freq
+	)
+);
 #endif /* _KGSL_TRACE_H */
 
 /* This part must be outside protection */

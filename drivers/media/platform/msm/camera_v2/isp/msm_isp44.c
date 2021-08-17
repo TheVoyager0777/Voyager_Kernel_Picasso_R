@@ -1,4 +1,5 @@
-/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -745,7 +746,7 @@ static int32_t msm_vfe44_convert_bpp_to_reg(int32_t bpp, uint32_t *bpp_reg)
 		*bpp_reg = 1 << 1;
 		break;
 	default:
-		pr_err("%s:%d invalid bpp %d", __func__, __LINE__, bpp);
+		pr_err("%s:%d invalid bpp %d\n", __func__, __LINE__, bpp);
 		return -EINVAL;
 	}
 
@@ -971,7 +972,7 @@ static void msm_vfe44_cfg_fetch_engine(struct vfe_device *vfe_dev,
 		msm_camera_io_w(temp, vfe_dev->vfe_base + 0x1C);
 
 	} else {
-		pr_err("%s: Invalid mux configuration - mux: %d", __func__,
+		pr_err("%s: Invalid mux configuration - mux: %d\n", __func__,
 			pix_cfg->input_mux);
 		return;
 	}
@@ -1954,7 +1955,6 @@ static struct platform_driver vfe44_driver = {
 	.probe = vfe_hw_probe,
 	.driver = {
 		.name = "msm_vfe44",
-		.owner = THIS_MODULE,
 		.of_match_table = msm_vfe44_dt_match,
 	},
 };

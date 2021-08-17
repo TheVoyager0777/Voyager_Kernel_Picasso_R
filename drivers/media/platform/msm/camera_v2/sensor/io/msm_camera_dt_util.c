@@ -1,4 +1,5 @@
-/* Copyright (c) 2013-2019 The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2020 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -34,14 +35,14 @@ int msm_camera_fill_vreg_params(struct camera_vreg_t *cam_vreg,
 
 	/* Validate input parameters */
 	if (!cam_vreg || !power_setting) {
-		pr_err("%s:%d failed: cam_vreg %pK power_setting %pK", __func__,
-			__LINE__,  cam_vreg, power_setting);
+		pr_err("%s:%d failed: cam_vreg %pK power_setting %pK\n",
+			__func__, __LINE__,  cam_vreg, power_setting);
 		return -EINVAL;
 	}
 
 	/* Validate size of num_vreg */
 	if (num_vreg <= 0) {
-		pr_err("failed: num_vreg %d", num_vreg);
+		pr_err("failed: num_vreg %d\n", num_vreg);
 		return -EINVAL;
 	}
 
@@ -484,7 +485,7 @@ int msm_camera_get_dt_power_setting_data(struct device_node *of_node,
 
 	struct msm_sensor_power_setting *power_setting;
 	uint16_t *power_setting_size, size = 0;
-	bool need_reverse = 0;
+	bool need_reverse = false;
 
 	if (!power_info)
 		return -EINVAL;
@@ -649,7 +650,7 @@ int msm_camera_get_dt_power_setting_data(struct device_node *of_node,
 	size = *power_setting_size;
 
 	if (NULL != ps && 0 != size)
-		need_reverse = 1;
+		need_reverse = true;
 
 	power_info->power_down_setting =
 		kcalloc(size, sizeof(*ps), GFP_KERNEL);
@@ -1368,7 +1369,7 @@ int32_t msm_sensor_driver_get_gpio_data(
 
 	/* Validate input parameters */
 	if (!of_node) {
-		pr_err("failed: invalid param of_node %pK", of_node);
+		pr_err("failed: invalid param of_node %pK\n", of_node);
 		return -EINVAL;
 	}
 
@@ -1450,7 +1451,7 @@ int msm_camera_power_up(struct msm_camera_power_ctrl_t *ctrl,
 		ret = pinctrl_select_state(ctrl->pinctrl_info.pinctrl,
 			ctrl->pinctrl_info.gpio_state_active);
 		if (ret)
-			pr_err("%s:%d cannot set pin to active state",
+			pr_err("%s:%d cannot set pin to active state\n",
 				__func__, __LINE__);
 	}
 	for (index = 0; index < ctrl->power_setting_size; index++) {
@@ -1742,7 +1743,7 @@ int msm_camera_power_down(struct msm_camera_power_ctrl_t *ctrl,
 		ret = pinctrl_select_state(ctrl->pinctrl_info.pinctrl,
 				ctrl->pinctrl_info.gpio_state_suspend);
 		if (ret)
-			pr_err("%s:%d cannot set pin to suspend state",
+			pr_err("%s:%d cannot set pin to suspend state\n",
 				__func__, __LINE__);
 		devm_pinctrl_put(ctrl->pinctrl_info.pinctrl);
 	}

@@ -1,14 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #ifndef __QSEECOMI_H_
@@ -30,6 +22,8 @@
 #define QSEOS_RESULT_FAIL_INCORRECT_PSWD      -71
 #define QSEOS_RESULT_FAIL_MAX_ATTEMPT         -72
 #define QSEOS_RESULT_FAIL_PENDING_OPERATION   -73
+
+#define SMCINVOKE_RESULT_INBOUND_REQ_NEEDED	3
 
 enum qseecom_command_scm_resp_type {
 	QSEOS_APP_ID = 0xEE01,
@@ -69,7 +63,6 @@ enum qseecom_qceos_cmd_id {
 	QSEOS_TEE_OPEN_SESSION_WHITELIST = 0x1D,
 	QSEOS_TEE_INVOKE_COMMAND_WHITELIST = 0x1E,
 	QSEOS_LISTENER_DATA_RSP_COMMAND_WHITELIST = 0x1F,
-	QSEOS_SOTA_NOTIFICATION_CHECK_STATUS = 0x20,
 	QSEOS_FSM_LTEOTA_REQ_CMD = 0x109,
 	QSEOS_FSM_LTEOTA_REQ_RSP_CMD = 0x110,
 	QSEOS_FSM_IKE_REQ_CMD = 0x203,
@@ -86,6 +79,7 @@ enum qseecom_qceos_cmd_status {
 	QSEOS_RESULT_SUCCESS = 0,
 	QSEOS_RESULT_INCOMPLETE,
 	QSEOS_RESULT_BLOCKED_ON_LISTENER,
+	QSEOS_RESULT_CBACK_REQUEST,
 	QSEOS_RESULT_FAILURE  = 0xFFFFFFFF
 };
 
@@ -350,9 +344,6 @@ struct qseecom_continue_blocked_request_ireq {
 #define TZ_SVC_ES                        16    /* Enterprise Security */
 #define TZ_SVC_MDTP                      18    /* Mobile Device Theft */
 
-/** SIP service call groups */
-#define TZ_SVC_FUSE                      8     /* Fuse services.      */
-
 /*----------------------------------------------------------------------------
  * Owning Entity IDs (defined by ARM SMC doc)
  * ---------------------------------------------------------------------------
@@ -591,12 +582,6 @@ struct qseecom_continue_blocked_request_ireq {
 #define TZ_OS_RPMB_CHECK_PROV_STATUS_ID_PARAM_ID \
 	TZ_SYSCALL_CREATE_PARAM_ID_0
 
-#define TZ_SOTA_UPDATE_NOTIFICATION_ID \
-	TZ_SYSCALL_CREATE_SMC_ID(TZ_OWNER_SIP, TZ_SVC_FUSE,  0x07)
-
-#define TZ_SOTA_UPDATE_NOTIFICATION_ID_PARAM_ID \
-	TZ_SYSCALL_CREATE_PARAM_ID_0
-
 #define TZ_OS_KS_GEN_KEY_ID \
 	TZ_SYSCALL_CREATE_SMC_ID(TZ_OWNER_QSEE_OS, TZ_SVC_KEYSTORE, 0x01)
 
@@ -737,7 +722,5 @@ struct qseecom_continue_blocked_request_ireq {
 	TZ_SYSCALL_CREATE_PARAM_ID_4( \
 	TZ_SYSCALL_PARAM_TYPE_VAL, TZ_SYSCALL_PARAM_TYPE_VAL, \
 	TZ_SYSCALL_PARAM_TYPE_BUF_RW, TZ_SYSCALL_PARAM_TYPE_VAL)
-
-
 
 #endif /* __QSEECOMI_H_ */

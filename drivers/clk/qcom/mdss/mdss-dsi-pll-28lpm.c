@@ -1,4 +1,5 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2018, 2021,  The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -451,10 +452,8 @@ int dsi_pll_clock_register_28lpm(struct platform_device *pdev,
 
 	clk_data->clks = devm_kzalloc(&pdev->dev, (num_clks *
 				sizeof(struct clk *)), GFP_KERNEL);
-	if (!clk_data->clks) {
-		devm_kfree(&pdev->dev, clk_data);
+	if (!clk_data->clks)
 		return -ENOMEM;
-	}
 	clk_data->clk_num = num_clks;
 
 	/* Establish client data */
@@ -549,13 +548,10 @@ int dsi_pll_clock_register_28lpm(struct platform_device *pdev,
 				of_clk_src_onecell_get, clk_data);
 	}
 	if (!rc) {
-		pr_info("Registered DSI PLL ndx=%d, clocks successfully", ndx);
-
+		pr_info("Registered DSI PLL ndx=%d,clocks successfully\n", ndx);
 		return rc;
 	}
 
 clk_register_fail:
-	devm_kfree(&pdev->dev, clk_data->clks);
-	devm_kfree(&pdev->dev, clk_data);
 	return rc;
 }

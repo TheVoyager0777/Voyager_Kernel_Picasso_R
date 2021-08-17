@@ -1,15 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0
 /*
  * Copyright (c) 2016, Linaro Ltd
  * Copyright (c) 2018-2019, The Linux Foundation, All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #include <linux/io.h>
@@ -54,6 +46,12 @@ struct glink_smem_pipe {
 };
 
 #define to_smem_pipe(p) container_of(p, struct glink_smem_pipe, native)
+
+static void glink_smem_rx_reset(struct qcom_glink_pipe *np)
+{
+	struct glink_smem_pipe *pipe = to_smem_pipe(np);
+	*pipe->tail = 0;
+}
 
 static size_t glink_smem_rx_avail(struct qcom_glink_pipe *np)
 {
@@ -107,13 +105,11 @@ static void glink_smem_rx_peak(struct qcom_glink_pipe *np,
 		tail -= pipe->native.length;
 
 	len = min_t(size_t, count, pipe->native.length - tail);
-	if (len) {
+	if (len)
 		memcpy_fromio(data, pipe->fifo + tail, len);
-	}
 
-	if (len != count) {
+	if (len != count)
 		memcpy_fromio(data + len, pipe->fifo, (count - len));
-	}
 }
 
 static void glink_smem_rx_advance(struct qcom_glink_pipe *np,
@@ -129,6 +125,12 @@ static void glink_smem_rx_advance(struct qcom_glink_pipe *np,
 		tail %= pipe->native.length;
 
 	*pipe->tail = cpu_to_le32(tail);
+}
+
+static void glink_smem_tx_reset(struct qcom_glink_pipe *np)
+{
+	struct glink_smem_pipe *pipe = to_smem_pipe(np);
+	*pipe->head = 0;
 }
 
 static size_t glink_smem_tx_avail(struct qcom_glink_pipe *np)
@@ -232,7 +234,6 @@ struct qcom_glink *qcom_glink_smem_register(struct device *parent,
 	if (ret) {
 		pr_err("failed to register glink edge\n");
 		put_device(dev);
-		kfree(dev);
 		return ERR_PTR(ret);
 	}
 
@@ -240,21 +241,21 @@ struct qcom_glink *qcom_glink_smem_register(struct device *parent,
 				   &remote_pid);
 	if (ret) {
 		dev_err(dev, "failed to parse qcom,remote-pid\n");
-		goto unregister;
+		goto err_put_dev;
 	}
 
 	rx_pipe = devm_kzalloc(dev, sizeof(*rx_pipe), GFP_KERNEL);
 	tx_pipe = devm_kzalloc(dev, sizeof(*tx_pipe), GFP_KERNEL);
 	if (!rx_pipe || !tx_pipe) {
 		ret = -ENOMEM;
-		goto unregister;
+		goto err_put_dev;
 	}
 
 	ret = qcom_smem_alloc(remote_pid,
 			      SMEM_GLINK_NATIVE_XPRT_DESCRIPTOR, 32);
 	if (ret && ret != -EEXIST) {
 		dev_err(dev, "failed to allocate glink descriptors\n");
-		goto unregister;
+		goto err_put_dev;
 	}
 
 	descs = qcom_smem_get(remote_pid,
@@ -262,13 +263,13 @@ struct qcom_glink *qcom_glink_smem_register(struct device *parent,
 	if (IS_ERR(descs)) {
 		dev_err(dev, "failed to acquire xprt descriptor\n");
 		ret = PTR_ERR(descs);
-		goto unregister;
+		goto err_put_dev;
 	}
 
 	if (size != 32) {
 		dev_err(dev, "glink descriptor of invalid size\n");
 		ret = -EINVAL;
-		goto unregister;
+		goto err_put_dev;
 	}
 
 	tx_pipe->tail = &descs[0];
@@ -280,7 +281,7 @@ struct qcom_glink *qcom_glink_smem_register(struct device *parent,
 			      SZ_16K);
 	if (ret && ret != -EEXIST) {
 		dev_err(dev, "failed to allocate TX fifo\n");
-		goto unregister;
+		goto err_put_dev;
 	}
 
 	tx_pipe->fifo = qcom_smem_get(remote_pid, SMEM_GLINK_NATIVE_XPRT_FIFO_0,
@@ -288,14 +289,16 @@ struct qcom_glink *qcom_glink_smem_register(struct device *parent,
 	if (IS_ERR(tx_pipe->fifo)) {
 		dev_err(dev, "failed to acquire TX fifo\n");
 		ret = PTR_ERR(tx_pipe->fifo);
-		goto unregister;
+		goto err_put_dev;
 	}
 
+	rx_pipe->native.reset = glink_smem_rx_reset;
 	rx_pipe->native.avail = glink_smem_rx_avail;
 	rx_pipe->native.peak = glink_smem_rx_peak;
 	rx_pipe->native.advance = glink_smem_rx_advance;
 	rx_pipe->remote_pid = remote_pid;
 
+	tx_pipe->native.reset = glink_smem_tx_reset;
 	tx_pipe->native.avail = glink_smem_tx_avail;
 	tx_pipe->native.write = glink_smem_tx_write;
 	tx_pipe->remote_pid = remote_pid;
@@ -309,12 +312,12 @@ struct qcom_glink *qcom_glink_smem_register(struct device *parent,
 					false);
 	if (IS_ERR(glink)) {
 		ret = PTR_ERR(glink);
-		goto unregister;
+		goto err_put_dev;
 	}
 
 	return glink;
 
-unregister:
+err_put_dev:
 	device_unregister(dev);
 
 	return ERR_PTR(ret);

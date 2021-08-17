@@ -15,12 +15,41 @@
 #include <linux/workqueue.h>
 #include <linux/debugfs.h>
 #include <linux/seq_file.h>
+#include <linux/suspend.h>
 
 #include "power.h"
 
-DEFINE_MUTEX(pm_mutex);
-
 #ifdef CONFIG_PM_SLEEP
+
+void lock_system_sleep(void)
+{
+	current->flags |= PF_FREEZER_SKIP;
+	mutex_lock(&system_transition_mutex);
+}
+EXPORT_SYMBOL_GPL(lock_system_sleep);
+
+void unlock_system_sleep(void)
+{
+	/*
+	 * Don't use freezer_count() because we don't want the call to
+	 * try_to_freeze() here.
+	 *
+	 * Reason:
+	 * Fundamentally, we just don't need it, because freezing condition
+	 * doesn't come into effect until we release the
+	 * system_transition_mutex lock, since the freezer always works with
+	 * system_transition_mutex held.
+	 *
+	 * More importantly, in the case of hibernation,
+	 * unlock_system_sleep() gets called in snapshot_read() and
+	 * snapshot_write() when the freezing condition is still in effect.
+	 * Which means, if we use try_to_freeze() here, it would make them
+	 * enter the refrigerator, thus causing hibernation to lockup.
+	 */
+	current->flags &= ~PF_FREEZER_SKIP;
+	mutex_unlock(&system_transition_mutex);
+}
+EXPORT_SYMBOL_GPL(unlock_system_sleep);
 
 /* Routines for PM-transition notifications */
 
@@ -505,77 +534,16 @@ void __pm_pr_dbg(bool defer, const char *fmt, ...)
 static inline void pm_print_times_init(void) {}
 #endif /* CONFIG_PM_SLEEP_DEBUG */
 
-#ifdef CONFIG_PM_SLEEP_MONITOR
-/* If set, devices will stuck at suspend for verification */
-static bool pm_hang_enabled;
-
-static int pm_notify_test(struct notifier_block *nb,
-			     unsigned long mode, void *_unused)
-{
-	pr_info("Jump into infinite loop now\n");
-
-	/* Suspend thread stuck at a loop forever */
-	for(;;)
-		;
-
-	pr_info("Fail to stuck at loop\n");
-
-	return 0;
-}
-
-static struct notifier_block pm_notify_nb = {
-	.notifier_call = pm_notify_test,
-};
-
-static ssize_t pm_hang_show(struct kobject *kobj, struct kobj_attribute *attr,
-			     char *buf)
-{
-	return snprintf(buf, 10, "%d\n", pm_hang_enabled);
-}
-
-static ssize_t pm_hang_store(struct kobject *kobj, struct kobj_attribute *attr,
-			      const char *buf, size_t n)
-{
-	unsigned long val;
-	int result;
-
-	if (kstrtoul(buf, 10, &val))
-		return -EINVAL;
-
-	if (val > 1)
-		return -EINVAL;
-
-	pm_hang_enabled = !!val;
-
-	if (pm_hang_enabled == true) {
-
-		result = register_pm_notifier(&pm_notify_nb);
-		if (result)
-			pr_warn("Can not register suspend notifier, return %d\n",
-				result);
-
-	} else {
-
-		result = unregister_pm_notifier(&pm_notify_nb);
-		if (result)
-			pr_warn("Can not unregister suspend notifier, return %d\n",
-				result);
-	}
-
-	return n;
-}
-
-power_attr(pm_hang);
-#endif
-
 struct kobject *power_kobj;
+EXPORT_SYMBOL_GPL(power_kobj);
 
 /**
  * state - control system sleep states.
  *
  * show() returns available sleep state labels, which may be "mem", "standby",
- * "freeze" and "disk" (hibernation).  See Documentation/power/states.txt for a
- * description of what they mean.
+ * "freeze" and "disk" (hibernation).
+ * See Documentation/admin-guide/pm/sleep-states.rst for a description of
+ * what they mean.
  *
  * store() accepts one of those strings, translates it into the proper
  * enumerated value, and initiates a suspend transition.
@@ -899,9 +867,6 @@ static struct attribute * g[] = {
 	&pm_print_times_attr.attr,
 	&pm_wakeup_irq_attr.attr,
 	&pm_debug_messages_attr.attr,
-#endif
-#ifdef CONFIG_PM_SLEEP_MONITOR
-	&pm_hang_attr.attr,
 #endif
 #endif
 #ifdef CONFIG_FREEZER

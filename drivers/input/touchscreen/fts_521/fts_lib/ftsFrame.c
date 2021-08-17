@@ -147,7 +147,7 @@ int getMSFrame3(MSFrameType type, MutualSenseFrame *frame)
 
 	frame->node_data = NULL;
 
-	logError(1, "%s %s: Starting to get frame %02X \n", tag, __func__,
+	logError(0, "%s %s: Starting to get frame %02X \n", tag, __func__,
 		 type);
 	switch (type) {
 	case MS_RAW:
@@ -225,7 +225,7 @@ LOAD_FRC:
 	frame->header.sense_node = sense_len;
 	frame->header.type = type;
 
-	logError(1, "%s %s: Force_len = %d Sense_len = %d Offset = %04X \n",
+	logError(0, "%s %s: Force_len = %d Sense_len = %d Offset = %04X \n",
 		 tag, __func__, force_len, sense_len, offset);
 
 	frame->node_data =
@@ -246,7 +246,7 @@ LOAD_FRC:
 		frame->node_data = NULL;
 		return (ret | ERROR_GET_FRAME_DATA | ERROR_GET_FRAME);
 	}
-	logError(1, "%s Frame acquired! \n", tag);
+	logError(0, "%s Frame acquired! \n", tag);
 	return frame->node_data_size;
 
 }

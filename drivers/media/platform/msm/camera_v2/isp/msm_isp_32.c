@@ -1,4 +1,5 @@
-/* Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2018, 2020 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -100,11 +101,6 @@ static int msm_isp_bw_request_history_idx;
 static char bw_request_history_buff[MAX_BW_HISTORY_BUFF_LEN];
 static char ub_info_buffer[MAX_UB_INFO_BUFF_LEN];
 static spinlock_t req_history_lock;
-static int vfe_debugfs_statistics_open(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-	return 0;
-}
 
 static ssize_t vfe_debugfs_statistics_read(struct file *t_file,
 	char __user *t_char, size_t t_size_t, loff_t *t_loff_t)
@@ -140,12 +136,6 @@ static ssize_t vfe_debugfs_statistics_write(struct file *t_file,
 	memset(stats, 0, sizeof(struct msm_isp_statistics));
 
 	return sizeof(struct msm_isp_statistics);
-}
-
-static int bw_history_open(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-	return 0;
 }
 
 static ssize_t bw_history_read(struct file *t_file, char __user *t_char,
@@ -203,12 +193,6 @@ static ssize_t bw_history_write(struct file *t_file,
 	return sizeof(msm_isp_bw_request_history);
 }
 
-static int ub_info_open(struct inode *inode, struct file *file)
-{
-	file->private_data = inode->i_private;
-	return 0;
-}
-
 static ssize_t ub_info_read(struct file *t_file, char __user *t_char,
 	size_t t_size_t, loff_t *t_loff_t)
 {
@@ -252,19 +236,19 @@ static ssize_t ub_info_write(struct file *t_file,
 }
 
 static const struct file_operations vfe_debugfs_error = {
-	.open = vfe_debugfs_statistics_open,
+	.open = simple_open,
 	.read = vfe_debugfs_statistics_read,
 	.write = vfe_debugfs_statistics_write,
 };
 
 static const struct file_operations bw_history_ops = {
-	.open = bw_history_open,
+	.open = simple_open,
 	.read = bw_history_read,
 	.write = bw_history_write,
 };
 
 static const struct file_operations ub_info_ops = {
-	.open = ub_info_open,
+	.open = simple_open
 	.read = ub_info_read,
 	.write = ub_info_write,
 };
@@ -538,7 +522,6 @@ static struct platform_driver vfe_driver = {
 	.probe = vfe_probe,
 	.driver = {
 		.name = "msm_vfe",
-		.owner = THIS_MODULE,
 		.of_match_table = msm_vfe_dt_match,
 	},
 	.id_table = msm_vfe_dev_id,

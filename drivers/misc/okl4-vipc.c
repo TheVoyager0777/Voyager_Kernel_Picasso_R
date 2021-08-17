@@ -592,7 +592,6 @@ static const struct of_device_id of_plat_okl4_vipc_table[] = {
 static struct platform_driver of_plat_okl4_vipc_driver = {
 	.driver = {
 		.name = "okl4_vipc",
-		.owner = THIS_MODULE,
 		.of_match_table = of_plat_okl4_vipc_table,
 	},
 	.probe = okl4_vipc_probe,

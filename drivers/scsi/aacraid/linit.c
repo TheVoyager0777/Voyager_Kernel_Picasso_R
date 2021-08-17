@@ -686,6 +686,9 @@ static int aac_eh_abort(struct scsi_cmnd* cmd)
 	u32 bus, cid;
 	int ret = FAILED;
 
+	if (aac_adapter_check_health(aac))
+		return ret;
+
 	bus = aac_logical_to_phys(scmd_channel(cmd));
 	cid = scmd_id(cmd);
 	if (aac->hba_map[bus][cid].devtype == AAC_DEVTYPE_NATIVE_RAW) {
@@ -693,7 +696,6 @@ static int aac_eh_abort(struct scsi_cmnd* cmd)
 		struct aac_hba_tm_req *tmf;
 		int status;
 		u64 address;
-		__le32 managed_request_id;
 
 		pr_err("%s: Host adapter abort request (%d,%d,%d,%d)\n",
 		 AAC_DRIVERNAME,
@@ -706,8 +708,6 @@ static int aac_eh_abort(struct scsi_cmnd* cmd)
 				(fib->flags & FIB_CONTEXT_FLAG_NATIVE_HBA) &&
 				(fib->callback_data == cmd)) {
 				found = 1;
-				managed_request_id = ((struct aac_hba_cmd_req *)
-					fib->hw_fib_va)->request_id;
 				break;
 			}
 		}
@@ -736,11 +736,7 @@ static int aac_eh_abort(struct scsi_cmnd* cmd)
 		status = aac_hba_send(HBA_IU_TYPE_SCSI_TM_REQ, fib,
 				  (fib_callback) aac_hba_callback,
 				  (void *) cmd);
-		if (status != -EINPROGRESS) {
-			aac_fib_complete(fib);
-			aac_fib_free(fib);
-			return ret;
-		}
+
 		/* Wait up to 15 secs for completion */
 		for (count = 0; count < 15; ++count) {
 			if (cmd->SCp.sent_command) {
@@ -919,11 +915,11 @@ static int aac_eh_dev_reset(struct scsi_cmnd *cmd)
 
 	info = &aac->hba_map[bus][cid];
 
-	if (!(info->devtype == AAC_DEVTYPE_NATIVE_RAW &&
-	 !(info->reset_state > 0)))
+	if (info->devtype != AAC_DEVTYPE_NATIVE_RAW &&
+	    info->reset_state > 0)
 		return FAILED;
 
-	pr_err("%s: Host device reset request. SCSI hang ?\n",
+	pr_err("%s: Host adapter reset request. SCSI hang ?\n",
 	       AAC_DRIVERNAME);
 
 	fib = aac_fib_alloc(aac);
@@ -938,12 +934,7 @@ static int aac_eh_dev_reset(struct scsi_cmnd *cmd)
 	status = aac_hba_send(command, fib,
 			      (fib_callback) aac_tmf_callback,
 			      (void *) info);
-	if (status != -EINPROGRESS) {
-		info->reset_state = 0;
-		aac_fib_complete(fib);
-		aac_fib_free(fib);
-		return ret;
-	}
+
 	/* Wait up to 15 seconds for completion */
 	for (count = 0; count < 15; ++count) {
 		if (info->reset_state == 0) {
@@ -982,11 +973,11 @@ static int aac_eh_target_reset(struct scsi_cmnd *cmd)
 
 	info = &aac->hba_map[bus][cid];
 
-	if (!(info->devtype == AAC_DEVTYPE_NATIVE_RAW &&
-	 !(info->reset_state > 0)))
+	if (info->devtype != AAC_DEVTYPE_NATIVE_RAW &&
+	    info->reset_state > 0)
 		return FAILED;
 
-	pr_err("%s: Host target reset request. SCSI hang ?\n",
+	pr_err("%s: Host adapter reset request. SCSI hang ?\n",
 	       AAC_DRIVERNAME);
 
 	fib = aac_fib_alloc(aac);
@@ -1002,13 +993,6 @@ static int aac_eh_target_reset(struct scsi_cmnd *cmd)
 	status = aac_hba_send(command, fib,
 			      (fib_callback) aac_tmf_callback,
 			      (void *) info);
-
-	if (status != -EINPROGRESS) {
-		info->reset_state = 0;
-		aac_fib_complete(fib);
-		aac_fib_free(fib);
-		return ret;
-	}
 
 	/* Wait up to 15 seconds for completion */
 	for (count = 0; count < 15; ++count) {
@@ -1062,7 +1046,7 @@ static int aac_eh_bus_reset(struct scsi_cmnd* cmd)
 		}
 	}
 
-	pr_err("%s: Host bus reset request. SCSI hang ?\n", AAC_DRIVERNAME);
+	pr_err("%s: Host adapter reset request. SCSI hang ?\n", AAC_DRIVERNAME);
 
 	/*
 	 * Check the health of the controller
@@ -1394,18 +1378,15 @@ static ssize_t aac_store_reset_adapter(struct device *device,
 				       const char *buf, size_t count)
 {
 	int retval = -EACCES;
-	int bled = 0;
-	struct aac_dev *aac;
-
 
 	if (!capable(CAP_SYS_ADMIN))
 		return retval;
 
-	aac = (struct aac_dev *)class_to_shost(device)->hostdata;
-	bled = buf[0] == '!' ? 1:0;
-	retval = aac_reset_adapter(aac, bled, IOP_HWSOFT_RESET);
+	retval = aac_reset_adapter(shost_priv(class_to_shost(device)),
+					buf[0] == '!', IOP_HWSOFT_RESET);
 	if (retval >= 0)
 		retval = count;
+
 	return retval;
 }
 
@@ -1700,12 +1681,20 @@ static int aac_probe_one(struct pci_dev *pdev, const struct pci_device_id *id)
 	aac->cardtype = index;
 	INIT_LIST_HEAD(&aac->entry);
 
-	aac->fibs = kzalloc(sizeof(struct fib) * (shost->can_queue + AAC_NUM_MGT_FIB), GFP_KERNEL);
+	if (aac_reset_devices || reset_devices)
+		aac->init_reset = true;
+
+	aac->fibs = kcalloc(shost->can_queue + AAC_NUM_MGT_FIB,
+			    sizeof(struct fib),
+			    GFP_KERNEL);
 	if (!aac->fibs)
 		goto out_free_host;
 	spin_lock_init(&aac->fib_lock);
 
 	mutex_init(&aac->ioctl_mutex);
+	mutex_init(&aac->scan_mutex);
+
+	INIT_DELAYED_WORK(&aac->safw_rescan_work, aac_safw_rescan_worker);
 	/*
 	 *	Map in the registers from the adapter.
 	 */
@@ -1811,7 +1800,8 @@ static int aac_probe_one(struct pci_dev *pdev, const struct pci_device_id *id)
 	error = scsi_add_host(shost, &pdev->dev);
 	if (error)
 		goto out_deinit;
-	scsi_scan_host(shost);
+
+	aac_scan_host(aac);
 
 	pci_enable_pcie_error_reporting(pdev);
 	pci_save_state(pdev);
@@ -1896,6 +1886,7 @@ static int aac_suspend(struct pci_dev *pdev, pm_message_t state)
 	struct aac_dev *aac = (struct aac_dev *)shost->hostdata;
 
 	scsi_block_requests(shost);
+	aac_cancel_safw_rescan_worker(aac);
 	aac_send_shutdown(aac);
 
 	aac_release_resources(aac);
@@ -1954,6 +1945,7 @@ static void aac_remove_one(struct pci_dev *pdev)
 	struct Scsi_Host *shost = pci_get_drvdata(pdev);
 	struct aac_dev *aac = (struct aac_dev *)shost->hostdata;
 
+	aac_cancel_safw_rescan_worker(aac);
 	scsi_remove_host(shost);
 
 	__aac_shutdown(aac);
@@ -2011,6 +2003,7 @@ static pci_ers_result_t aac_pci_error_detected(struct pci_dev *pdev,
 		aac->handle_pci_error = 1;
 
 		scsi_block_requests(aac->scsi_host_ptr);
+		aac_cancel_safw_rescan_worker(aac);
 		aac_flush_ios(aac);
 		aac_release_resources(aac);
 
@@ -2095,7 +2088,7 @@ static void aac_pci_resume(struct pci_dev *pdev)
 		if (sdev->sdev_state == SDEV_OFFLINE)
 			sdev->sdev_state = SDEV_RUNNING;
 	scsi_unblock_requests(aac->scsi_host_ptr);
-	scsi_scan_host(aac->scsi_host_ptr);
+	aac_scan_host(aac);
 	pci_save_state(pdev);
 
 	dev_err(&pdev->dev, "aacraid: PCI error - resume\n");

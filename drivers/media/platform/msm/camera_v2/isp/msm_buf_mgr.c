@@ -1,4 +1,5 @@
-/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -225,7 +226,8 @@ static int msm_isp_prepare_v4l2_buf(struct msm_isp_buf_mgr *buf_mgr,
 					&(mapped_info->len));
 		if (ret) {
 			rc = -EINVAL;
-			pr_err_ratelimited("%s: cannot map address", __func__);
+			pr_err_ratelimited("%s: cannot map address\n",
+						__func__);
 			goto get_phy_err;
 		}
 
@@ -314,7 +316,7 @@ static int msm_isp_map_buf(struct msm_isp_buf_mgr *buf_mgr,
 
 	if (ret) {
 		rc = -EINVAL;
-		pr_err_ratelimited("%s: cannot map address", __func__);
+		pr_err_ratelimited("%s: cannot map address\n", __func__);
 		goto smmu_map_error;
 	}
 	CDBG("%s: addr:%pK\n",
@@ -480,7 +482,7 @@ static int msm_isp_get_buf_by_index(struct msm_isp_buf_mgr *buf_mgr,
 	}
 
 	if (*buf_info) {
-		pr_debug("Found buf in isp buf mgr");
+		pr_debug("Found buf in isp buf mgr\n");
 		rc = 0;
 	}
 	spin_unlock_irqrestore(&bufq->bufq_lock, flags);
@@ -813,8 +815,7 @@ done:
 
 static int msm_isp_buf_done(struct msm_isp_buf_mgr *buf_mgr,
 	uint32_t bufq_handle, uint32_t buf_index,
-	struct timeval *tv, uint32_t frame_id, uint32_t output_format,
-	enum vb2_buffer_state vb_buffer_state)
+	struct timeval *tv, uint32_t frame_id, uint32_t output_format)
 {
 	int rc = 0;
 	unsigned long flags;
@@ -843,7 +844,7 @@ static int msm_isp_buf_done(struct msm_isp_buf_mgr *buf_mgr,
 			spin_unlock_irqrestore(&bufq->bufq_lock, flags);
 			buf_mgr->vb2_ops->buf_done(buf_info->vb2_v4l2_buf,
 				bufq->session_id, bufq->stream_id,
-				frame_id, tv, output_format, vb_buffer_state);
+				frame_id, tv, output_format);
 		} else {
 			spin_unlock_irqrestore(&bufq->bufq_lock, flags);
 		}
@@ -964,8 +965,7 @@ static int msm_isp_buf_enqueue(struct msm_isp_buf_mgr *buf_mgr,
 				buf_info->buf_debug.put_state_last ^= 1;
 				rc = msm_isp_buf_done(buf_mgr,
 					info->handle, info->buf_idx,
-					buf_info->tv, buf_info->frame_id, 0,
-					VB2_BUF_STATE_DONE);
+					buf_info->tv, buf_info->frame_id, 0);
 			}
 		}
 	} else {
@@ -1252,7 +1252,7 @@ int msm_isp_smmu_attach(struct msm_isp_buf_mgr *buf_mgr,
 	if (cmd->iommu_attach_mode == IOMMU_ATTACH) {
 		/* disable smmu stall on fault */
 		cam_smmu_set_attr(buf_mgr->iommu_hdl,
-			DOMAIN_ATTR_CB_STALL_DISABLE, &stall_disable);
+			DOMAIN_ATTR_FAULT_MODEL_NO_STALL, &stall_disable);
 		/*
 		 * Call hypervisor thru scm call to notify secure or
 		 * non-secure mode

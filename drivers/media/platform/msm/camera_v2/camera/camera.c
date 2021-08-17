@@ -1,4 +1,5 @@
-/* Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2018, 2020 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -92,7 +93,7 @@ static int camera_v4l2_querycap(struct file *filep, void *fh,
 	int rc;
 	struct v4l2_event event;
 
-	if (msm_is_daemon_present() == false)
+	if (!msm_is_daemon_present())
 		return 0;
 
 	/* can use cap->driver to make differentiation */
@@ -114,7 +115,7 @@ static int camera_v4l2_s_crop(struct file *filep, void *fh,
 	int rc = 0;
 	struct v4l2_event event;
 
-	if (msm_is_daemon_present() == false)
+	if (!msm_is_daemon_present())
 		return 0;
 
 	if (crop->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
@@ -138,7 +139,7 @@ static int camera_v4l2_g_crop(struct file *filep, void *fh,
 	int rc = 0;
 	struct v4l2_event event;
 
-	if (msm_is_daemon_present() == false)
+	if (!msm_is_daemon_present())
 		return 0;
 
 	if (crop->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
@@ -161,7 +162,7 @@ static int camera_v4l2_queryctrl(struct file *filep, void *fh,
 	int rc = 0;
 	struct v4l2_event event;
 
-	if (msm_is_daemon_present() == false)
+	if (!msm_is_daemon_present())
 		return 0;
 
 	if (ctrl->type == V4L2_CTRL_TYPE_MENU) {
@@ -298,7 +299,7 @@ static int camera_v4l2_streamon(struct file *filep, void *fh,
 	rc = vb2_streamon(&sp->vb2_q, buf_type);
 	mutex_unlock(&sp->lock);
 
-	if (msm_is_daemon_present() == false)
+	if (!msm_is_daemon_present())
 		return 0;
 
 	camera_pack_event(filep, MSM_CAMERA_SET_PARM,
@@ -319,7 +320,7 @@ static int camera_v4l2_streamoff(struct file *filep, void *fh,
 	int rc = 0;
 	struct camera_v4l2_private *sp = fh_to_private(fh);
 
-	if (msm_is_daemon_present() != false) {
+	if (msm_is_daemon_present()) {
 		camera_pack_event(filep, MSM_CAMERA_SET_PARM,
 			MSM_CAMERA_PRIV_STREAM_OFF, -1, &event);
 
@@ -339,7 +340,7 @@ static int camera_v4l2_g_fmt_vid_cap_mplane(struct file *filep, void *fh,
 {
 	int rc = -EINVAL;
 
-	if (msm_is_daemon_present() == false)
+	if (!msm_is_daemon_present())
 		return 0;
 
 	if (pfmt->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) {
@@ -393,7 +394,7 @@ static int camera_v4l2_s_fmt_vid_cap_mplane(struct file *filep, void *fh,
 			pr_debug("%s: plane size[%d]\n", __func__,
 					user_fmt->plane_sizes[i]);
 		mutex_unlock(sp->vb2_q.lock);
-		if (msm_is_daemon_present() != false) {
+		if (msm_is_daemon_present()) {
 			camera_pack_event(filep, MSM_CAMERA_SET_PARM,
 				MSM_CAMERA_PRIV_S_FMT, -1, &event);
 
@@ -441,7 +442,7 @@ static int camera_v4l2_s_parm(struct file *filep, void *fh,
 	if (rc < 0)
 		return rc;
 
-	if (msm_is_daemon_present() != false) {
+	if (msm_is_daemon_present()) {
 		rc = msm_post_event(&event, MSM_POST_EVT_TIMEOUT);
 		if (rc < 0)
 			goto error;
@@ -518,7 +519,7 @@ static long camera_v4l2_vidioc_private_ioctl(struct file *filep, void *fh,
 		}
 		break;
 	default:
-		pr_debug("unimplemented id %d", k_ioctl->id);
+		pr_debug("unimplemented id %d\n", k_ioctl->id);
 		return -EINVAL;
 	}
 	return rc;
@@ -687,7 +688,7 @@ static int camera_v4l2_open(struct file *filep)
 			goto command_ack_q_fail;
 		}
 
-		if (msm_is_daemon_present() != false) {
+		if (msm_is_daemon_present()) {
 			camera_pack_event(filep, MSM_CAMERA_NEW_SESSION,
 				0, -1, &event);
 			rc = msm_post_event(&event, MSM_POST_EVT_TIMEOUT);
@@ -773,18 +774,18 @@ static int camera_v4l2_close(struct file *filep)
 	opn_idx &= ~mask;
 	atomic_set(&pvdev->opened, opn_idx);
 
-	if (msm_is_daemon_present() != false && sp->stream_created == true) {
+	if (msm_is_daemon_present() && sp->stream_created) {
 		pr_debug("%s: close stream_id=%d\n", __func__, sp->stream_id);
 		camera_pack_event(filep, MSM_CAMERA_SET_PARM,
 			MSM_CAMERA_PRIV_DEL_STREAM, -1, &event);
 		msm_post_event(&event, MSM_POST_EVT_TIMEOUT);
 	}
 
-	if (sp->stream_created == true)
+	if (sp->stream_created)
 		sp->stream_created = false;
 
 	if (atomic_read(&pvdev->opened) == 0) {
-		if (msm_is_daemon_present() != false) {
+		if (msm_is_daemon_present()) {
 			camera_pack_event(filep, MSM_CAMERA_DEL_SESSION,
 				0, -1, &event);
 			msm_post_event(&event, MSM_POST_EVT_TIMEOUT);
@@ -833,13 +834,13 @@ static long camera_handle_internal_compat_ioctl(struct file *file,
 	switch (k_ioctl.id) {
 	case MSM_CAMERA_PRIV_IOCTL_ID_RETURN_BUF: {
 		if (k_ioctl.size != sizeof(struct msm_camera_return_buf)) {
-			pr_debug("Invalid size for id %d with size %d",
+			pr_debug("Invalid size for id %d with size %d\n",
 				k_ioctl.id, k_ioctl.size);
 			return -EINVAL;
 		}
-		k_ioctl.ioctl_ptr = (__force __u64 __user)tmp_compat_ioctl_ptr;
+		k_ioctl.ioctl_ptr = (__u64 __user)tmp_compat_ioctl_ptr;
 		if (!k_ioctl.ioctl_ptr) {
-			pr_debug("Invalid ptr for id %d", k_ioctl.id);
+			pr_debug("Invalid ptr for id %d\n", k_ioctl.id);
 			return -EINVAL;
 		}
 		rc = camera_v4l2_vidioc_private_ioctl(file, file->private_data,
@@ -847,7 +848,7 @@ static long camera_handle_internal_compat_ioctl(struct file *file,
 		}
 		break;
 	default:
-		pr_debug("unimplemented id %d", k_ioctl.id);
+		pr_debug("unimplemented id %d\n", k_ioctl.id);
 		return -EINVAL;
 	}
 	return rc;

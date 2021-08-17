@@ -101,6 +101,57 @@ static inline void down_write_nonfifo(struct rw_semaphore *lock)
 		msleep(1);
 }
 
+#define PCM_LOCK_DEFAULT	0
+#define PCM_LOCK_IRQ	1
+#define PCM_LOCK_IRQSAVE	2
+
+static unsigned long __snd_pcm_stream_lock_mode(struct snd_pcm_substream *substream,
+						unsigned int mode)
+{
+	unsigned long flags = 0;
+	if (substream->pcm->nonatomic) {
+		down_read_nested(&snd_pcm_link_rwsem, SINGLE_DEPTH_NESTING);
+		mutex_lock(&substream->self_group.mutex);
+	} else {
+		switch (mode) {
+		case PCM_LOCK_DEFAULT:
+			read_lock(&snd_pcm_link_rwlock);
+			break;
+		case PCM_LOCK_IRQ:
+			read_lock_irq(&snd_pcm_link_rwlock);
+			break;
+		case PCM_LOCK_IRQSAVE:
+			read_lock_irqsave(&snd_pcm_link_rwlock, flags);
+			break;
+		}
+		spin_lock(&substream->self_group.lock);
+	}
+	return flags;
+}
+
+static void __snd_pcm_stream_unlock_mode(struct snd_pcm_substream *substream,
+					 unsigned int mode, unsigned long flags)
+{
+	if (substream->pcm->nonatomic) {
+		mutex_unlock(&substream->self_group.mutex);
+		up_read(&snd_pcm_link_rwsem);
+	} else {
+		spin_unlock(&substream->self_group.lock);
+
+		switch (mode) {
+		case PCM_LOCK_DEFAULT:
+			read_unlock(&snd_pcm_link_rwlock);
+			break;
+		case PCM_LOCK_IRQ:
+			read_unlock_irq(&snd_pcm_link_rwlock);
+			break;
+		case PCM_LOCK_IRQSAVE:
+			read_unlock_irqrestore(&snd_pcm_link_rwlock, flags);
+			break;
+		}
+	}
+}
+
 /**
  * snd_pcm_stream_lock - Lock the PCM stream
  * @substream: PCM substream
@@ -111,13 +162,7 @@ static inline void down_write_nonfifo(struct rw_semaphore *lock)
  */
 void snd_pcm_stream_lock(struct snd_pcm_substream *substream)
 {
-	if (substream->pcm->nonatomic) {
-		down_read_nested(&snd_pcm_link_rwsem, SINGLE_DEPTH_NESTING);
-		mutex_lock(&substream->self_group.mutex);
-	} else {
-		read_lock(&snd_pcm_link_rwlock);
-		spin_lock(&substream->self_group.lock);
-	}
+	__snd_pcm_stream_lock_mode(substream, PCM_LOCK_DEFAULT);
 }
 EXPORT_SYMBOL_GPL(snd_pcm_stream_lock);
 
@@ -129,13 +174,7 @@ EXPORT_SYMBOL_GPL(snd_pcm_stream_lock);
  */
 void snd_pcm_stream_unlock(struct snd_pcm_substream *substream)
 {
-	if (substream->pcm->nonatomic) {
-		mutex_unlock(&substream->self_group.mutex);
-		up_read(&snd_pcm_link_rwsem);
-	} else {
-		spin_unlock(&substream->self_group.lock);
-		read_unlock(&snd_pcm_link_rwlock);
-	}
+	__snd_pcm_stream_unlock_mode(substream, PCM_LOCK_DEFAULT, 0);
 }
 EXPORT_SYMBOL_GPL(snd_pcm_stream_unlock);
 
@@ -149,9 +188,7 @@ EXPORT_SYMBOL_GPL(snd_pcm_stream_unlock);
  */
 void snd_pcm_stream_lock_irq(struct snd_pcm_substream *substream)
 {
-	if (!substream->pcm->nonatomic)
-		local_irq_disable();
-	snd_pcm_stream_lock(substream);
+	__snd_pcm_stream_lock_mode(substream, PCM_LOCK_IRQ);
 }
 EXPORT_SYMBOL_GPL(snd_pcm_stream_lock_irq);
 
@@ -163,19 +200,13 @@ EXPORT_SYMBOL_GPL(snd_pcm_stream_lock_irq);
  */
 void snd_pcm_stream_unlock_irq(struct snd_pcm_substream *substream)
 {
-	snd_pcm_stream_unlock(substream);
-	if (!substream->pcm->nonatomic)
-		local_irq_enable();
+	__snd_pcm_stream_unlock_mode(substream, PCM_LOCK_IRQ, 0);
 }
 EXPORT_SYMBOL_GPL(snd_pcm_stream_unlock_irq);
 
 unsigned long _snd_pcm_stream_lock_irqsave(struct snd_pcm_substream *substream)
 {
-	unsigned long flags = 0;
-	if (!substream->pcm->nonatomic)
-		local_irq_save(flags);
-	snd_pcm_stream_lock(substream);
-	return flags;
+	return __snd_pcm_stream_lock_mode(substream, PCM_LOCK_IRQSAVE);
 }
 EXPORT_SYMBOL_GPL(_snd_pcm_stream_lock_irqsave);
 
@@ -189,9 +220,7 @@ EXPORT_SYMBOL_GPL(_snd_pcm_stream_lock_irqsave);
 void snd_pcm_stream_unlock_irqrestore(struct snd_pcm_substream *substream,
 				      unsigned long flags)
 {
-	snd_pcm_stream_unlock(substream);
-	if (!substream->pcm->nonatomic)
-		local_irq_restore(flags);
+	__snd_pcm_stream_unlock_mode(substream, PCM_LOCK_IRQSAVE, flags);
 }
 EXPORT_SYMBOL_GPL(snd_pcm_stream_unlock_irqrestore);
 
@@ -619,7 +648,7 @@ static int snd_pcm_hw_params_choose(struct snd_pcm_substream *pcm,
 			changed = snd_pcm_hw_param_first(pcm, params, *v, NULL);
 		else
 			changed = snd_pcm_hw_param_last(pcm, params, *v, NULL);
-		if (snd_BUG_ON(changed < 0))
+		if (changed < 0)
 			return changed;
 		if (changed == 0)
 			continue;
@@ -726,13 +755,8 @@ static int snd_pcm_hw_params(struct snd_pcm_substream *substream,
 		runtime->boundary *= 2;
 
 	/* clear the buffer for avoiding possible kernel info leaks */
-	if (runtime->dma_area && !substream->ops->copy_user) {
-		size_t size = runtime->dma_bytes;
-
-		if (runtime->info & SNDRV_PCM_INFO_MMAP)
-			size = PAGE_ALIGN(size);
-		memset(runtime->dma_area, 0, size);
-	}
+	if (runtime->dma_area && !substream->ops->copy_user)
+		memset(runtime->dma_area, 0, runtime->dma_bytes);
 
 	snd_pcm_timer_resolution_change(substream);
 	snd_pcm_set_state(substream, SNDRV_PCM_STATE_SETUP);
@@ -797,7 +821,8 @@ static int snd_pcm_hw_free(struct snd_pcm_substream *substream)
 	if (substream->ops->hw_free)
 		result = substream->ops->hw_free(substream);
 	snd_pcm_set_state(substream, SNDRV_PCM_STATE_OPEN);
-	pm_qos_remove_request(&substream->latency_pm_qos_req);
+	if (pm_qos_request_active(&substream->latency_pm_qos_req))
+		pm_qos_remove_request(&substream->latency_pm_qos_req);
 	return result;
 }
 
@@ -869,6 +894,18 @@ static int snd_pcm_sw_params_user(struct snd_pcm_substream *substream,
 	return err;
 }
 
+static inline snd_pcm_uframes_t
+snd_pcm_calc_delay(struct snd_pcm_substream *substream)
+{
+	snd_pcm_uframes_t delay;
+
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+		delay = snd_pcm_playback_hw_avail(substream->runtime);
+	else
+		delay = snd_pcm_capture_avail(substream->runtime);
+	return delay + substream->runtime->delay;
+}
+
 int snd_pcm_status(struct snd_pcm_substream *substream,
 		   struct snd_pcm_status *status)
 {
@@ -920,21 +957,9 @@ int snd_pcm_status(struct snd_pcm_substream *substream,
  _tstamp_end:
 	status->appl_ptr = runtime->control->appl_ptr;
 	status->hw_ptr = runtime->status->hw_ptr;
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		status->avail = snd_pcm_playback_avail(runtime);
-		if (runtime->status->state == SNDRV_PCM_STATE_RUNNING ||
-		    runtime->status->state == SNDRV_PCM_STATE_DRAINING) {
-			status->delay = runtime->buffer_size - status->avail;
-			status->delay += runtime->delay;
-		} else
-			status->delay = 0;
-	} else {
-		status->avail = snd_pcm_capture_avail(runtime);
-		if (runtime->status->state == SNDRV_PCM_STATE_RUNNING)
-			status->delay = status->avail + runtime->delay;
-		else
-			status->delay = 0;
-	}
+	status->avail = snd_pcm_avail(substream);
+	status->delay = snd_pcm_running(substream) ?
+		snd_pcm_calc_delay(substream) : 0;
 	status->avail_max = runtime->avail_max;
 	status->overrange = runtime->overrange;
 	runtime->avail_max = 0;
@@ -1348,13 +1373,12 @@ int snd_pcm_drain_done(struct snd_pcm_substream *substream)
 int snd_pcm_stop_xrun(struct snd_pcm_substream *substream)
 {
 	unsigned long flags;
-	int ret = 0;
 
 	snd_pcm_stream_lock_irqsave(substream, flags);
-	if (snd_pcm_running(substream))
-		ret = snd_pcm_stop(substream, SNDRV_PCM_STATE_XRUN);
+	if (substream->runtime && snd_pcm_running(substream))
+		__snd_pcm_xrun(substream);
 	snd_pcm_stream_unlock_irqrestore(substream, flags);
-	return ret;
+	return 0;
 }
 EXPORT_SYMBOL_GPL(snd_pcm_stop_xrun);
 
@@ -1617,7 +1641,8 @@ static int snd_pcm_xrun(struct snd_pcm_substream *substream)
 		result = 0;	/* already there */
 		break;
 	case SNDRV_PCM_STATE_RUNNING:
-		result = snd_pcm_stop(substream, SNDRV_PCM_STATE_XRUN);
+		__snd_pcm_xrun(substream);
+		result = 0;
 		break;
 	default:
 		result = -EBADFD;
@@ -2672,10 +2697,9 @@ static snd_pcm_sframes_t rewind_appl_ptr(struct snd_pcm_substream *substream,
 	return ret < 0 ? 0 : frames;
 }
 
-static snd_pcm_sframes_t snd_pcm_playback_rewind(struct snd_pcm_substream *substream,
-						 snd_pcm_uframes_t frames)
+static snd_pcm_sframes_t snd_pcm_rewind(struct snd_pcm_substream *substream,
+					snd_pcm_uframes_t frames)
 {
-	struct snd_pcm_runtime *runtime = substream->runtime;
 	snd_pcm_sframes_t ret;
 
 	if (frames == 0)
@@ -2685,33 +2709,14 @@ static snd_pcm_sframes_t snd_pcm_playback_rewind(struct snd_pcm_substream *subst
 	ret = do_pcm_hwsync(substream);
 	if (!ret)
 		ret = rewind_appl_ptr(substream, frames,
-				      snd_pcm_playback_hw_avail(runtime));
+				      snd_pcm_hw_avail(substream));
 	snd_pcm_stream_unlock_irq(substream);
 	return ret;
 }
 
-static snd_pcm_sframes_t snd_pcm_capture_rewind(struct snd_pcm_substream *substream,
-						snd_pcm_uframes_t frames)
+static snd_pcm_sframes_t snd_pcm_forward(struct snd_pcm_substream *substream,
+					 snd_pcm_uframes_t frames)
 {
-	struct snd_pcm_runtime *runtime = substream->runtime;
-	snd_pcm_sframes_t ret;
-
-	if (frames == 0)
-		return 0;
-
-	snd_pcm_stream_lock_irq(substream);
-	ret = do_pcm_hwsync(substream);
-	if (!ret)
-		ret = rewind_appl_ptr(substream, frames,
-				      snd_pcm_capture_hw_avail(runtime));
-	snd_pcm_stream_unlock_irq(substream);
-	return ret;
-}
-
-static snd_pcm_sframes_t snd_pcm_playback_forward(struct snd_pcm_substream *substream,
-						  snd_pcm_uframes_t frames)
-{
-	struct snd_pcm_runtime *runtime = substream->runtime;
 	snd_pcm_sframes_t ret;
 
 	if (frames == 0)
@@ -2721,25 +2726,7 @@ static snd_pcm_sframes_t snd_pcm_playback_forward(struct snd_pcm_substream *subs
 	ret = do_pcm_hwsync(substream);
 	if (!ret)
 		ret = forward_appl_ptr(substream, frames,
-				       snd_pcm_playback_avail(runtime));
-	snd_pcm_stream_unlock_irq(substream);
-	return ret;
-}
-
-static snd_pcm_sframes_t snd_pcm_capture_forward(struct snd_pcm_substream *substream,
-						 snd_pcm_uframes_t frames)
-{
-	struct snd_pcm_runtime *runtime = substream->runtime;
-	snd_pcm_sframes_t ret;
-
-	if (frames == 0)
-		return 0;
-
-	snd_pcm_stream_lock_irq(substream);
-	ret = do_pcm_hwsync(substream);
-	if (!ret)
-		ret = forward_appl_ptr(substream, frames,
-				       snd_pcm_capture_avail(runtime));
+				       snd_pcm_avail(substream));
 	snd_pcm_stream_unlock_irq(substream);
 	return ret;
 }
@@ -2757,19 +2744,13 @@ static int snd_pcm_hwsync(struct snd_pcm_substream *substream)
 static int snd_pcm_delay(struct snd_pcm_substream *substream,
 			 snd_pcm_sframes_t *delay)
 {
-	struct snd_pcm_runtime *runtime = substream->runtime;
 	int err;
 	snd_pcm_sframes_t n = 0;
 
 	snd_pcm_stream_lock_irq(substream);
 	err = do_pcm_hwsync(substream);
-	if (!err) {
-		if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-			n = snd_pcm_playback_hw_avail(runtime);
-		else
-			n = snd_pcm_capture_avail(runtime);
-		n += runtime->delay;
-	}
+	if (!err)
+		n = snd_pcm_calc_delay(substream);
 	snd_pcm_stream_unlock_irq(substream);
 	if (!err)
 		*delay = n;
@@ -2907,10 +2888,7 @@ static int snd_pcm_rewind_ioctl(struct snd_pcm_substream *substream,
 		return -EFAULT;
 	if (put_user(0, _frames))
 		return -EFAULT;
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		result = snd_pcm_playback_rewind(substream, frames);
-	else
-		result = snd_pcm_capture_rewind(substream, frames);
+	result = snd_pcm_rewind(substream, frames);
 	__put_user(result, _frames);
 	return result < 0 ? result : 0;
 }
@@ -2925,10 +2903,7 @@ static int snd_pcm_forward_ioctl(struct snd_pcm_substream *substream,
 		return -EFAULT;
 	if (put_user(0, _frames))
 		return -EFAULT;
-	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
-		result = snd_pcm_playback_forward(substream, frames);
-	else
-		result = snd_pcm_capture_forward(substream, frames);
+	result = snd_pcm_forward(substream, frames);
 	__put_user(result, _frames);
 	return result < 0 ? result : 0;
 }
@@ -3086,7 +3061,7 @@ int snd_pcm_kernel_ioctl(struct snd_pcm_substream *substream,
 		/* provided only for OSS; capture-only and no value returned */
 		if (substream->stream != SNDRV_PCM_STREAM_CAPTURE)
 			return -EINVAL;
-		result = snd_pcm_capture_forward(substream, *frames);
+		result = snd_pcm_forward(substream, *frames);
 		return result < 0 ? result : 0;
 	}
 	case SNDRV_PCM_IOCTL_HW_PARAMS:
@@ -3181,7 +3156,7 @@ static ssize_t snd_pcm_readv(struct kiocb *iocb, struct iov_iter *to)
 	if (!frame_aligned(runtime, to->iov->iov_len))
 		return -EINVAL;
 	frames = bytes_to_samples(runtime, to->iov->iov_len);
-	bufs = kmalloc(sizeof(void *) * to->nr_segs, GFP_KERNEL);
+	bufs = kmalloc_array(to->nr_segs, sizeof(void *), GFP_KERNEL);
 	if (bufs == NULL)
 		return -ENOMEM;
 	for (i = 0; i < to->nr_segs; ++i)
@@ -3216,7 +3191,7 @@ static ssize_t snd_pcm_writev(struct kiocb *iocb, struct iov_iter *from)
 	    !frame_aligned(runtime, from->iov->iov_len))
 		return -EINVAL;
 	frames = bytes_to_samples(runtime, from->iov->iov_len);
-	bufs = kmalloc(sizeof(void *) * from->nr_segs, GFP_KERNEL);
+	bufs = kmalloc_array(from->nr_segs, sizeof(void *), GFP_KERNEL);
 	if (bufs == NULL)
 		return -ENOMEM;
 	for (i = 0; i < from->nr_segs; ++i)
@@ -3228,82 +3203,46 @@ static ssize_t snd_pcm_writev(struct kiocb *iocb, struct iov_iter *from)
 	return result;
 }
 
-static unsigned int snd_pcm_playback_poll(struct file *file, poll_table * wait)
+static __poll_t snd_pcm_poll(struct file *file, poll_table *wait)
 {
 	struct snd_pcm_file *pcm_file;
 	struct snd_pcm_substream *substream;
 	struct snd_pcm_runtime *runtime;
-        unsigned int mask;
+	__poll_t mask, ok;
 	snd_pcm_uframes_t avail;
 
 	pcm_file = file->private_data;
 
 	substream = pcm_file->substream;
+	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK)
+		ok = EPOLLOUT | EPOLLWRNORM;
+	else
+		ok = EPOLLIN | EPOLLRDNORM;
 	if (PCM_RUNTIME_CHECK(substream))
-		return POLLOUT | POLLWRNORM | POLLERR;
-	runtime = substream->runtime;
+		return ok | EPOLLERR;
 
+	runtime = substream->runtime;
 	poll_wait(file, &runtime->sleep, wait);
 
+	mask = 0;
 	snd_pcm_stream_lock_irq(substream);
-	avail = snd_pcm_playback_avail(runtime);
+	avail = snd_pcm_avail(substream);
 	switch (runtime->status->state) {
 	case SNDRV_PCM_STATE_RUNNING:
 	case SNDRV_PCM_STATE_PREPARED:
 	case SNDRV_PCM_STATE_PAUSED:
-		if (avail >= runtime->control->avail_min) {
-			mask = POLLOUT | POLLWRNORM;
-			break;
-		}
-		/* Fall through */
-	case SNDRV_PCM_STATE_DRAINING:
-		mask = 0;
-		break;
-	default:
-		mask = POLLOUT | POLLWRNORM | POLLERR;
-		break;
-	}
-	snd_pcm_stream_unlock_irq(substream);
-	return mask;
-}
-
-static unsigned int snd_pcm_capture_poll(struct file *file, poll_table * wait)
-{
-	struct snd_pcm_file *pcm_file;
-	struct snd_pcm_substream *substream;
-	struct snd_pcm_runtime *runtime;
-        unsigned int mask;
-	snd_pcm_uframes_t avail;
-
-	pcm_file = file->private_data;
-
-	substream = pcm_file->substream;
-	if (PCM_RUNTIME_CHECK(substream))
-		return POLLIN | POLLRDNORM | POLLERR;
-	runtime = substream->runtime;
-
-	poll_wait(file, &runtime->sleep, wait);
-
-	snd_pcm_stream_lock_irq(substream);
-	avail = snd_pcm_capture_avail(runtime);
-	switch (runtime->status->state) {
-	case SNDRV_PCM_STATE_RUNNING:
-	case SNDRV_PCM_STATE_PREPARED:
-	case SNDRV_PCM_STATE_PAUSED:
-		if (avail >= runtime->control->avail_min) {
-			mask = POLLIN | POLLRDNORM;
-			break;
-		}
-		mask = 0;
+		if (avail >= runtime->control->avail_min)
+			mask = ok;
 		break;
 	case SNDRV_PCM_STATE_DRAINING:
-		if (avail > 0) {
-			mask = POLLIN | POLLRDNORM;
-			break;
+		if (substream->stream == SNDRV_PCM_STREAM_CAPTURE) {
+			mask = ok;
+			if (!avail)
+				mask |= EPOLLERR;
 		}
-		/* Fall through */
+		break;
 	default:
-		mask = POLLIN | POLLRDNORM | POLLERR;
+		mask = ok | EPOLLERR;
 		break;
 	}
 	snd_pcm_stream_unlock_irq(substream);
@@ -3322,7 +3261,7 @@ static unsigned int snd_pcm_capture_poll(struct file *file, poll_table * wait)
 /*
  * mmap status record
  */
-static int snd_pcm_mmap_status_fault(struct vm_fault *vmf)
+static vm_fault_t snd_pcm_mmap_status_fault(struct vm_fault *vmf)
 {
 	struct snd_pcm_substream *substream = vmf->vma->vm_private_data;
 	struct snd_pcm_runtime *runtime;
@@ -3358,7 +3297,7 @@ static int snd_pcm_mmap_status(struct snd_pcm_substream *substream, struct file 
 /*
  * mmap control record
  */
-static int snd_pcm_mmap_control_fault(struct vm_fault *vmf)
+static vm_fault_t snd_pcm_mmap_control_fault(struct vm_fault *vmf)
 {
 	struct snd_pcm_substream *substream = vmf->vma->vm_private_data;
 	struct snd_pcm_runtime *runtime;
@@ -3447,7 +3386,7 @@ snd_pcm_default_page_ops(struct snd_pcm_substream *substream, unsigned long ofs)
 /*
  * fault callback for mmapping a RAM page
  */
-static int snd_pcm_mmap_data_fault(struct vm_fault *vmf)
+static vm_fault_t snd_pcm_mmap_data_fault(struct vm_fault *vmf)
 {
 	struct snd_pcm_substream *substream = vmf->vma->vm_private_data;
 	struct snd_pcm_runtime *runtime;
@@ -3539,7 +3478,7 @@ EXPORT_SYMBOL_GPL(snd_pcm_lib_default_mmap);
 int snd_pcm_lib_mmap_iomem(struct snd_pcm_substream *substream,
 			   struct vm_area_struct *area)
 {
-	struct snd_pcm_runtime *runtime = substream->runtime;;
+	struct snd_pcm_runtime *runtime = substream->runtime;
 
 	area->vm_page_prot = pgprot_noncached(area->vm_page_prot);
 	return vm_iomap_memory(area, runtime->dma_addr, runtime->dma_bytes);
@@ -3795,7 +3734,7 @@ const struct file_operations snd_pcm_f_ops[2] = {
 		.open =			snd_pcm_playback_open,
 		.release =		snd_pcm_release,
 		.llseek =		no_llseek,
-		.poll =			snd_pcm_playback_poll,
+		.poll =			snd_pcm_poll,
 		.unlocked_ioctl =	snd_pcm_ioctl,
 		.compat_ioctl = 	snd_pcm_ioctl_compat,
 		.mmap =			snd_pcm_mmap,
@@ -3809,7 +3748,7 @@ const struct file_operations snd_pcm_f_ops[2] = {
 		.open =			snd_pcm_capture_open,
 		.release =		snd_pcm_release,
 		.llseek =		no_llseek,
-		.poll =			snd_pcm_capture_poll,
+		.poll =			snd_pcm_poll,
 		.unlocked_ioctl =	snd_pcm_ioctl,
 		.compat_ioctl = 	snd_pcm_ioctl_compat,
 		.mmap =			snd_pcm_mmap,

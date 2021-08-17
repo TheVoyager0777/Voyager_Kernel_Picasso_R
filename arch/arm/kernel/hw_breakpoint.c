@@ -44,17 +44,17 @@ static DEFINE_PER_CPU(struct perf_event *, bp_on_reg[ARM_MAX_BRP]);
 static DEFINE_PER_CPU(struct perf_event *, wp_on_reg[ARM_MAX_WRP]);
 
 /* Number of BRP/WRP registers on this CPU. */
-static int core_num_brps;
-static int core_num_wrps;
+static int core_num_brps __ro_after_init;
+static int core_num_wrps __ro_after_init;
 
 /* Debug architecture version. */
-static u8 debug_arch;
+static u8 debug_arch __ro_after_init;
 
 /* Does debug architecture support OS Save and Restore? */
-static bool has_ossr;
+static bool has_ossr __ro_after_init;
 
 /* Maximum supported watchpoint length. */
-static u8 max_watchpoint_len;
+static u8 max_watchpoint_len __ro_after_init;
 
 #define READ_WB_REG_CASE(OP2, M, VAL)			\
 	case ((OP2 << 4) + M):				\
@@ -224,18 +224,6 @@ static int get_num_brps(void)
 {
 	int brps = get_num_brp_resources();
 	return core_has_mismatch_brps() ? brps - 1 : brps;
-}
-
-/* Determine if halting mode is enabled */
-static int halting_mode_enabled(void)
-{
-	u32 dscr;
-
-	ARM_DBG_READ(c0, c1, 0, dscr);
-	WARN_ONCE(dscr & ARM_DSCR_HDBGEN,
-	  "halting debug mode enabled. Unable to access hardware resources.\n");
-
-	return !!(dscr & ARM_DSCR_HDBGEN);
 }
 
 /*
@@ -468,14 +456,13 @@ static int get_hbp_len(u8 hbp_len)
 /*
  * Check whether bp virtual address is in kernel space.
  */
-int arch_check_bp_in_kernelspace(struct perf_event *bp)
+int arch_check_bp_in_kernelspace(struct arch_hw_breakpoint *hw)
 {
 	unsigned int len;
 	unsigned long va;
-	struct arch_hw_breakpoint *info = counter_arch_bp(bp);
 
-	va = info->address;
-	len = get_hbp_len(info->ctrl.len);
+	va = hw->address;
+	len = get_hbp_len(hw->ctrl.len);
 
 	return (va >= TASK_SIZE) && ((va + len - 1) >= TASK_SIZE);
 }
@@ -530,42 +517,42 @@ int arch_bp_generic_fields(struct arch_hw_breakpoint_ctrl ctrl,
 /*
  * Construct an arch_hw_breakpoint from a perf_event.
  */
-static int arch_build_bp_info(struct perf_event *bp)
+static int arch_build_bp_info(struct perf_event *bp,
+			      const struct perf_event_attr *attr,
+			      struct arch_hw_breakpoint *hw)
 {
-	struct arch_hw_breakpoint *info = counter_arch_bp(bp);
-
 	/* Type */
-	switch (bp->attr.bp_type) {
+	switch (attr->bp_type) {
 	case HW_BREAKPOINT_X:
-		info->ctrl.type = ARM_BREAKPOINT_EXECUTE;
+		hw->ctrl.type = ARM_BREAKPOINT_EXECUTE;
 		break;
 	case HW_BREAKPOINT_R:
-		info->ctrl.type = ARM_BREAKPOINT_LOAD;
+		hw->ctrl.type = ARM_BREAKPOINT_LOAD;
 		break;
 	case HW_BREAKPOINT_W:
-		info->ctrl.type = ARM_BREAKPOINT_STORE;
+		hw->ctrl.type = ARM_BREAKPOINT_STORE;
 		break;
 	case HW_BREAKPOINT_RW:
-		info->ctrl.type = ARM_BREAKPOINT_LOAD | ARM_BREAKPOINT_STORE;
+		hw->ctrl.type = ARM_BREAKPOINT_LOAD | ARM_BREAKPOINT_STORE;
 		break;
 	default:
 		return -EINVAL;
 	}
 
 	/* Len */
-	switch (bp->attr.bp_len) {
+	switch (attr->bp_len) {
 	case HW_BREAKPOINT_LEN_1:
-		info->ctrl.len = ARM_BREAKPOINT_LEN_1;
+		hw->ctrl.len = ARM_BREAKPOINT_LEN_1;
 		break;
 	case HW_BREAKPOINT_LEN_2:
-		info->ctrl.len = ARM_BREAKPOINT_LEN_2;
+		hw->ctrl.len = ARM_BREAKPOINT_LEN_2;
 		break;
 	case HW_BREAKPOINT_LEN_4:
-		info->ctrl.len = ARM_BREAKPOINT_LEN_4;
+		hw->ctrl.len = ARM_BREAKPOINT_LEN_4;
 		break;
 	case HW_BREAKPOINT_LEN_8:
-		info->ctrl.len = ARM_BREAKPOINT_LEN_8;
-		if ((info->ctrl.type != ARM_BREAKPOINT_EXECUTE)
+		hw->ctrl.len = ARM_BREAKPOINT_LEN_8;
+		if ((hw->ctrl.type != ARM_BREAKPOINT_EXECUTE)
 			&& max_watchpoint_len >= 8)
 			break;
 	default:
@@ -578,24 +565,24 @@ static int arch_build_bp_info(struct perf_event *bp)
 	 * by the hardware and must be aligned to the appropriate number of
 	 * bytes.
 	 */
-	if (info->ctrl.type == ARM_BREAKPOINT_EXECUTE &&
-	    info->ctrl.len != ARM_BREAKPOINT_LEN_2 &&
-	    info->ctrl.len != ARM_BREAKPOINT_LEN_4)
+	if (hw->ctrl.type == ARM_BREAKPOINT_EXECUTE &&
+	    hw->ctrl.len != ARM_BREAKPOINT_LEN_2 &&
+	    hw->ctrl.len != ARM_BREAKPOINT_LEN_4)
 		return -EINVAL;
 
 	/* Address */
-	info->address = bp->attr.bp_addr;
+	hw->address = attr->bp_addr;
 
 	/* Privilege */
-	info->ctrl.privilege = ARM_BREAKPOINT_USER;
-	if (arch_check_bp_in_kernelspace(bp))
-		info->ctrl.privilege |= ARM_BREAKPOINT_PRIV;
+	hw->ctrl.privilege = ARM_BREAKPOINT_USER;
+	if (arch_check_bp_in_kernelspace(hw))
+		hw->ctrl.privilege |= ARM_BREAKPOINT_PRIV;
 
 	/* Enabled? */
-	info->ctrl.enabled = !bp->attr.disabled;
+	hw->ctrl.enabled = !attr->disabled;
 
 	/* Mismatch */
-	info->ctrl.mismatch = 0;
+	hw->ctrl.mismatch = 0;
 
 	return 0;
 }
@@ -603,9 +590,10 @@ static int arch_build_bp_info(struct perf_event *bp)
 /*
  * Validate the arch-specific HW Breakpoint register settings.
  */
-int arch_validate_hwbkpt_settings(struct perf_event *bp)
+int hw_breakpoint_arch_parse(struct perf_event *bp,
+			     const struct perf_event_attr *attr,
+			     struct arch_hw_breakpoint *hw)
 {
-	struct arch_hw_breakpoint *info = counter_arch_bp(bp);
 	int ret = 0;
 	u32 offset, alignment_mask = 0x3;
 
@@ -614,14 +602,14 @@ int arch_validate_hwbkpt_settings(struct perf_event *bp)
 		return -ENODEV;
 
 	/* Build the arch_hw_breakpoint. */
-	ret = arch_build_bp_info(bp);
+	ret = arch_build_bp_info(bp, attr, hw);
 	if (ret)
 		goto out;
 
 	/* Check address alignment. */
-	if (info->ctrl.len == ARM_BREAKPOINT_LEN_8)
+	if (hw->ctrl.len == ARM_BREAKPOINT_LEN_8)
 		alignment_mask = 0x7;
-	offset = info->address & alignment_mask;
+	offset = hw->address & alignment_mask;
 	switch (offset) {
 	case 0:
 		/* Aligned */
@@ -629,19 +617,19 @@ int arch_validate_hwbkpt_settings(struct perf_event *bp)
 	case 1:
 	case 2:
 		/* Allow halfword watchpoints and breakpoints. */
-		if (info->ctrl.len == ARM_BREAKPOINT_LEN_2)
+		if (hw->ctrl.len == ARM_BREAKPOINT_LEN_2)
 			break;
 	case 3:
 		/* Allow single byte watchpoint. */
-		if (info->ctrl.len == ARM_BREAKPOINT_LEN_1)
+		if (hw->ctrl.len == ARM_BREAKPOINT_LEN_1)
 			break;
 	default:
 		ret = -EINVAL;
 		goto out;
 	}
 
-	info->address &= ~alignment_mask;
-	info->ctrl.len <<= offset;
+	hw->address &= ~alignment_mask;
+	hw->ctrl.len <<= offset;
 
 	if (is_default_overflow_handler(bp)) {
 		/*
@@ -652,7 +640,7 @@ int arch_validate_hwbkpt_settings(struct perf_event *bp)
 			return -EINVAL;
 
 		/* We don't allow mismatch breakpoints in kernel space. */
-		if (arch_check_bp_in_kernelspace(bp))
+		if (arch_check_bp_in_kernelspace(hw))
 			return -EPERM;
 
 		/*
@@ -667,8 +655,8 @@ int arch_validate_hwbkpt_settings(struct perf_event *bp)
 		 * reports them.
 		 */
 		if (!debug_exception_updates_fsr() &&
-		    (info->ctrl.type == ARM_BREAKPOINT_LOAD ||
-		     info->ctrl.type == ARM_BREAKPOINT_STORE))
+		    (hw->ctrl.type == ARM_BREAKPOINT_LOAD ||
+		     hw->ctrl.type == ARM_BREAKPOINT_STORE))
 			return -EINVAL;
 	}
 
@@ -799,22 +787,18 @@ static void watchpoint_handler(unsigned long addr, unsigned int fsr,
 		}
 
 		pr_debug("watchpoint fired: address = 0x%x\n", info->trigger);
-
-		/*
-		 * If we triggered a user watchpoint from a uaccess routine,
-		 * then handle the stepping ourselves since userspace really
-		 * can't help us with this.
-		 */
-		if (watchpoint_fault_on_uaccess(regs, info))
-			goto step;
-
 		perf_bp_event(wp, regs);
 
 		/*
-		 * Defer stepping to the overflow handler if one is installed.
-		 * Otherwise, insert a temporary mismatch breakpoint so that
-		 * we can single-step over the watchpoint trigger.
+		 * If no overflow handler is present, insert a temporary
+		 * mismatch breakpoint so we can single-step over the
+		 * watchpoint trigger.
 		 */
+		if (is_default_overflow_handler(wp))
+			enable_single_step(wp, instruction_pointer(regs));
+
+unlock:
+		rcu_read_unlock();
 		if (!is_default_overflow_handler(wp))
 			continue;
 step:
@@ -903,7 +887,7 @@ static void breakpoint_handler(unsigned long unknown, struct pt_regs *regs)
 			info->trigger = addr;
 			pr_debug("breakpoint fired: address = 0x%x\n", addr);
 			perf_bp_event(bp, regs);
-			if (is_default_overflow_handler(bp))
+			if (!bp->overflow_handler)
 				enable_single_step(bp, addr);
 			goto unlock;
 		}
@@ -1002,17 +986,6 @@ static void reset_ctrl_regs(unsigned int cpu)
 {
 	int i, raw_num_brps, err = 0;
 	u32 val;
-
-	/*
-	 * Bail out without clearing the breakpoint registers if halting
-	 * debug mode or monitor debug mode is enabled. Checking for monitor
-	 * debug mode here ensures we don't clear the breakpoint registers
-	 * across power collapse if save and restore code has already
-	 * preserved the debug register values or they weren't lost and
-	 * monitor mode was already enabled earlier.
-	 */
-	if (halting_mode_enabled() || monitor_mode_enabled())
-		return;
 
 	/*
 	 * v7 debug contains save and restore registers so that debug state

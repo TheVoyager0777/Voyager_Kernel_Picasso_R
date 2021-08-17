@@ -1,13 +1,6 @@
-/* Copyright (c) 2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/msm-bus.h>
@@ -53,7 +46,6 @@ static struct platform_driver msm_bus_proxy_client_driver = {
 	.probe = msm_bus_device_proxy_client_probe,
 	.driver = {
 		.name = "msm_bus_proxy_client_device",
-		.owner = THIS_MODULE,
 		.of_match_table = proxy_client_match,
 	},
 };
@@ -64,7 +56,7 @@ static int __init msm_bus_proxy_client_init_driver(void)
 
 	rc =  platform_driver_register(&msm_bus_proxy_client_driver);
 	if (rc) {
-		pr_err("Failed to register proxy client device driver");
+		pr_err("Failed to register proxy client device driver\n");
 		return rc;
 	}
 

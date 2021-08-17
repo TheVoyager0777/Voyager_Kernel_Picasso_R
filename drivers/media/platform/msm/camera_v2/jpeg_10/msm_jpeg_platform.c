@@ -1,4 +1,5 @@
-/* Copyright (c) 2012-2016, 2018-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2016, 2018-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -443,8 +444,8 @@ int msm_jpeg_platform_setup(struct msm_jpeg_device *pgmn_dev)
 		goto err_res_size;
 	}
 
-	pgmn_dev->base = (__force void *)jpeg_base;
-	pgmn_dev->vbif_base = (__force void *)vbif_base;
+	pgmn_dev->base = (void *)jpeg_base;
+	pgmn_dev->vbif_base = (void *)vbif_base;
 	pgmn_dev->jpeg_irq_res = jpeg_irq_res;
 
 	return 0;
@@ -511,7 +512,7 @@ int msm_jpeg_platform_release(void *context)
 	/* disable all the clocks */
 	msm_camera_clk_enable(&pgmn_dev->pdev->dev, pgmn_dev->jpeg_clk_info,
 		pgmn_dev->jpeg_clk, pgmn_dev->num_clk, false);
-	JPEG_DBG("%s:%d] clock disbale done", __func__, __LINE__);
+	JPEG_DBG("%s:%d] clock disable done", __func__, __LINE__);
 
 	/* disable all the regulators */
 	msm_camera_regulator_enable(pgmn_dev->jpeg_vdd,

@@ -8,6 +8,7 @@
  * Copyright (c) 2006, Michael Wu <flamingice@sourmilk.net>
  * Copyright (c) 2013 - 2014 Intel Mobile Communications GmbH
  * Copyright (c) 2016 - 2017 Intel Deutschland GmbH
+ * Copyright (c) 2018        Intel Corporation
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 as
@@ -1441,11 +1442,13 @@ struct ieee80211_ht_operation {
 #define IEEE80211_DELBA_PARAM_INITIATOR_MASK 0x0800
 
 /*
- * A-PMDU buffer sizes
- * According to IEEE802.11n spec size varies from 8K to 64K (in powers of 2)
+ * A-MPDU buffer sizes
+ * According to HT size varies from 8 to 64 frames
+ * HE adds the ability to have up to 256 frames.
  */
-#define IEEE80211_MIN_AMPDU_BUF 0x8
-#define IEEE80211_MAX_AMPDU_BUF 0x40
+#define IEEE80211_MIN_AMPDU_BUF		0x8
+#define IEEE80211_MAX_AMPDU_BUF_HT	0x40
+#define IEEE80211_MAX_AMPDU_BUF		0x100
 
 
 /* Spatial Multiplexing Power Save Modes (for capability) */
@@ -2547,7 +2550,7 @@ enum ieee80211_key_len {
 #define FILS_ERP_MAX_REALM_LEN		253
 #define FILS_ERP_MAX_RRK_LEN		64
 
-#define PMK_MAX_LEN			48
+#define PMK_MAX_LEN			64
 
 /* Public action codes (IEEE Std 802.11-2016, 9.6.8.1, Table 9-307) */
 enum ieee80211_pub_actioncode {
@@ -2881,6 +2884,7 @@ enum ieee80211_sa_query_action {
 #define WLAN_OUI_TYPE_MICROSOFT_WPA	1
 #define WLAN_OUI_TYPE_MICROSOFT_WMM	2
 #define WLAN_OUI_TYPE_MICROSOFT_WPS	4
+#define WLAN_OUI_TYPE_MICROSOFT_TPC	8
 
 /*
  * WMM/802.11e Tspec Element
@@ -2934,6 +2938,17 @@ static inline u8 *ieee80211_get_qos_ctl(struct ieee80211_hdr *hdr)
 		return (u8 *)hdr + 30;
 	else
 		return (u8 *)hdr + 24;
+}
+
+/**
+ * ieee80211_get_tid - get qos TID
+ * @hdr: the frame
+ */
+static inline u8 ieee80211_get_tid(struct ieee80211_hdr *hdr)
+{
+	u8 *qc = ieee80211_get_qos_ctl(hdr);
+
+	return qc[0] & IEEE80211_QOS_CTL_TID_MASK;
 }
 
 /**

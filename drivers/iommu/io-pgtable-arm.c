@@ -22,6 +22,7 @@
 
 #include <linux/atomic.h>
 #include <linux/iommu.h>
+#include <linux/io-pgtable.h>
 #include <linux/kernel.h>
 #include <linux/scatterlist.h>
 #include <linux/sizes.h>
@@ -30,8 +31,6 @@
 #include <linux/dma-mapping.h>
 
 #include <asm/barrier.h>
-
-#include "io-pgtable.h"
 
 #define ARM_LPAE_MAX_ADDR_BITS		48
 #define ARM_LPAE_S2_MAX_CONCAT_PAGES	16
@@ -197,10 +196,10 @@
 		(iopte_type(pte,l) == ARM_LPAE_PTE_TYPE_PAGE) :	\
 		(iopte_type(pte,l) == ARM_LPAE_PTE_TYPE_BLOCK))
 
-#define iopte_to_pfn(pte,d)					\
+#define iopte_to_pfn(pte, d)					\
 	(((pte) & ((1ULL << ARM_LPAE_MAX_ADDR_BITS) - 1)) >> (d)->pg_shift)
 
-#define pfn_to_iopte(pfn,d)					\
+#define pfn_to_iopte(pfn, d)					\
 	(((pfn) << (d)->pg_shift) & ((1ULL << ARM_LPAE_MAX_ADDR_BITS) - 1))
 
 struct arm_lpae_io_pgtable {
@@ -364,9 +363,9 @@ static void __arm_lpae_set_pte(arm_lpae_iopte *ptep, arm_lpae_iopte pte,
 		__arm_lpae_sync_pte(ptep, cfg);
 }
 
-static int __arm_lpae_unmap(struct arm_lpae_io_pgtable *data,
-			    unsigned long iova, size_t size, int lvl,
-			    arm_lpae_iopte *ptep);
+static size_t __arm_lpae_unmap(struct arm_lpae_io_pgtable *data,
+			       unsigned long iova, size_t size, int lvl,
+			       arm_lpae_iopte *ptep);
 
 
 static void __arm_lpae_init_pte(struct arm_lpae_io_pgtable *data,
@@ -634,7 +633,8 @@ static int arm_lpae_map_sg(struct io_pgtable_ops *ops, unsigned long iova,
 	arm_lpae_iopte prot;
 	struct scatterlist *s;
 	size_t mapped = 0;
-	int i, ret;
+	int i;
+	int ret = -EINVAL;
 	unsigned int min_pagesz;
 	struct io_pgtable_cfg *cfg = &data->iop.cfg;
 	struct map_state ms;
@@ -705,7 +705,7 @@ static int arm_lpae_map_sg(struct io_pgtable_ops *ops, unsigned long iova,
 out_err:
 	/* Return the size of the partial mapping so that they can be undone */
 	*size = mapped;
-	return 0;
+	return ret;
 }
 
 static void __arm_lpae_free_pgtable(struct arm_lpae_io_pgtable *data, int lvl,
@@ -750,10 +750,10 @@ static void arm_lpae_free_pgtable(struct io_pgtable *iop)
 	kfree(data);
 }
 
-static int arm_lpae_split_blk_unmap(struct arm_lpae_io_pgtable *data,
-				    unsigned long iova, size_t size,
-				    arm_lpae_iopte blk_pte, int lvl,
-				    arm_lpae_iopte *ptep)
+static size_t arm_lpae_split_blk_unmap(struct arm_lpae_io_pgtable *data,
+				       unsigned long iova, size_t size,
+				       arm_lpae_iopte blk_pte, int lvl,
+				       arm_lpae_iopte *ptep)
 {
 	struct io_pgtable_cfg *cfg = &data->iop.cfg;
 	arm_lpae_iopte pte, *tablep;
@@ -809,9 +809,9 @@ static int arm_lpae_split_blk_unmap(struct arm_lpae_io_pgtable *data,
 	return __arm_lpae_unmap(data, iova, size, lvl, tablep);
 }
 
-static int __arm_lpae_unmap(struct arm_lpae_io_pgtable *data,
-			    unsigned long iova, size_t size, int lvl,
-			    arm_lpae_iopte *ptep)
+static size_t __arm_lpae_unmap(struct arm_lpae_io_pgtable *data,
+			       unsigned long iova, size_t size, int lvl,
+			       arm_lpae_iopte *ptep)
 {
 	arm_lpae_iopte pte;
 	struct io_pgtable *iop = &data->iop;
@@ -884,7 +884,7 @@ static int __arm_lpae_unmap(struct arm_lpae_io_pgtable *data,
 }
 
 static size_t arm_lpae_unmap(struct io_pgtable_ops *ops, unsigned long iova,
-			  size_t size)
+			size_t size)
 {
 	size_t unmapped = 0;
 	struct arm_lpae_io_pgtable *data = io_pgtable_ops_to_data(ops);
@@ -910,6 +910,7 @@ static size_t arm_lpae_unmap(struct io_pgtable_ops *ops, unsigned long iova,
 		unmapped += ret;
 		iova += ret;
 	}
+
 	if (unmapped)
 		io_pgtable_tlb_flush_all(&data->iop);
 
@@ -1536,8 +1537,7 @@ static int __init arm_lpae_run_tests(struct io_pgtable_cfg *cfg)
 
 		/* Full unmap */
 		iova = 0;
-		j = find_first_bit(&cfg->pgsize_bitmap, BITS_PER_LONG);
-		while (j != BITS_PER_LONG) {
+		for_each_set_bit(j, &cfg->pgsize_bitmap, BITS_PER_LONG) {
 			size = 1UL << j;
 
 			if (ops->unmap(ops, iova, size) != size)
@@ -1557,8 +1557,6 @@ static int __init arm_lpae_run_tests(struct io_pgtable_cfg *cfg)
 				return __FAIL(ops, i);
 
 			iova += SZ_1G;
-			j++;
-			j = find_next_bit(&cfg->pgsize_bitmap, BITS_PER_LONG, j);
 		}
 
 		if (arm_lpae_range_has_mapping(ops, 0, SZ_2G))

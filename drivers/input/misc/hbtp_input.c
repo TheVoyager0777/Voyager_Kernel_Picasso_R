@@ -1,14 +1,6 @@
-
-/* Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2014-2020 The Linux Foundation. All rights reserved.
  */
 
 #include <linux/poll.h>
@@ -706,7 +698,7 @@ static long hbtp_input_ioctl_handler(struct file *file, unsigned int cmd,
 		}
 
 		if (!hbtp->power_sig_enabled) {
-			pr_err("%s: power_signal is not enabled", __func__);
+			pr_err("%s: power_signal is not enabled\n", __func__);
 			return -EPERM;
 		}
 
@@ -856,7 +848,7 @@ static const struct file_operations hbtp_input_fops = {
 #ifdef CONFIG_OF
 static int hbtp_parse_dt(struct device *dev)
 {
-	int rc, size, en_gpio;
+	int rc, size;
 	struct device_node *np = dev->of_node;
 	struct property *prop;
 	u32 temp_val;
@@ -1019,23 +1011,6 @@ static int hbtp_parse_dt(struct device *dev)
 
 	}
 
-	/*
-	 * "qcom,platform-en-gpio" is optinal.
-	 * But if it is defined in dtsi, should check the GPIO value
-	 * to continue the probe function or not.
-	 */
-	en_gpio = of_get_named_gpio(np, "qcom,platform-en-gpio", 0);
-	if (gpio_is_valid(en_gpio)) {
-		rc = gpio_request(en_gpio, "qcom,platform-en-gpio");
-		if (!rc) {
-			rc = gpio_direction_input(en_gpio);
-			if (!rc && gpio_get_value(en_gpio)) {
-				gpio_free(en_gpio);
-				return -EINVAL;
-			}
-			gpio_free(en_gpio);
-		}
-	}
 	return 0;
 }
 #else
@@ -1225,7 +1200,7 @@ static int hbtp_fb_suspend(struct hbtp_data *ts)
 			mutex_lock(&hbtp->mutex);
 			pr_debug("%s: Wait is done for suspend\n", __func__);
 		} else {
-			pr_debug("%s: power_sig is NOT enabled", __func__);
+			pr_debug("%s: power_sig is NOT enabled\n", __func__);
 		}
 	}
 
@@ -1336,11 +1311,7 @@ static int hbtp_pdev_probe(struct platform_device *pdev)
 	if (pdev->dev.of_node) {
 		error = hbtp_parse_dt(&pdev->dev);
 		if (error) {
-			pr_debug("%s: parse dt failed, rc=%d\n", __func__,
-					error);
-			sysfs_remove_bin_file(sensor_kobject, &vibdata_attr);
-			sysfs_remove_bin_file(sensor_kobject, &capdata_attr);
-			kobject_put(sensor_kobject);
+			pr_err("%s: parse dt failed, rc=%d\n", __func__, error);
 			return error;
 		}
 	}
@@ -1430,7 +1401,6 @@ static struct platform_driver hbtp_pdev_driver = {
 	.remove		= hbtp_pdev_remove,
 	.driver		= {
 		.name		= "hbtp",
-		.owner		= THIS_MODULE,
 		.of_match_table = hbtp_match_table,
 	},
 };
@@ -1474,7 +1444,7 @@ static ssize_t hbtp_display_pwr_show(struct kobject *kobj,
 	ssize_t ret = 0;
 
 	mutex_lock(&hbtp->mutex);
-	ret = snprintf(buf, PAGE_SIZE, "%u\n", hbtp->display_status);
+	ret = scnprintf(buf, PAGE_SIZE, "%u\n", hbtp->display_status);
 	mutex_unlock(&hbtp->mutex);
 	return ret;
 }
@@ -1520,7 +1490,7 @@ static int __init hbtp_init(void)
 		MKDEV(MAJOR(hbtp->hbtp_dev), minor), hbtp, HBTP_INPUT_NAME);
 	if (IS_ERR(hbtp->dev)) {
 		error = PTR_ERR(hbtp->dev);
-		pr_err("%s: device_create failed for %s (%d)", __func__,
+		pr_err("%s: device_create failed for %s (%d)\n", __func__,
 				HBTP_INPUT_NAME, error);
 		goto err_device_create;
 	}
@@ -1530,7 +1500,7 @@ static int __init hbtp_init(void)
 	error = cdev_add(&hbtp->cdev, MKDEV(MAJOR(hbtp->hbtp_dev), minor),
 		NUM_DEVICES);
 	if (error < 0) {
-		pr_err("%s: cdev_add failed for %s (%d)", __func__,
+		pr_err("%s: cdev_add failed for %s (%d)\n", __func__,
 				HBTP_INPUT_NAME, error);
 		goto err_cdev_add;
 	}

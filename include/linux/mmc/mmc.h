@@ -56,9 +56,6 @@
 #define MMC_SEND_TUNING_BLOCK_HS200	21	/* adtc R1  */
 #define MMC_SEND_TUNING_BLOCK_HS400      MMC_SEND_TUNING_BLOCK_HS200
 
-#define DISCARD_QUEUE		0x1
-#define DISCARD_TASK		0x2
-
   /* class 3 */
 #define MMC_WRITE_DAT_UNTIL_STOP 20   /* adtc [31:0] data addr   R1  */
 
@@ -148,7 +145,7 @@ static inline bool mmc_op_multi(u32 opcode)
 #define R1_WP_ERASE_SKIP	(1 << 15)	/* sx, c */
 #define R1_CARD_ECC_DISABLED	(1 << 14)	/* sx, a */
 #define R1_ERASE_RESET		(1 << 13)	/* sr, c */
-#define R1_STATUS(x)            (x & 0xFFFFE000)
+#define R1_STATUS(x)            (x & 0xFFF9A000)
 #define R1_CURRENT_STATE(x)	((x & 0x00001E00) >> 9)	/* sx, b (4 bits) */
 #define R1_READY_FOR_DATA	(1 << 8)	/* sx, a */
 #define R1_SWITCH_ERROR		(1 << 7)	/* sx, c */
@@ -192,7 +189,6 @@ static inline bool mmc_op_multi(u32 opcode)
  * OCR bits are mostly in host.h
  */
 #define MMC_CARD_BUSY	0x80000000	/* Card Power up status bit */
-#define MMC_CARD_SECTOR_ADDR 0x40000000 /* Card supports sectors */
 
 /*
  * Card Command Classes (CCC)
@@ -296,7 +292,6 @@ static inline bool mmc_op_multi(u32 opcode)
 #define EXT_CSD_PWR_CL_200_360		237	/* RO */
 #define EXT_CSD_PWR_CL_DDR_52_195	238	/* RO */
 #define EXT_CSD_PWR_CL_DDR_52_360	239	/* RO */
-#define EXT_CSD_CACHE_FLUSH_POLICY	240	/* RO */
 #define EXT_CSD_BKOPS_STATUS		246	/* RO */
 #define EXT_CSD_POWER_OFF_LONG_TIME	247	/* RO */
 #define EXT_CSD_GENERIC_CMD6_TIME	248	/* RO */
@@ -393,9 +388,6 @@ static inline bool mmc_op_multi(u32 opcode)
 #define EXT_CSD_PWR_CL_4BIT_SHIFT	0
 
 #define EXT_CSD_PACKED_EVENT_EN	BIT(3)
-
-#define EXT_CSD_BKOPS_MANUAL_EN		BIT(0)
-#define EXT_CSD_BKOPS_AUTO_EN		BIT(1)
 
 /*
  * EXCEPTION_EVENT_STATUS field

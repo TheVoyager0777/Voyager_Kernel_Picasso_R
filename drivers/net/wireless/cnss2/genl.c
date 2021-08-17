@@ -1,19 +1,11 @@
-/* Copyright (c) 2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2019, The Linux Foundation. All rights reserved. */
 
 #define pr_fmt(fmt) "cnss_genl: " fmt
 
 #include <linux/err.h>
 #include <linux/module.h>
+#include <linux/delay.h>
 #include <net/netlink.h>
 #include <net/genetlink.h>
 
@@ -170,6 +162,7 @@ int cnss_genl_send_msg(void *buff, u8 type, char *file_name, u32 total_size)
 	u32 seg_id = 0;
 	u32 data_len = 0;
 	u8 end = 0;
+	u8 retry;
 
 	cnss_pr_dbg("type: %u, total_size: %x\n", type, total_size);
 
@@ -180,8 +173,16 @@ int cnss_genl_send_msg(void *buff, u8 type, char *file_name, u32 total_size)
 			data_len = remaining;
 			end = 1;
 		}
-		ret = cnss_genl_send_data(type, file_name, total_size,
-					  seg_id, end, data_len, msg_buff);
+
+		for (retry = 0; retry < 2; retry++) {
+			ret = cnss_genl_send_data(type, file_name, total_size,
+						  seg_id, end, data_len,
+						  msg_buff);
+			if (ret >= 0)
+				break;
+			msleep(100);
+		}
+
 		if (ret < 0) {
 			cnss_pr_err("fail to send genl data, ret %d\n", ret);
 			return ret;

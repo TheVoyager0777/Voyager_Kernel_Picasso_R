@@ -119,7 +119,6 @@ struct cdns_spi {
 	void __iomem *regs;
 	struct clk *ref_clk;
 	struct clk *pclk;
-	unsigned int clk_rate;
 	u32 speed_hz;
 	const u8 *txbuf;
 	u8 *rxbuf;
@@ -259,7 +258,7 @@ static void cdns_spi_config_clock_freq(struct spi_device *spi,
 	u32 ctrl_reg, baud_rate_val;
 	unsigned long frequency;
 
-	frequency = xspi->clk_rate;
+	frequency = clk_get_rate(xspi->ref_clk);
 
 	ctrl_reg = cdns_spi_read(xspi, CDNS_SPI_CR);
 
@@ -629,9 +628,8 @@ static int cdns_spi_probe(struct platform_device *pdev)
 	master->auto_runtime_pm = true;
 	master->mode_bits = SPI_CPOL | SPI_CPHA;
 
-	xspi->clk_rate = clk_get_rate(xspi->ref_clk);
 	/* Set to default valid value */
-	master->max_speed_hz = xspi->clk_rate / 4;
+	master->max_speed_hz = clk_get_rate(xspi->ref_clk) / 4;
 	xspi->speed_hz = master->max_speed_hz;
 
 	master->bits_per_word_mask = SPI_BPW_MASK(8);
@@ -693,8 +691,7 @@ static int cdns_spi_remove(struct platform_device *pdev)
  */
 static int __maybe_unused cdns_spi_suspend(struct device *dev)
 {
-	struct platform_device *pdev = to_platform_device(dev);
-	struct spi_master *master = platform_get_drvdata(pdev);
+	struct spi_master *master = dev_get_drvdata(dev);
 
 	return spi_master_suspend(master);
 }
@@ -709,8 +706,7 @@ static int __maybe_unused cdns_spi_suspend(struct device *dev)
  */
 static int __maybe_unused cdns_spi_resume(struct device *dev)
 {
-	struct platform_device *pdev = to_platform_device(dev);
-	struct spi_master *master = platform_get_drvdata(pdev);
+	struct spi_master *master = dev_get_drvdata(dev);
 	struct cdns_spi *xspi = spi_master_get_devdata(master);
 
 	cdns_spi_init_hw(xspi);
@@ -740,7 +736,7 @@ static int __maybe_unused cnds_runtime_resume(struct device *dev)
 	ret = clk_prepare_enable(xspi->ref_clk);
 	if (ret) {
 		dev_err(dev, "Cannot enable device clock.\n");
-		clk_disable(xspi->pclk);
+		clk_disable_unprepare(xspi->pclk);
 		return ret;
 	}
 	return 0;

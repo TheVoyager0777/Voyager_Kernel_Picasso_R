@@ -174,7 +174,7 @@ DECLARE_EVENT_CLASS(tasklet,
 		__entry->func = func;
 	),
 
-	TP_printk("function=%pf", __entry->func)
+	TP_printk("function=%ps", __entry->func)
 );
 
 DEFINE_EVENT(tasklet, tasklet_entry,

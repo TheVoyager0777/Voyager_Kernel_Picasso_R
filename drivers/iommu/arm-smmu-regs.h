@@ -208,9 +208,16 @@ enum arm_smmu_s2cr_privcfg {
 #define TCU_INV_IN_PRGSS_SHIFT		16
 #define TBUID_SHIFT			10
 
+#define SCTLR_MEM_ATTR_SHIFT		16
 #define SCTLR_SHCFG_SHIFT		22
+#define SCTLR_RACFG_SHIFT		24
+#define SCTLR_WACFG_SHIFT		26
 #define SCTLR_SHCFG_MASK		0x3
 #define SCTLR_SHCFG_NSH			0x3
+#define SCTLR_RACFG_RA			0x2
+#define SCTLR_WACFG_WA			0x2
+#define SCTLR_MEM_ATTR_OISH_WB_CACHE	0xf
+#define SCTLR_MTCFG			(1 << 20)
 #define SCTLR_S1_ASIDPNE		(1 << 12)
 #define SCTLR_CFCFG			(1 << 7)
 #define SCTLR_HUPCF			(1 << 8)
@@ -251,5 +258,40 @@ enum arm_smmu_s2cr_privcfg {
 					 FSR_EF | FSR_PF | FSR_TF | FSR_IGN)
 
 #define FSYNR0_WNR			(1 << 4)
+#define FSYNR0_PNU			(1 << 5)
+#define FSYNR0_IND			(1 << 6)
+#define FSYNR0_NSATTR			(1 << 8)
+
+#define IMPL_DEF1_MICRO_MMU_CTRL	0
+#define MICRO_MMU_CTRL_LOCAL_HALT_REQ	(1 << 2)
+#define MICRO_MMU_CTRL_IDLE		(1 << 3)
+
+/* Definitions for implementation-defined registers */
+#define ACTLR_QCOM_OSH_SHIFT		28
+#define ACTLR_QCOM_OSH			1
+
+#define ACTLR_QCOM_ISH_SHIFT		29
+#define ACTLR_QCOM_ISH			1
+
+#define ACTLR_QCOM_NSH_SHIFT		30
+#define ACTLR_QCOM_NSH			1
+
+#define FSYNR1_BID			GENMASK(15, 13)
+#define FSYNR1_PID			GENMASK(12, 8)
+#define FSYNR1_MID			GENMASK(7, 0)
+
+#define IMPL_DEF1_MICRO_MMU_CTRL	0
+#define MICRO_MMU_CTRL_LOCAL_HALT_REQ	(1 << 2)
+#define MICRO_MMU_CTRL_IDLE		(1 << 3)
+
+/* Definitions for implementation-defined registers */
+#define ACTLR_QCOM_OSH_SHIFT		28
+#define ACTLR_QCOM_OSH			1
+
+#define ACTLR_QCOM_ISH_SHIFT		29
+#define ACTLR_QCOM_ISH			1
+
+#define ACTLR_QCOM_NSH_SHIFT		30
+#define ACTLR_QCOM_NSH			1
 
 #endif /* _ARM_SMMU_REGS_H */

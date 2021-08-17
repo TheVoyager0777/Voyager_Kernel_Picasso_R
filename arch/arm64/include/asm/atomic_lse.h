@@ -473,23 +473,23 @@ static inline long atomic64_dec_if_positive(atomic64_t *v)
 
 #define __LL_SC_CMPXCHG(op)	__LL_SC_CALL(__cmpxchg_case_##op)
 
-#define __CMPXCHG_CASE(w, sfx, name, sz, mb, cl...)			\
-static inline u##sz __cmpxchg_case_##name##sz(volatile void *ptr,	\
-					      u##sz old,		\
-					      u##sz new)		\
+#define __CMPXCHG_CASE(w, sz, name, mb, cl...)				\
+static inline unsigned long __cmpxchg_case_##name(volatile void *ptr,	\
+						  unsigned long old,	\
+						  unsigned long new)	\
 {									\
 	register unsigned long x0 asm ("x0") = (unsigned long)ptr;	\
-	register u##sz x1 asm ("x1") = old;				\
-	register u##sz x2 asm ("x2") = new;				\
+	register unsigned long x1 asm ("x1") = old;			\
+	register unsigned long x2 asm ("x2") = new;			\
 									\
 	asm volatile(ARM64_LSE_ATOMIC_INSN(				\
 	/* LL/SC */							\
-	__LL_SC_CMPXCHG(name##sz)					\
+	__LL_SC_CMPXCHG(name)						\
 	__nops(3),							\
 	/* LSE atomics */						\
 	"	prfm	pstl1strm, %[v]\n"				\
 	"	mov	" #w "30, %" #w "[old]\n"			\
-	"	cas" #mb #sfx "\t" #w "30, %" #w "[new], %[v]\n"	\
+	"	cas" #mb #sz "\t" #w "30, %" #w "[new], %[v]\n"		\
 	"	mov	%" #w "[ret], " #w "30")			\
 	: [ret] "+r" (x0), [v] "+Q" (*(unsigned long *)ptr)		\
 	: [old] "r" (x1), [new] "r" (x2)				\
@@ -498,22 +498,22 @@ static inline u##sz __cmpxchg_case_##name##sz(volatile void *ptr,	\
 	return x0;							\
 }
 
-__CMPXCHG_CASE(w, b,     ,  8,   )
-__CMPXCHG_CASE(w, h,     , 16,   )
-__CMPXCHG_CASE(w,  ,     , 32,   )
-__CMPXCHG_CASE(x,  ,     , 64,   )
-__CMPXCHG_CASE(w, b, acq_,  8,  a, "memory")
-__CMPXCHG_CASE(w, h, acq_, 16,  a, "memory")
-__CMPXCHG_CASE(w,  , acq_, 32,  a, "memory")
-__CMPXCHG_CASE(x,  , acq_, 64,  a, "memory")
-__CMPXCHG_CASE(w, b, rel_,  8,  l, "memory")
-__CMPXCHG_CASE(w, h, rel_, 16,  l, "memory")
-__CMPXCHG_CASE(w,  , rel_, 32,  l, "memory")
-__CMPXCHG_CASE(x,  , rel_, 64,  l, "memory")
-__CMPXCHG_CASE(w, b,  mb_,  8, al, "memory")
-__CMPXCHG_CASE(w, h,  mb_, 16, al, "memory")
-__CMPXCHG_CASE(w,  ,  mb_, 32, al, "memory")
-__CMPXCHG_CASE(x,  ,  mb_, 64, al, "memory")
+__CMPXCHG_CASE(w, b,     1,   )
+__CMPXCHG_CASE(w, h,     2,   )
+__CMPXCHG_CASE(w,  ,     4,   )
+__CMPXCHG_CASE(x,  ,     8,   )
+__CMPXCHG_CASE(w, b, acq_1,  a, "memory")
+__CMPXCHG_CASE(w, h, acq_2,  a, "memory")
+__CMPXCHG_CASE(w,  , acq_4,  a, "memory")
+__CMPXCHG_CASE(x,  , acq_8,  a, "memory")
+__CMPXCHG_CASE(w, b, rel_1,  l, "memory")
+__CMPXCHG_CASE(w, h, rel_2,  l, "memory")
+__CMPXCHG_CASE(w,  , rel_4,  l, "memory")
+__CMPXCHG_CASE(x,  , rel_8,  l, "memory")
+__CMPXCHG_CASE(w, b,  mb_1, al, "memory")
+__CMPXCHG_CASE(w, h,  mb_2, al, "memory")
+__CMPXCHG_CASE(w,  ,  mb_4, al, "memory")
+__CMPXCHG_CASE(x,  ,  mb_8, al, "memory")
 
 #undef __LL_SC_CMPXCHG
 #undef __CMPXCHG_CASE
@@ -570,9 +570,8 @@ static inline int __refcount_##op(int i, atomic_t *r)			\
 	/* LL/SC */							\
 	__LL_SC_CALL(__refcount_##op)					\
 	"	cmp	%w0, wzr\n"					\
-	__nops(2),							\
+	__nops(1),							\
 	/* LSE atomics */						\
-	"	prfm		pstl1strm, %[cval]\n"			\
 	"	ldadd		%w[i], w30, %[cval]\n"			\
 	"	adds		%w[i], %w[i], w30\n"			\
 	REFCOUNT_PRE_CHECK_ ## pre (w30))				\
@@ -596,9 +595,8 @@ static inline int __refcount_##op(int i, atomic_t *r)			\
 	/* LL/SC */							\
 	__LL_SC_CALL(__refcount_##op)					\
 	"	cmp	%w0, wzr\n"					\
-	__nops(2),							\
+	__nops(1),							\
 	/* LSE atomics */						\
-	"	prfm	pstl1strm, %[cval]\n"				\
 	"	neg	%w[i], %w[i]\n"					\
 	"	ldaddl	%w[i], w30, %[cval]\n"				\
 	"	adds	%w[i], %w[i], w30\n")				\
@@ -623,6 +621,87 @@ static inline int __refcount_add_not_zero(int i, atomic_t *r)
 	"	mov	%w0, %w[i]\n"
 	__LL_SC_CALL(__refcount_add_not_zero)
 	"	cmp	%w0, wzr\n"
+	__nops(6),
+	/* LSE atomics */
+	"	ldr	%w0, %[cval]\n"
+	"1:	cmp	%w0, wzr\n"
+	"	b.eq	2f\n"
+	"	add	w30, %w0, %w[i]\n"
+	"	cas	%w0, w30, %[cval]\n"
+	"	sub	w30, w30, %w[i]\n"
+	"	cmp	%w0, w30\n"
+	"	b.ne	1b\n"
+	"	adds	%w0, w30, %w[i]\n"
+	"2:\n")
+	REFCOUNT_POST_CHECK_NEG
+	: "=&r" (result), [cval] "+Q" (r->counter)
+	: [counter] "r" (&r->counter), [i] "Ir" (i), "r" (x1)
+	: __LL_SC_CLOBBERS, "cc");
+
+	return result;
+}
+
+#define REFCOUNT_ADD_OP(op, pre, post)					\
+static inline int __refcount_##op(int i, atomic_t *r)			\
+{									\
+	register int w0 asm ("w0") = i;					\
+	register atomic_t *x1 asm ("x1") = r;				\
+									\
+	asm volatile(ARM64_LSE_ATOMIC_INSN(				\
+	/* LL/SC */							\
+	__LL_SC_CALL(__refcount_##op)					\
+	"	cmp	%w0, wzr\n"					\
+	__nops(1),							\
+	__nops(2),							\
+	/* LSE atomics */						\
+	"	prfm		pstl1strm, %[cval]\n"			\
+	"	ldadd		%w[i], w30, %[cval]\n"			\
+	"	adds		%w[i], %w[i], w30\n"			\
+	REFCOUNT_PRE_CHECK_ ## pre (w30))				\
+	REFCOUNT_POST_CHECK_ ## post					\
+	: [i] "+r" (w0), [cval] "+Q" (r->counter)			\
+	: [counter] "r"(&r->counter), "r" (x1)				\
+	: __LL_SC_CLOBBERS, "cc");					\
+									\
+	return w0;							\
+}
+REFCOUNT_ADD_OP(add_lt, ZERO, NEG_OR_ZERO);
+#define REFCOUNT_SUB_OP(op, post)					\
+static inline int __refcount_##op(int i, atomic_t *r)			\
+{									\
+	register int w0 asm ("w0") = i;					\
+	register atomic_t *x1 asm ("x1") = r;				\
+									\
+	asm volatile(ARM64_LSE_ATOMIC_INSN(				\
+	/* LL/SC */							\
+	__LL_SC_CALL(__refcount_##op)					\
+	"	cmp	%w0, wzr\n"					\
+	__nops(1),							\
+	__nops(2),							\
+	/* LSE atomics */						\
+	"	prfm	pstl1strm, %[cval]\n"				\
+	"	neg	%w[i], %w[i]\n"					\
+	"	ldaddl	%w[i], w30, %[cval]\n"				\
+	"	adds	%w[i], %w[i], w30\n")				\
+	REFCOUNT_POST_CHECK_ ## post					\
+	: [i] "+r" (w0), [cval] "+Q" (r->counter)			\
+	: [counter] "r" (&r->counter), "r" (x1)				\
+	: __LL_SC_CLOBBERS, "cc");					\
+									\
+	return w0;							\
+}
+REFCOUNT_SUB_OP(sub_lt, NEG);
+REFCOUNT_SUB_OP(sub_le, NEG_OR_ZERO);
+static inline int __refcount_add_not_zero(int i, atomic_t *r)
+{
+	register int result asm ("w0");
+	register atomic_t *x1 asm ("x1") = r;
+	asm volatile(ARM64_LSE_ATOMIC_INSN(
+	/* LL/SC */
+	"	mov	%w0, %w[i]\n"
+	__LL_SC_CALL(__refcount_add_not_zero)
+	"	cmp	%w0, wzr\n"
+	__nops(6),
 	__nops(7),
 	/* LSE atomics */
 	"	prfm	pstl1strm, %[cval]\n"
@@ -640,7 +719,6 @@ static inline int __refcount_add_not_zero(int i, atomic_t *r)
 	: "=&r" (result), [cval] "+Q" (r->counter)
 	: [counter] "r" (&r->counter), [i] "Ir" (i), "r" (x1)
 	: __LL_SC_CLOBBERS, "cc");
-
 	return result;
 }
 

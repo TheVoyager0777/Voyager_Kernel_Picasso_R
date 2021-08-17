@@ -1,4 +1,5 @@
-/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -252,21 +253,13 @@ static uint32_t msm_isp_axi_get_plane_size(
 		break;
 	case V4L2_PIX_FMT_NV12:
 	case V4L2_PIX_FMT_NV21:
-		if (plane_cfg[plane_idx].output_plane_format == Y_PLANE)
-			size = plane_cfg[plane_idx].output_height *
-				plane_cfg[plane_idx].output_width;
-		else
-			size = plane_cfg[plane_idx].output_height *
-				plane_cfg[plane_idx].output_width;
+		size = plane_cfg[plane_idx].output_height *
+			plane_cfg[plane_idx].output_width;
 		break;
 	case V4L2_PIX_FMT_NV14:
 	case V4L2_PIX_FMT_NV41:
-		if (plane_cfg[plane_idx].output_plane_format == Y_PLANE)
-			size = plane_cfg[plane_idx].output_height *
-				plane_cfg[plane_idx].output_width;
-		else
-			size = plane_cfg[plane_idx].output_height *
-				plane_cfg[plane_idx].output_width;
+		size = plane_cfg[plane_idx].output_height *
+			plane_cfg[plane_idx].output_width;
 		break;
 	case V4L2_PIX_FMT_NV16:
 	case V4L2_PIX_FMT_NV61:
@@ -546,7 +539,7 @@ void msm_isp_calculate_framedrop(
 		stream_info = &axi_data->stream_info[
 			HANDLE_TO_IDX(stream_cfg_cmd->axi_stream_handle)];
 	} else {
-		pr_err("%s: Invalid stream handle", __func__);
+		pr_err("%s: Invalid stream handle\n", __func__);
 		return;
 	}
 	if (!stream_info) {
@@ -978,7 +971,7 @@ static int msm_isp_cfg_ping_pong_address(struct vfe_device *vfe_dev,
 	uint32_t stream_idx = HANDLE_TO_IDX(stream_info->stream_handle);
 
 	if (stream_idx >= MAX_NUM_STREAM) {
-		pr_err("%s: Invalid stream_idx", __func__);
+		pr_err("%s: Invalid stream_idx\n", __func__);
 		return rc;
 	}
 
@@ -1047,7 +1040,7 @@ static void msm_isp_process_done_buf(struct vfe_device *vfe_dev,
 	memset(&buf_event, 0, sizeof(buf_event));
 
 	if (stream_idx >= MAX_NUM_STREAM) {
-		pr_err("%s: Invalid stream_idx", __func__);
+		pr_err("%s: Invalid stream_idx\n", __func__);
 		return;
 	}
 

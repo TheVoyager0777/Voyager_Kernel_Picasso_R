@@ -1,19 +1,8 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * drivers/staging/android/ion/ion_cma_secure_heap.c
- *
  * Copyright (C) Linaro 2012
  * Author: <benjamin.gaignard@linaro.org> for ST-Ericsson.
  * Copyright (c) 2013-2018, The Linux Foundation. All rights reserved.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
  */
 
 #include <linux/device.h>
@@ -129,20 +118,21 @@ static int ion_secure_cma_get_sgtable(struct device *dev, struct sg_table *sgt,
 	return 0;
 }
 
-static int ion_secure_cma_add_to_pool(
-					struct ion_cma_secure_heap *sheap,
-					unsigned long len,
-					bool prefetch)
+static int
+ion_secure_cma_add_to_pool(struct ion_cma_secure_heap *sheap,
+			   unsigned long len,
+			   bool prefetch)
 {
 	void *cpu_addr;
 	dma_addr_t handle;
 	unsigned long attrs = 0;
 	int ret = 0;
 	struct ion_cma_alloc_chunk *chunk;
+	atomic_t *temp = &sheap->total_pool_size;
 
 	trace_ion_secure_cma_add_to_pool_start(len,
-					atomic_read(&sheap->total_pool_size),
-					prefetch);
+					       atomic_read(temp),
+					       prefetch);
 	mutex_lock(&sheap->chunk_lock);
 
 	chunk = kzalloc(sizeof(*chunk), GFP_KERNEL);
@@ -178,8 +168,8 @@ out:
 	mutex_unlock(&sheap->chunk_lock);
 
 	trace_ion_secure_cma_add_to_pool_end(len,
-					atomic_read(&sheap->total_pool_size),
-					prefetch);
+					     atomic_read(temp),
+					     prefetch);
 
 	return ret;
 }
@@ -292,10 +282,10 @@ static void bad_math_dump(unsigned long len, int total_overlap,
 	WARN(1, "mismatch in the sizes of secure cma chunks\n");
 }
 
-static int ion_secure_cma_alloc_from_pool(
-					struct ion_cma_secure_heap *sheap,
-					dma_addr_t *phys,
-					unsigned long len)
+static int
+ion_secure_cma_alloc_from_pool(struct ion_cma_secure_heap *sheap,
+			       dma_addr_t *phys,
+			       unsigned long len)
 {
 	dma_addr_t paddr;
 	unsigned long page_no;
@@ -469,10 +459,10 @@ out:
 }
 
 /* ION CMA heap operations functions */
-static struct ion_secure_cma_buffer_info *__ion_secure_cma_allocate(
-			    struct ion_heap *heap, struct ion_buffer *buffer,
-			    unsigned long len,
-			    unsigned long flags)
+static struct ion_secure_cma_buffer_info *
+__ion_secure_cma_allocate(struct ion_heap *heap, struct ion_buffer *buffer,
+			  unsigned long len,
+			  unsigned long flags)
 {
 	struct ion_cma_secure_heap *sheap =
 		container_of(heap, struct ion_cma_secure_heap, heap);
@@ -557,10 +547,11 @@ static void __ion_secure_cma_free(struct ion_cma_secure_heap *sheap,
 	kfree(info);
 }
 
-static struct ion_secure_cma_buffer_info *__ion_secure_cma_allocate_non_contig(
-			struct ion_heap *heap, struct ion_buffer *buffer,
-			unsigned long len,
-			unsigned long flags)
+static struct ion_secure_cma_buffer_info *
+__ion_secure_cma_allocate_non_contig(struct ion_heap *heap,
+				     struct ion_buffer *buffer,
+				     unsigned long len,
+				     unsigned long flags)
 {
 	struct ion_cma_secure_heap *sheap =
 		container_of(heap, struct ion_cma_secure_heap, heap);

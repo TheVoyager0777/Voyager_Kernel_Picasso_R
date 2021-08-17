@@ -1,16 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
  * Copyright (C) 2011 Google, Inc
- * Copyright (c) 2011-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+ * Copyright (c) 2011-2019, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/highmem.h>
@@ -20,9 +11,11 @@
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
 #include <linux/dma-mapping.h>
-#include <linux/cma.h>
 #include <soc/qcom/scm.h>
 #include <soc/qcom/secure_buffer.h>
+
+#define CREATE_TRACE_POINTS
+#include "trace_secure_buffer.h"
 
 DEFINE_MUTEX(secure_buffer_mutex);
 
@@ -38,23 +31,11 @@ struct cp2_lock_req {
 	u32 lock;
 } __attribute__ ((__packed__));
 
-struct mem_prot_info {
-	phys_addr_t addr;
-	u64 size;
-};
-
 #define MEM_PROT_ASSIGN_ID		0x16
 #define MEM_PROTECT_LOCK_ID2		0x0A
 #define MEM_PROTECT_LOCK_ID2_FLAT	0x11
 #define V2_CHUNK_SIZE           SZ_1M
 #define FEATURE_ID_CP 12
-
-struct dest_vm_and_perm_info {
-	u32 vm;
-	u32 perm;
-	u64 ctx;
-	u32 ctx_size;
-};
 
 #define BATCH_MAX_SIZE SZ_2M
 #define BATCH_MAX_SECTIONS 32
@@ -138,8 +119,7 @@ static int secure_buffer_change_table(struct sg_table *table, int lock)
 		 * secure environment to ensure the data is actually present
 		 * in RAM
 		 */
-		dmac_flush_range(chunk_list,
-			(void *)chunk_list + chunk_list_len);
+		dmac_flush_range(chunk_list, chunk_list + chunk_list_len);
 
 		ret = secure_buffer_change_chunk(chunk_list_phys,
 				nchunks, V2_CHUNK_SIZE, lock);
@@ -239,9 +219,13 @@ static int batched_hyp_assign(struct sg_table *table, struct scm_desc *desc)
 	unsigned int entries_size;
 	unsigned int batch_start = 0;
 	unsigned int batches_processed;
+	unsigned int i = 0;
+	u64 total_delta;
 	struct scatterlist *curr_sgl = table->sgl;
 	struct scatterlist *next_sgl;
 	int ret = 0;
+	ktime_t batch_assign_start_ts;
+	ktime_t first_assign_ts;
 	struct mem_prot_info *sg_table_copy = kcalloc(BATCH_MAX_SECTIONS,
 						      sizeof(*sg_table_copy),
 						      GFP_KERNEL);
@@ -249,6 +233,7 @@ static int batched_hyp_assign(struct sg_table *table, struct scm_desc *desc)
 	if (!sg_table_copy)
 		return -ENOMEM;
 
+	first_assign_ts = ktime_get();
 	while (batch_start < table->nents) {
 		batches_processed = get_batches_from_sgl(sg_table_copy,
 							 curr_sgl, &next_sgl);
@@ -259,8 +244,13 @@ static int batched_hyp_assign(struct sg_table *table, struct scm_desc *desc)
 		desc->args[0] = virt_to_phys(sg_table_copy);
 		desc->args[1] = entries_size;
 
+		trace_hyp_assign_batch_start(sg_table_copy, batches_processed);
+		batch_assign_start_ts = ktime_get();
 		ret = scm_call2(SCM_SIP_FNID(SCM_SVC_MP,
 				MEM_PROT_ASSIGN_ID), desc);
+		trace_hyp_assign_batch_end(ret, ktime_us_delta(ktime_get(),
+					   batch_assign_start_ts));
+		i++;
 		if (ret) {
 			pr_info("%s: Failed to assign memory protection, ret = %d\n",
 				__func__, ret);
@@ -274,7 +264,8 @@ static int batched_hyp_assign(struct sg_table *table, struct scm_desc *desc)
 
 		batch_start += batches_processed;
 	}
-
+	total_delta = ktime_us_delta(ktime_get(), first_assign_ts);
+	trace_hyp_assign_end(total_delta, div64_u64(total_delta, i));
 	kfree(sg_table_copy);
 	return ret;
 }
@@ -299,7 +290,7 @@ static int __hyp_assign_table(struct sg_table *table,
 	size_t dest_vm_copy_size;
 
 	if (!table || !table->sgl || !source_vm_list || !source_nelems ||
-	    !dest_vmids || !dest_perms || !dest_nelems)
+	    !dest_vmids || !dest_perms || !dest_nelems || !table->nents)
 		return -EINVAL;
 
 	/*
@@ -344,6 +335,8 @@ static int __hyp_assign_table(struct sg_table *table,
 	dmac_flush_range(dest_vm_copy,
 			 (void *)dest_vm_copy + dest_vm_copy_size);
 
+	trace_hyp_assign_info(source_vm_list, source_nelems, dest_vmids,
+			      dest_perms, dest_nelems);
 	ret = batched_hyp_assign(table, &desc);
 
 	mutex_unlock(&secure_buffer_mutex);
@@ -393,33 +386,6 @@ int hyp_assign_phys(phys_addr_t addr, u64 size, u32 *source_vm_list,
 }
 EXPORT_SYMBOL(hyp_assign_phys);
 
-int cma_hyp_assign_phys(struct device *dev, u32 *source_vm_list,
-				int source_nelems, int *dest_vmids,
-					int *dest_perms, int dest_nelems)
-{
-	phys_addr_t addr;
-	u64 size;
-	struct cma *cma = NULL;
-	int ret;
-
-	if (dev && dev->cma_area)
-		cma = dev->cma_area;
-
-	if (cma) {
-		addr = cma_get_base(cma);
-		size = (size_t)cma_get_size(cma);
-	} else {
-		return -ENOMEM;
-	}
-
-	ret = hyp_assign_phys(addr, size, source_vm_list,
-				source_nelems, dest_vmids,
-					dest_perms, dest_nelems);
-
-	return ret;
-}
-EXPORT_SYMBOL(cma_hyp_assign_phys);
-
 const char *msm_secure_vmid_to_string(int secure_vmid)
 {
 	switch (secure_vmid) {
@@ -457,12 +423,6 @@ const char *msm_secure_vmid_to_string(int secure_vmid)
 		return "VMID_CP_SPSS_SP_SHARED";
 	case VMID_CP_SPSS_HLOS_SHARED:
 		return "VMID_CP_SPSS_HLOS_SHARED";
-	case VMID_CP_CAMERA_ENCODE:
-		return "VMID_CP_CAMERA_ENCODE";
-	case VMID_CP_CDSP:
-		return "VMID_CP_CDSP";
-	case VMID_CP_DSP_EXT:
-		return "VMID_CP_DSP_EXT";
 	case VMID_INVAL:
 		return "VMID_INVAL";
 	case VMID_NAV:
@@ -484,3 +444,14 @@ bool msm_secure_v2_is_supported(void)
 	return (scm_get_feat_version(FEATURE_ID_CP) >=
 			MAKE_CP_VERSION(1, 1, 0));
 }
+
+u32 msm_secure_get_vmid_perms(u32 vmid)
+{
+	if (vmid == VMID_CP_SEC_DISPLAY)
+		return PERM_READ;
+	else if (vmid == VMID_CP_CDSP)
+		return PERM_READ | PERM_WRITE | PERM_EXEC;
+	else
+		return PERM_READ | PERM_WRITE;
+}
+EXPORT_SYMBOL(msm_secure_get_vmid_perms);

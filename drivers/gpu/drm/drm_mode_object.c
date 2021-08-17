@@ -151,6 +151,7 @@ struct drm_mode_object *__drm_mode_object_find(struct drm_device *dev,
 
 /**
  * drm_mode_object_find - look up a drm object with static lifetime
+ * @dev: drm device
  * @file_priv: drm file
  * @id: id of the mode object
  * @type: type of the mode object
@@ -272,8 +273,9 @@ int drm_object_property_set_value(struct drm_mode_object *obj,
 }
 EXPORT_SYMBOL(drm_object_property_set_value);
 
-int __drm_object_property_get_value(struct drm_mode_object *obj,
-				  struct drm_property *property, uint64_t *val)
+static int __drm_object_property_get_value(struct drm_mode_object *obj,
+					   struct drm_property *property,
+					   uint64_t *val)
 {
 	int i;
 
@@ -431,8 +433,7 @@ static int set_property_legacy(struct drm_mode_object *obj,
 	drm_modeset_lock_all(dev);
 	switch (obj->type) {
 	case DRM_MODE_OBJECT_CONNECTOR:
-		ret = drm_mode_connector_set_obj_prop(obj, prop,
-						      prop_value);
+		ret = drm_connector_set_obj_prop(obj, prop, prop_value);
 		break;
 	case DRM_MODE_OBJECT_CRTC:
 		ret = drm_mode_crtc_set_obj_prop(obj, prop, prop_value);

@@ -1,5 +1,6 @@
 /*
  * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -11,11 +12,10 @@
  * GNU General Public License for more details.
  */
 
-#define CONFIG_PINCTRL_LPI 1
+#define CONFIG_PINCTRL_LPI_LEGACY 1
 #define CONFIG_PINCTRL_WCD 1
 #define CONFIG_AUDIO_EXT_CLK 1
 #define CONFIG_SND_SOC_WCD9XXX_V2 1
-#define CONFIG_SND_SOC_WCD_CPE 1
 #define CONFIG_SND_SOC_WCD_MBHC 1
 #define CONFIG_SND_SOC_WSA881X 1
 #define CONFIG_SND_SOC_WCD_DSP_MGR 1
@@ -53,10 +53,8 @@
 #define CONFIG_SND_SOC_MSM_STUB 1
 #define CONFIG_WCD_DSP_GLINK 1
 #define CONFIG_MSM_AVTIMER 1
-#define CONFIG_AVTIMER_LEGACY 1
 #define CONFIG_SND_SOC_EXT_CODEC 1
 #define CONFIG_SND_SOC_INT_CODEC 1
-#define CONFIG_SND_SOC_CPE 1
 #define CONFIG_SND_SOC_SDM660_CDC 1
 #define CONFIG_SND_SOC_ANALOG_CDC 1
 #define CONFIG_SND_SOC_DIGITAL_CDC 1

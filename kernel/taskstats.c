@@ -209,11 +209,7 @@ static int fill_stats_for_pid(pid_t pid, struct taskstats *stats)
 {
 	struct task_struct *tsk;
 
-	rcu_read_lock();
-	tsk = find_task_by_vpid(pid);
-	if (tsk)
-		get_task_struct(tsk);
-	rcu_read_unlock();
+	tsk = find_get_task_by_vpid(pid);
 	if (!tsk)
 		return -ESRCH;
 	fill_stats(current_user_ns(), task_active_pid_ns(current), tsk, stats);
@@ -431,7 +427,9 @@ static void sysstats_fill_zoneinfo(struct sys_memstats *stats)
 		if (!populated_zone(zone))
 			continue;
 
+#if IS_ENABLED(CONFIG_ZSMALLOC)
 		zspages += zone_page_state(zone, NR_ZSPAGES);
+#endif
 		if (!strcmp(zone->name, "DMA")) {
 			stats->dma_nr_free_pages =
 				K(zone_page_state(zone, NR_FREE_PAGES));
@@ -496,7 +494,7 @@ static void sysstats_build(struct sys_memstats *stats)
 	stats->version = SYSSTATS_VERSION;
 	stats->memtotal = K(i.totalram);
 	stats->reclaimable =
-		global_node_page_state(NR_KERNEL_MISC_RECLAIMABLE) << 2;
+		K(global_node_page_state(NR_KERNEL_MISC_RECLAIMABLE));
 	stats->swap_used = K(i.totalswap - i.freeswap);
 	stats->swap_total = K(i.totalswap);
 	stats->vmalloc_total = K(vmalloc_nr_pages());
@@ -656,9 +654,7 @@ static int taskstats2_cmd_attr_pid(struct genl_info *info)
 	int rc;
 	u64 utime, stime;
 	const struct cred *tcred;
-#ifdef CONFIG_CPUSETS
 	struct cgroup_subsys_state *css;
-#endif //CONFIG_CPUSETS
 	unsigned long flags;
 	struct signal_struct *sig;
 
@@ -725,12 +721,10 @@ static int taskstats2_cmd_attr_pid(struct genl_info *info)
 
 	strlcpy(stats->name, tsk->comm, sizeof(stats->name));
 
-#ifdef CONFIG_CPUSETS
 	css = task_get_css(tsk, cpuset_cgrp_id);
 	cgroup_path_ns(css->cgroup, stats->state, sizeof(stats->state),
 				current->nsproxy->cgroup_ns);
 	css_put(css);
-#endif //CONFIG_CPUSETS
 	/* version 2 fields end here */
 
 	put_task_struct(tsk);
@@ -840,6 +834,10 @@ static int taskstats2_foreach(struct sk_buff *skb, struct netlink_callback *cb)
 	nla = nla_find(nlmsg_attrdata(cb->nlh, GENL_HDRLEN),
 			nlmsg_attrlen(cb->nlh, GENL_HDRLEN),
 			TASKSTATS_TYPE_FOREACH);
+
+	if (!nla)
+		goto out;
+
 	buf  = nla_get_u32(nla);
 	oom_score_min = (short) (buf & 0xFFFF);
 	oom_score_max = (short) ((buf >> 16) & 0xFFFF);
@@ -896,6 +894,7 @@ static int taskstats2_foreach(struct sk_buff *skb, struct netlink_callback *cb)
 	}
 
 	cb->args[0] = iter.tgid;
+out:
 	return skb->len;
 }
 

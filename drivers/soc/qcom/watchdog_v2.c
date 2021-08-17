@@ -1,19 +1,16 @@
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/io.h>
 #include <linux/delay.h>
+#include <linux/sort.h>
+#include <linux/kernel_stat.h>
+#include <linux/irq_cpustat.h>
 #include <linux/slab.h>
 #include <linux/jiffies.h>
 #include <linux/kthread.h>
@@ -35,6 +32,11 @@
 #include <linux/sched/clock.h>
 #include <linux/cpumask.h>
 #include <uapi/linux/sched/types.h>
+#include <linux/sched/debug.h>
+#ifdef CONFIG_QCOM_INITIAL_LOGBUF
+#include <linux/kallsyms.h>
+#include <linux/math64.h>
+#endif
 
 #define MODULE_NAME "msm_watchdog"
 #define WDT0_ACCSCSSNBARK_INT 0
@@ -54,10 +56,29 @@
 #define SCM_SET_REGSAVE_CMD	0x2
 #define SCM_SVC_SEC_WDOG_DIS	0x7
 #define MAX_CPU_CTX_SIZE	2048
+#define NR_TOP_HITTERS		10
+#define COMPARE_RET		-1
+
+typedef int (*compare_t) (const void *lhs, const void *rhs);
+
+#ifdef CONFIG_QCOM_INITIAL_LOGBUF
+#define LOGBUF_TIMEOUT		100000U
+
+static struct delayed_work log_buf_work;
+static char *init_log_buf;
+static unsigned int *log_buf_size;
+static dma_addr_t log_buf_paddr;
+#endif
 
 static struct msm_watchdog_data *wdog_data;
 
 static int cpu_idle_pc_state[NR_CPUS];
+
+struct irq_info {
+	unsigned int irq;
+	unsigned int total_count;
+	unsigned int irq_counter[NR_CPUS];
+};
 
 /*
  * user_pet_enable:
@@ -99,10 +120,11 @@ struct msm_watchdog_data {
 	unsigned long long thread_start;
 	unsigned long long ping_start[NR_CPUS];
 	unsigned long long ping_end[NR_CPUS];
-	unsigned int cpu_scandump_sizes[NR_CPUS];
-
-	/* When single buffer is used to collect Scandump */
-	unsigned int scandump_size;
+	struct work_struct irq_counts_work;
+	struct irq_info irq_counts[NR_TOP_HITTERS];
+	struct irq_info ipi_counts[NR_IPI];
+	unsigned int tot_irq_count[NR_CPUS];
+	atomic_t irq_counts_running;
 };
 
 /*
@@ -138,6 +160,23 @@ module_param(WDT_HZ, long, 0000);
 
 static int ipi_en = IPI_CORES_IN_LPM;
 module_param(ipi_en, int, 0444);
+
+#ifdef CONFIG_FIRE_WATCHDOG
+static int wdog_fire;
+static int wdog_fire_set(const char *val, const struct kernel_param *kp);
+module_param_call(wdog_fire, wdog_fire_set, param_get_int,
+		&wdog_fire, 0644);
+
+static int wdog_fire_set(const char *val, const struct kernel_param *kp)
+{
+	printk(KERN_INFO "trigger wdog_fire_set\n");
+	local_irq_disable();
+	while (1)
+	;
+
+	return 0;
+}
+#endif
 
 static void dump_cpu_alive_mask(struct msm_watchdog_data *wdog_dd)
 {
@@ -197,7 +236,7 @@ static int panic_wdog_handler(struct notifier_block *this,
 {
 	struct msm_watchdog_data *wdog_dd = container_of(this,
 				struct msm_watchdog_data, panic_blk);
-	if (panic_timeout == 0 || crash_kexec_post_notifiers) {
+	if (panic_timeout == 0) {
 		__raw_writel(0, wdog_dd->base + WDT0_EN);
 		/* Make sure watchdog is enabled before notifying the caller */
 		mb();
@@ -208,6 +247,10 @@ static int panic_wdog_handler(struct notifier_block *this,
 				wdog_dd->base + WDT0_BITE_TIME);
 		__raw_writel(1, wdog_dd->base + WDT0_RST);
 	}
+#ifdef CONFIG_DUMP_ALL_STACKS
+	printk(KERN_INFO "D Status stack trace dump:\n");
+	show_state_filter(TASK_UNINTERRUPTIBLE);
+#endif
 	return NOTIFY_DONE;
 }
 
@@ -254,6 +297,7 @@ static ssize_t wdog_disable_set(struct device *dev,
 	int ret;
 	u8 disable;
 	struct msm_watchdog_data *wdog_dd = dev_get_drvdata(dev);
+	struct scm_desc desc = {0};
 
 	ret = kstrtou8(buf, 10, &disable);
 	if (ret) {
@@ -268,17 +312,11 @@ static ssize_t wdog_disable_set(struct device *dev,
 			return count;
 		}
 		disable = 1;
-		if (!is_scm_armv8()) {
-			ret = scm_call(SCM_SVC_BOOT, SCM_SVC_SEC_WDOG_DIS,
-				       &disable, sizeof(disable), NULL, 0);
-		} else {
-			struct scm_desc desc = {0};
 
-			desc.args[0] = 1;
-			desc.arginfo = SCM_ARGS(1);
-			ret = scm_call2(SCM_SIP_FNID(SCM_SVC_BOOT,
-					SCM_SVC_SEC_WDOG_DIS), &desc);
-		}
+		desc.args[0] = 1;
+		desc.arginfo = SCM_ARGS(1);
+		ret = scm_call2(SCM_SIP_FNID(SCM_SVC_BOOT,
+						SCM_SVC_SEC_WDOG_DIS), &desc);
 		if (ret) {
 			dev_err(wdog_dd->dev,
 					"Failed to deactivate secure wdog\n");
@@ -411,13 +449,190 @@ static void ping_other_cpus(struct msm_watchdog_data *wdog_dd)
 	}
 }
 
-static void pet_task_wakeup(unsigned long data)
+static void pet_task_wakeup(struct timer_list *t)
 {
 	struct msm_watchdog_data *wdog_dd =
-		(struct msm_watchdog_data *)data;
+		from_timer(wdog_dd, t, pet_timer);
 	wdog_dd->timer_expired = true;
 	wdog_dd->timer_fired = sched_clock();
 	wake_up(&wdog_dd->pet_complete);
+}
+
+static int cmp_irq_info_fn(const void *a, const void *b)
+{
+	struct irq_info *lhs = (struct irq_info *)a;
+	struct irq_info *rhs = (struct irq_info *)b;
+
+	if (lhs->total_count < rhs->total_count)
+		return 1;
+
+	if (lhs->total_count > rhs->total_count)
+		return COMPARE_RET;
+
+	return 0;
+}
+
+static void swap_irq_info_fn(void *a, void *b, int size)
+{
+	struct irq_info temp;
+	struct irq_info *lhs = (struct irq_info *)a;
+	struct irq_info *rhs = (struct irq_info *)b;
+
+	temp = *lhs;
+	*lhs = *rhs;
+	*rhs = temp;
+}
+
+static struct irq_info *search(struct irq_info *key, struct irq_info *base,
+			       size_t num, compare_t cmp)
+{
+	struct irq_info *pivot = NULL;
+	int result;
+
+	while (num > 0) {
+		pivot = base + (num >> 1);
+		result = cmp(key, pivot);
+
+		if (result == 0)
+			goto out;
+
+		if (result > 0) {
+			base = pivot + 1;
+			num--;
+		}
+
+		if (num)
+			num >>= 1;
+	}
+
+out:
+	return pivot;
+}
+
+static void print_irq_stat(struct msm_watchdog_data *wdog_dd)
+{
+	int index;
+	int cpu;
+	struct irq_info *info;
+
+
+	pr_debug("(virq:irq_count)-\n");
+	for (index = 0; index < NR_TOP_HITTERS; index++) {
+		info = &wdog_dd->irq_counts[index];
+		pr_debug("%u:%u\n", info->irq, info->total_count);
+	}
+	pr_debug("\n");
+
+	pr_debug("(cpu:irq_count)-\n");
+	for_each_possible_cpu(cpu)
+		pr_debug("%u:%u\n", cpu, wdog_dd->tot_irq_count[cpu]);
+	pr_debug("\n");
+
+	pr_debug("(ipi:irq_count)-\n");
+	for (index = 0; index < NR_IPI; index++) {
+		info = &wdog_dd->ipi_counts[index];
+		pr_debug("%u:%u\n", info->irq, info->total_count);
+	}
+	pr_debug("\n");
+}
+
+static void compute_irq_stat(struct work_struct *work)
+{
+	unsigned int count;
+	int index = 0, cpu, irq;
+	struct irq_desc *desc;
+	struct irq_info *pos;
+	struct irq_info *start;
+	struct irq_info key = {0};
+	unsigned int running;
+	struct msm_watchdog_data *wdog_dd = container_of(work,
+					    struct msm_watchdog_data,
+					    irq_counts_work);
+
+	size_t arr_size = ARRAY_SIZE(wdog_dd->irq_counts);
+
+	/* avoid parallel execution from bark handler and queued
+	 * irq_counts_work.
+	 */
+	running = atomic_xchg(&wdog_dd->irq_counts_running, 1);
+	if (running)
+		return;
+
+	/* per irq counts */
+	rcu_read_lock();
+	for_each_irq_nr(irq) {
+		desc = irq_to_desc(irq);
+		if (!desc)
+			continue;
+
+		count = kstat_irqs_usr(irq);
+		if (!count)
+			continue;
+
+		if (index < arr_size) {
+			wdog_dd->irq_counts[index].irq = irq;
+			wdog_dd->irq_counts[index].total_count = count;
+			for_each_possible_cpu(cpu)
+				wdog_dd->irq_counts[index].irq_counter[cpu] =
+					*per_cpu_ptr(desc->kstat_irqs, cpu);
+
+			index++;
+			if (index == arr_size)
+				sort(wdog_dd->irq_counts, arr_size,
+				     sizeof(*pos), cmp_irq_info_fn,
+				     swap_irq_info_fn);
+
+			continue;
+		}
+
+		key.total_count = count;
+		start = wdog_dd->irq_counts + (arr_size - 1);
+		pos = search(&key, wdog_dd->irq_counts,
+			     arr_size, cmp_irq_info_fn);
+		pr_debug("*pos:%u key:%u\n",
+				pos->total_count, key.total_count);
+		if (pos && (pos->total_count >= key.total_count)) {
+			if (pos < start)
+				pos++;
+			else
+				pos = NULL;
+		}
+
+		pr_debug("count :%u irq:%u\n", count, irq);
+		if (pos && pos < start) {
+			start--;
+			for (; start >= pos ; start--)
+				*(start + 1) = *start;
+		}
+
+		if (pos) {
+			pos->irq = irq;
+			pos->total_count = count;
+			for_each_possible_cpu(cpu)
+				pos->irq_counter[cpu] =
+					*per_cpu_ptr(desc->kstat_irqs, cpu);
+		}
+	}
+	rcu_read_unlock();
+
+	/* per cpu total irq counts */
+	for_each_possible_cpu(cpu)
+		wdog_dd->tot_irq_count[cpu] = kstat_cpu_irqs_sum(cpu);
+
+	/* per IPI counts */
+	for (index = 0; index < NR_IPI; index++) {
+		wdog_dd->ipi_counts[index].total_count = 0;
+		wdog_dd->ipi_counts[index].irq = index;
+		for_each_possible_cpu(cpu) {
+			wdog_dd->ipi_counts[index].irq_counter[cpu] =
+				__IRQ_STAT(cpu, ipi_irqs[index]);
+			wdog_dd->ipi_counts[index].total_count +=
+				wdog_dd->ipi_counts[index].irq_counter[cpu];
+		}
+	}
+
+	print_irq_stat(wdog_dd);
+	atomic_xchg(&wdog_dd->irq_counts_running, 0);
 }
 
 static __ref int watchdog_kthread(void *arg)
@@ -458,6 +673,7 @@ static __ref int watchdog_kthread(void *arg)
 		 * Could have been changed on other cpu
 		 */
 		mod_timer(&wdog_dd->pet_timer, jiffies + delay_time);
+		queue_work(system_unbound_wq, &wdog_dd->irq_counts_work);
 	}
 	return 0;
 }
@@ -486,6 +702,17 @@ static struct notifier_block wdog_cpu_pm_nb = {
 	.notifier_call = wdog_cpu_pm_notify,
 };
 
+#ifdef CONFIG_QCOM_INITIAL_LOGBUF
+static void log_buf_remove(void)
+{
+	flush_delayed_work(&log_buf_work);
+	dma_free_coherent(wdog_data->dev, *log_buf_size,
+			  init_log_buf, log_buf_paddr);
+}
+#else
+static void log_buf_remove(void) { return; }
+#endif
+
 static int msm_watchdog_remove(struct platform_device *pdev)
 {
 	struct msm_watchdog_data *wdog_dd =
@@ -505,6 +732,8 @@ static int msm_watchdog_remove(struct platform_device *pdev)
 	dev_info(wdog_dd->dev, "MSM Watchdog Exit - Deactivated\n");
 	del_timer_sync(&wdog_dd->pet_timer);
 	kthread_stop(wdog_dd->watchdog_task);
+	flush_work(&wdog_dd->irq_counts_work);
+	log_buf_remove();
 	kfree(wdog_dd);
 	return 0;
 }
@@ -513,6 +742,8 @@ void msm_trigger_wdog_bite(void)
 {
 	if (!wdog_data)
 		return;
+
+	compute_irq_stat(&wdog_data->irq_counts_work);
 	pr_info("Causing a watchdog bite!");
 	__raw_writel(1, wdog_data->base + WDT0_BITE_TIME);
 	/* Mke sure bite time is written before we reset */
@@ -527,6 +758,15 @@ void msm_trigger_wdog_bite(void)
 		__raw_readl(wdog_data->base + WDT0_EN),
 		__raw_readl(wdog_data->base + WDT0_BARK_TIME),
 		__raw_readl(wdog_data->base + WDT0_BITE_TIME));
+	/*
+	 * This function induces the non-secure bite and control
+	 * should not return to the calling function. Non-secure
+	 * bite interrupt is affined to all the cores and it may
+	 * not be handled by the same cores which configured
+	 * non-secure bite. So add forever loop here.
+	 */
+	while (1)
+		udelay(1);
 }
 
 static irqreturn_t wdog_bark_handler(int irq, void *dev_id)
@@ -542,11 +782,11 @@ static irqreturn_t wdog_bark_handler(int irq, void *dev_id)
 	nanosec_rem = do_div(wdog_dd->last_pet, 1000000000);
 	dev_info(wdog_dd->dev, "Watchdog last pet at %lu.%06lu\n",
 			(unsigned long) wdog_dd->last_pet, nanosec_rem / 1000);
-
+        show_state_filter(TASK_UNINTERRUPTIBLE);
 	if (wdog_dd->do_ipi_ping)
 		dump_cpu_alive_mask(wdog_dd);
+
 	msm_trigger_wdog_bite();
-	panic("Failed to cause a watchdog bite! - Falling back to kernel panic!");
 	return IRQ_HANDLED;
 }
 
@@ -555,135 +795,6 @@ static irqreturn_t wdog_ppi_bark(int irq, void *dev_id)
 	struct msm_watchdog_data *wdog_dd =
 			*(struct msm_watchdog_data **)(dev_id);
 	return wdog_bark_handler(irq, wdog_dd);
-}
-
-static void configure_bark_dump(struct msm_watchdog_data *wdog_dd)
-{
-	int ret;
-	struct msm_dump_entry dump_entry;
-	struct msm_dump_data *cpu_data;
-	int cpu;
-	void *cpu_buf;
-
-	if (!IS_ENABLED(CONFIG_QCOM_MEMORY_DUMP_V2))
-		return;
-
-	cpu_data = kcalloc(num_present_cpus(), sizeof(struct msm_dump_data),
-								GFP_KERNEL);
-	if (!cpu_data)
-		goto out0;
-
-	cpu_buf = kcalloc(num_present_cpus(), MAX_CPU_CTX_SIZE, GFP_KERNEL);
-	if (!cpu_buf)
-		goto out1;
-
-	for_each_cpu(cpu, cpu_present_mask) {
-		cpu_data[cpu].addr = virt_to_phys(cpu_buf +
-						cpu * MAX_CPU_CTX_SIZE);
-		cpu_data[cpu].len = MAX_CPU_CTX_SIZE;
-		snprintf(cpu_data[cpu].name, sizeof(cpu_data[cpu].name),
-			"KCPU_CTX%d", cpu);
-		dump_entry.id = MSM_DUMP_DATA_CPU_CTX + cpu;
-		dump_entry.addr = virt_to_phys(&cpu_data[cpu]);
-		ret = msm_dump_data_register(MSM_DUMP_TABLE_APPS,
-					     &dump_entry);
-		/*
-		 * Don't free the buffers in case of error since
-		 * registration may have succeeded for some cpus.
-		 */
-		if (ret)
-			pr_err("cpu %d reg dump setup failed\n", cpu);
-	}
-
-	return;
-out1:
-	kfree(cpu_data);
-out0:
-	return;
-}
-
-static void register_scan_dump(struct msm_watchdog_data *wdog_dd)
-{
-	static void *dump_addr;
-	int ret;
-	struct msm_dump_entry dump_entry;
-	struct msm_dump_data *dump_data;
-
-	dump_data = kzalloc(sizeof(struct msm_dump_data), GFP_KERNEL);
-	if (!dump_data)
-		return;
-	dump_addr = kzalloc(wdog_dd->scandump_size, GFP_KERNEL);
-	if (!dump_addr)
-		goto err0;
-
-	dump_data->addr = virt_to_phys(dump_addr);
-	dump_data->len = wdog_dd->scandump_size;
-	strlcpy(dump_data->name, "KSCANDUMP", sizeof(dump_data->name));
-
-	dump_entry.id = MSM_DUMP_DATA_SCANDUMP;
-	dump_entry.addr = virt_to_phys(dump_data);
-	ret = msm_dump_data_register(MSM_DUMP_TABLE_APPS, &dump_entry);
-	if (ret) {
-		pr_err("Registering scandump region failed\n");
-		goto err1;
-	}
-	return;
-err1:
-	kfree(dump_addr);
-err0:
-	kfree(dump_data);
-}
-
-static void configure_scandump(struct msm_watchdog_data *wdog_dd)
-{
-	int ret;
-	struct msm_dump_entry dump_entry;
-	struct msm_dump_data *cpu_data;
-	int cpu;
-	static dma_addr_t dump_addr;
-	static void *dump_vaddr;
-	unsigned int scandump_size;
-
-	if (wdog_dd->scandump_size) {
-		register_scan_dump(wdog_dd);
-		return;
-	}
-
-	for_each_cpu(cpu, cpu_present_mask) {
-		scandump_size = wdog_dd->cpu_scandump_sizes[cpu];
-		cpu_data = devm_kzalloc(wdog_dd->dev,
-					sizeof(struct msm_dump_data),
-					GFP_KERNEL);
-		if (!cpu_data)
-			continue;
-
-		dump_vaddr = (void *) dma_alloc_coherent(wdog_dd->dev,
-							 scandump_size,
-							 &dump_addr,
-							 GFP_KERNEL);
-		if (!dump_vaddr) {
-			dev_err(wdog_dd->dev, "Couldn't get memory for dump\n");
-			continue;
-		}
-		memset(dump_vaddr, 0x0, scandump_size);
-
-		cpu_data->addr = dump_addr;
-		cpu_data->len = scandump_size;
-		snprintf(cpu_data->name, sizeof(cpu_data->name),
-			"KSCANDUMP%d", cpu);
-		dump_entry.id = MSM_DUMP_DATA_SCANDUMP_PER_CPU + cpu;
-		dump_entry.addr = virt_to_phys(cpu_data);
-		ret = msm_dump_data_register(MSM_DUMP_TABLE_APPS,
-					     &dump_entry);
-		if (ret) {
-			dev_err(wdog_dd->dev, "Dump setup failed, id = %d\n",
-				MSM_DUMP_DATA_SCANDUMP_PER_CPU + cpu);
-			dma_free_coherent(wdog_dd->dev, scandump_size,
-					  dump_vaddr,
-					  dump_addr);
-			devm_kfree(wdog_dd->dev, cpu_data);
-		}
-	}
 }
 
 static int init_watchdog_sysfs(struct msm_watchdog_data *wdog_dd)
@@ -704,6 +815,65 @@ static int init_watchdog_sysfs(struct msm_watchdog_data *wdog_dd)
 
 	return error;
 }
+
+#ifdef CONFIG_QCOM_INITIAL_LOGBUF
+static void minidump_reg_init_log_buf(void)
+{
+	struct md_region md_entry;
+
+	/* Register init_log_buf info to minidump table */
+	strlcpy(md_entry.name, "KBOOT_LOG", sizeof(md_entry.name));
+	md_entry.virt_addr = (uintptr_t)init_log_buf;
+	md_entry.phys_addr = log_buf_paddr;
+	md_entry.size = *log_buf_size;
+	md_entry.id = MINIDUMP_DEFAULT_ID;
+	if (msm_minidump_add_region(&md_entry) < 0)
+		pr_err("Failed to add init_log_buf in Minidump\n");
+}
+
+static void log_buf_work_fn(struct work_struct *work)
+{
+	char **addr = NULL;
+
+	addr = (char **)kallsyms_lookup_name("log_buf");
+	if (!addr) {
+		dev_err(wdog_data->dev, "log_buf symbol not found\n");
+		goto out;
+	}
+
+	log_buf_size = (unsigned int *)kallsyms_lookup_name("log_buf_len");
+	if (!log_buf_size) {
+		dev_err(wdog_data->dev, "log_buf_len symbol not found\n");
+		goto out;
+	}
+
+	init_log_buf = dma_alloc_coherent(wdog_data->dev, *log_buf_size,
+					  &log_buf_paddr, GFP_KERNEL);
+	if (!init_log_buf) {
+		dev_err(wdog_data->dev, "log_buf dma_alloc_coherent failed\n");
+		goto out;
+	}
+
+	minidump_reg_init_log_buf();
+	memcpy(init_log_buf, *addr, (size_t)(*log_buf_size));
+	pr_info("boot log copy done\n");
+out:
+	return;
+}
+
+static void log_buf_init(void)
+{
+	/* keep granularity of milli seconds */
+	unsigned int curr_time_msec = div_u64(sched_clock(), NSEC_PER_MSEC);
+	unsigned int timeout_msec = LOGBUF_TIMEOUT - curr_time_msec;
+
+	INIT_DELAYED_WORK(&log_buf_work, log_buf_work_fn);
+	queue_delayed_work(system_unbound_wq, &log_buf_work,
+			   msecs_to_jiffies(timeout_msec));
+}
+#else
+static void log_buf_init(void)  { return; }
+#endif
 
 static void init_watchdog_data(struct msm_watchdog_data *wdog_dd)
 {
@@ -743,14 +913,15 @@ static void init_watchdog_data(struct msm_watchdog_data *wdog_dd)
 			return;
 		}
 	}
+
+	INIT_WORK(&wdog_dd->irq_counts_work, compute_irq_stat);
+	atomic_set(&wdog_dd->irq_counts_running, 0);
 	delay_time = msecs_to_jiffies(wdog_dd->pet_time);
 	wdog_dd->min_slack_ticks = UINT_MAX;
 	wdog_dd->min_slack_ns = ULLONG_MAX;
-	configure_scandump(wdog_dd);
-	configure_bark_dump(wdog_dd);
 	timeout = (wdog_dd->bark_time * WDT_HZ)/1000;
 	__raw_writel(timeout, wdog_dd->base + WDT0_BARK_TIME);
-	__raw_writel(timeout + 3*WDT_HZ, wdog_dd->base + WDT0_BITE_TIME);
+	__raw_writel(timeout + 10*WDT_HZ, wdog_dd->base + WDT0_BITE_TIME);
 
 	wdog_dd->panic_blk.notifier_call = panic_wdog_handler;
 	atomic_notifier_chain_register(&panic_notifier_list,
@@ -761,9 +932,7 @@ static void init_watchdog_data(struct msm_watchdog_data *wdog_dd)
 	wdog_dd->user_pet_complete = true;
 	wdog_dd->user_pet_enabled = false;
 	wake_up_process(wdog_dd->watchdog_task);
-	init_timer(&wdog_dd->pet_timer);
-	wdog_dd->pet_timer.data = (unsigned long)wdog_dd;
-	wdog_dd->pet_timer.function = pet_task_wakeup;
+	timer_setup(&wdog_dd->pet_timer, pet_task_wakeup, 0);
 	wdog_dd->pet_timer.expires = jiffies + delay_time;
 	add_timer(&wdog_dd->pet_timer);
 
@@ -803,7 +972,7 @@ static int msm_wdog_dt_to_pdata(struct platform_device *pdev,
 {
 	struct device_node *node = pdev->dev.of_node;
 	struct resource *res;
-	int ret, cpu, num_scandump_sizes;
+	int ret;
 
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "wdt-base");
 	if (!res)
@@ -864,26 +1033,6 @@ static int msm_wdog_dt_to_pdata(struct platform_device *pdev,
 	}
 	pdata->wakeup_irq_enable = of_property_read_bool(node,
 							 "qcom,wakeup-enable");
-
-	num_scandump_sizes = of_property_count_elems_of_size(node,
-							"qcom,scandump-sizes",
-							sizeof(u32));
-	if ((num_scandump_sizes < 0) || ((num_scandump_sizes != 1) &&
-				(num_scandump_sizes != NR_CPUS))) {
-		dev_info(&pdev->dev, "%s scandump sizes property not correct\n",
-			__func__);
-	} else if (num_scandump_sizes == 1) {
-		if (of_property_read_u32(node, "qcom,scandump-sizes",
-					 &pdata->scandump_size))
-			dev_info(&pdev->dev,
-				 "No need to allocate memory for scandumps\n");
-	} else {
-		for_each_cpu(cpu, cpu_present_mask)
-			of_property_read_u32_index(node, "qcom,scandump-sizes",
-						   cpu,
-					&pdata->cpu_scandump_sizes[cpu]);
-	}
-
 	pdata->irq_ppi = irq_is_percpu(pdata->bark_irq);
 	dump_pdata(pdata);
 	return 0;
@@ -916,12 +1065,15 @@ static int msm_watchdog_probe(struct platform_device *pdev)
 	}
 	init_watchdog_data(wdog_dd);
 
+	log_buf_init();
+
 	/* Add wdog info to minidump table */
 	strlcpy(md_entry.name, "KWDOGDATA", sizeof(md_entry.name));
 	md_entry.virt_addr = (uintptr_t)wdog_dd;
 	md_entry.phys_addr = virt_to_phys(wdog_dd);
 	md_entry.size = sizeof(*wdog_dd);
-	if (msm_minidump_add_region(&md_entry))
+	md_entry.id = MINIDUMP_DEFAULT_ID;
+	if (msm_minidump_add_region(&md_entry) < 0)
 		pr_info("Failed to add Watchdog data in Minidump\n");
 
 	return 0;
@@ -931,7 +1083,8 @@ err:
 }
 
 static const struct dev_pm_ops msm_watchdog_dev_pm_ops = {
-	SET_NOIRQ_SYSTEM_SLEEP_PM_OPS(msm_watchdog_suspend, msm_watchdog_resume)
+	.suspend_noirq = msm_watchdog_suspend,
+	.resume_noirq = msm_watchdog_resume,
 };
 
 static struct platform_driver msm_watchdog_driver = {

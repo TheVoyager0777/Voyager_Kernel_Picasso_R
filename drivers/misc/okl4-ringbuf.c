@@ -459,7 +459,6 @@ MODULE_DEVICE_TABLE(of, of_platform_shared_buffer_table);
 static struct platform_driver of_platform_ringbuf_tx_driver = {
 	.driver = {
 		.name = "okl4_ringbuf_tx",
-		.owner = THIS_MODULE,
 		.of_match_table = of_platform_shared_buffer_table,
 	},
 	.probe = ringbuf_tx_probe,
@@ -569,7 +568,6 @@ static int ringbuf_rx_probe(struct platform_device *pdev)
 static struct platform_driver of_platform_ringbuf_rx_driver = {
 	.driver = {
 		.name = "okl4_ringbuf_rx",
-		.owner = THIS_MODULE,
 		.of_match_table = of_platform_shared_buffer_table,
 	},
 	.probe = ringbuf_rx_probe,

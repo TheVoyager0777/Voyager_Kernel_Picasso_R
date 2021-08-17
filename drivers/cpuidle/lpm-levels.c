@@ -1,16 +1,9 @@
+// SPDX-License-Identifier: GPL-2.0-only
+
 /* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  * Copyright (C) 2006-2007 Adam Belay <abelay@novell.com>
  * Copyright (C) 2009 Intel Corporation
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
  */
 
 #define pr_fmt(fmt) "%s: " fmt, KBUILD_MODNAME
@@ -26,7 +19,6 @@
 #include <linux/hrtimer.h>
 #include <linux/ktime.h>
 #include <linux/tick.h>
-#include <linux/wakeup_reason.h>
 #include <linux/suspend.h>
 #include <linux/pm_qos.h>
 #include <linux/of_platform.h>
@@ -36,6 +28,7 @@
 #include <linux/sched.h>
 #include <linux/cpu_pm.h>
 #include <linux/cpuhotplug.h>
+#include <linux/regulator/machine.h>
 #include <linux/sched/clock.h>
 #include <linux/sched/stat.h>
 #include <soc/qcom/pm.h>
@@ -48,20 +41,13 @@
 #include <asm/cpuidle.h>
 #include "lpm-levels.h"
 #include <trace/events/power.h>
-#if defined(CONFIG_COMMON_CLK)
 #include "../clk/clk.h"
-#elif defined(CONFIG_COMMON_CLK_MSM)
-#include "../../drivers/clk/msm/clock.h"
-#endif /* CONFIG_COMMON_CLK */
 #define CREATE_TRACE_POINTS
 #include <trace/events/trace_msm_low_power.h>
 
 #define SCLK_HZ (32768)
 #define PSCI_POWER_STATE(reset) (reset << 30)
 #define PSCI_AFFINITY_LEVEL(lvl) ((lvl & 0x3) << 24)
-#define BIAS_HYST (bias_hyst * NSEC_PER_MSEC)
-
-#define MAX_S2IDLE_CPU_ATTEMPTS  32   /* divide by # cpus for max suspends */
 
 enum {
 	MSM_LPM_LVL_DBG_SUSPEND_LIMITS = BIT(0),
@@ -97,8 +83,6 @@ struct lpm_cluster *lpm_root_node;
 static bool lpm_prediction = true;
 module_param_named(lpm_prediction, lpm_prediction, bool, 0664);
 
-static uint32_t bias_hyst;
-module_param_named(bias_hyst, bias_hyst, uint, 0664);
 static bool lpm_ipi_prediction = true;
 module_param_named(lpm_ipi_prediction, lpm_ipi_prediction, bool, 0664);
 
@@ -141,7 +125,8 @@ module_param_named(print_parsed_dt, print_parsed_dt, bool, 0664);
 
 static bool sleep_disabled;
 module_param_named(sleep_disabled, sleep_disabled, bool, 0664);
-
+static bool sleep_disabled_touch;
+module_param_named(sleep_disabled_touch, sleep_disabled_touch, bool, 0664);
 /**
  * msm_cpuidle_get_deep_idle_latency - Get deep idle latency value
  *
@@ -162,6 +147,13 @@ uint32_t register_system_pm_ops(struct system_pm_ops *pm_ops)
 
 	return 0;
 }
+
+void lpm_disable_for_input(bool on)
+{
+	sleep_disabled_touch = !!on;
+	return;
+}
+EXPORT_SYMBOL(lpm_disable_for_input);
 
 static uint32_t least_cluster_latency(struct lpm_cluster *cluster,
 					struct latency_level *lat_level)
@@ -548,7 +540,7 @@ static uint64_t lpm_cpuidle_predict(struct cpuidle_device *dev,
 		history->hinvalid = 0;
 		history->htmr_wkup = 1;
 		history->stime = 0;
-		return 1;
+		return 0;
 	}
 
 	/*
@@ -665,31 +657,51 @@ static void clear_predict_history(void)
 
 static void update_history(struct cpuidle_device *dev, int idx);
 
-static inline bool is_cpu_biased(int cpu, uint64_t *bias_time)
+static inline bool lpm_disallowed(s64 sleep_us, int cpu, struct lpm_cpu *pm_cpu)
 {
-	u64 now = sched_clock();
-	u64 last = sched_get_cpu_last_busy_time(cpu);
-	u64 diff = 0;
+	uint64_t bias_time = 0;
 
-	if (!last)
-		return false;
+	if (cpu_isolated(cpu))
+		goto out;
 
-	diff = now - last;
-	if (diff < BIAS_HYST) {
-		*bias_time = BIAS_HYST - diff;
+	if (sleep_disabled || sleep_disabled_touch)
+		return true;
+
+	bias_time = sched_lpm_disallowed_time(cpu);
+	if (bias_time) {
+		pm_cpu->bias = bias_time;
 		return true;
 	}
 
+out:
+	if (sleep_us < 0)
+		return true;
+
 	return false;
+}
+
+static void calculate_next_wakeup(uint32_t *next_wakeup_us,
+				  uint32_t next_event_us,
+				  uint32_t lvl_latency_us,
+				  s64 sleep_us)
+{
+	if (!next_event_us)
+		return;
+
+	if (next_event_us < lvl_latency_us)
+		return;
+
+	if (next_event_us < sleep_us)
+		*next_wakeup_us = next_event_us - lvl_latency_us;
 }
 
 static int cpu_power_select(struct cpuidle_device *dev,
 		struct lpm_cpu *cpu)
 {
+	ktime_t delta_next;
 	int best_level = 0;
 	uint32_t latency_us = pm_qos_request_for_cpu(PM_QOS_CPU_DMA_LATENCY,
 							dev->cpu);
-	ktime_t delta_next;
 	s64 sleep_us = ktime_to_us(tick_nohz_get_sleep_length(&delta_next));
 	uint32_t modified_time_us = 0;
 	uint32_t next_event_us = 0;
@@ -700,26 +712,15 @@ static int cpu_power_select(struct cpuidle_device *dev,
 	uint32_t next_wakeup_us = (uint32_t)sleep_us;
 	uint32_t min_residency, max_residency;
 	struct power_params *pwr_params;
-	uint64_t bias_time = 0;
 
-	if ((sleep_disabled && !cpu_isolated(dev->cpu)) || sleep_us < 0)
-		return best_level;
+	if (lpm_disallowed(sleep_us, dev->cpu, cpu))
+		goto done_select;
 
 	idx_restrict = cpu->nlevels + 1;
-
 	next_event_us = (uint32_t)(ktime_to_us(get_next_event_time(dev->cpu)));
 
-	if (is_cpu_biased(dev->cpu, &bias_time) && (!cpu_isolated(dev->cpu))) {
-		cpu->bias = bias_time;
-		goto done_select;
-	}
-
 	for (i = 0; i < cpu->nlevels; i++) {
-		bool allow;
-
-		allow = i ? lpm_cpu_mode_allow(dev->cpu, i, true) : true;
-
-		if (!allow)
+		if (!lpm_cpu_mode_allow(dev->cpu, i, true))
 			continue;
 
 		pwr_params = &cpu->levels[i].pwr;
@@ -727,17 +728,11 @@ static int cpu_power_select(struct cpuidle_device *dev,
 		min_residency = pwr_params->min_residency;
 		max_residency = pwr_params->max_residency;
 
-		if (latency_us <= lvl_latency_us)
+		if (latency_us < lvl_latency_us)
 			break;
 
-		if (next_event_us) {
-			if (next_event_us < lvl_latency_us)
-				break;
-
-			if (((next_event_us - lvl_latency_us) < sleep_us) ||
-					(next_event_us < sleep_us))
-				next_wakeup_us = next_event_us - lvl_latency_us;
-		}
+		calculate_next_wakeup(&next_wakeup_us, next_event_us,
+				      lvl_latency_us, sleep_us);
 
 		if (!i && !cpu_isolated(dev->cpu)) {
 			/*
@@ -746,10 +741,9 @@ static int cpu_power_select(struct cpuidle_device *dev,
 			 * call prediction.
 			 */
 			if (next_wakeup_us > max_residency) {
-				predicted = (lpm_cpuidle_predict(dev, cpu,
+				predicted = lpm_cpuidle_predict(dev, cpu,
 					&idx_restrict, &idx_restrict_time,
-					&ipi_predicted
-					) == 1) ? 0 : (max_residency >> 1);
+					&ipi_predicted);
 				if (predicted && (predicted < min_residency))
 					predicted = min_residency;
 			} else
@@ -783,8 +777,8 @@ static int cpu_power_select(struct cpuidle_device *dev,
 	min_residency = pwr_params->min_residency;
 	max_residency = pwr_params->max_residency;
 
-	if ((predicted || (idx_restrict != (cpu->nlevels + 1)))
-			&& (best_level < (cpu->nlevels-1))) {
+	if ((predicted || (idx_restrict != cpu->nlevels + 1)) &&
+	    (best_level < (cpu->nlevels-1))) {
 		htime = predicted + cpu->tmr_add;
 		if (lpm_ipi_prediction && cpu->ipi_prediction)
 			htime += DEFAULT_IPI_TIMER_ADD;
@@ -1071,7 +1065,7 @@ static int cluster_select(struct lpm_cluster *cluster, bool from_idle,
 					&level->num_cpu_votes))
 			continue;
 
-		if (from_idle && latency_us <= pwr_params->exit_latency)
+		if (from_idle && latency_us < pwr_params->exit_latency)
 			break;
 
 		if (sleep_us < (pwr_params->exit_latency +
@@ -1107,15 +1101,6 @@ static int cluster_select(struct lpm_cluster *cluster, bool from_idle,
 	return best_level;
 }
 
-static void cluster_notify(struct lpm_cluster *cluster,
-		struct lpm_cluster_level *level, bool enter)
-{
-	if (level->is_reset && enter)
-		cpu_cluster_pm_enter(cluster->aff_level);
-	else if (level->is_reset && !enter)
-		cpu_cluster_pm_exit(cluster->aff_level);
-}
-
 static int cluster_configure(struct lpm_cluster *cluster, int idx,
 		bool from_idle, int predicted)
 {
@@ -1145,15 +1130,6 @@ static int cluster_configure(struct lpm_cluster *cluster, int idx,
 	}
 
 	if (level->notify_rpm) {
-		/*
-		 * Print the clocks which are enabled during system suspend
-		 * This debug information is useful to know which are the
-		 * clocks that are enabled and preventing the system level
-		 * LPMs(XO and Vmin).
-		 */
-		if (!from_idle)
-			clock_debug_print_enabled(false);
-
 		cpu = get_next_online_cpu(from_idle);
 		cpumask_copy(&cpumask, cpumask_of(cpu));
 		clear_predict_history();
@@ -1162,8 +1138,6 @@ static int cluster_configure(struct lpm_cluster *cluster, int idx,
 			if ((sys_pm_ops->enter(&cpumask)))
 				return -EBUSY;
 	}
-	/* Notify cluster enter event after successfully config completion */
-	cluster_notify(cluster, level, true);
 
 	cluster->last_level = idx;
 
@@ -1308,8 +1282,6 @@ static void cluster_unprepare(struct lpm_cluster *cluster,
 	last_level = cluster->last_level;
 	cluster->last_level = cluster->default_level;
 
-	cluster_notify(cluster, &cluster->levels[last_level], false);
-
 	if (from_idle)
 		update_cluster_history(&cluster->history, last_level);
 
@@ -1401,7 +1373,7 @@ static bool psci_enter_sleep(struct lpm_cpu *cpu, int idx, bool from_idle)
 		stop_critical_timings();
 		cpu_do_idle();
 		start_critical_timings();
-		return 1;
+		return true;
 	}
 
 	if (from_idle && cpu->levels[idx].use_bc_timer) {
@@ -1441,7 +1413,7 @@ static int lpm_cpuidle_select(struct cpuidle_driver *drv,
 	return cpu_power_select(dev, cpu);
 }
 
-void update_ipi_history(int cpu)
+static void update_ipi_history(int cpu)
 {
 	struct ipi_history *history = &per_cpu(cpu_ipi_history, cpu);
 	ktime_t now = ktime_get();
@@ -1507,9 +1479,7 @@ static int lpm_cpuidle_enter(struct cpuidle_device *dev,
 	if (need_resched())
 		goto exit;
 
-	cpuidle_set_idle_cpu(dev->cpu);
 	success = psci_enter_sleep(cpu, idx, true);
-	cpuidle_clear_idle_cpu(dev->cpu);
 
 exit:
 	end_time = ktime_to_ns(ktime_get());
@@ -1535,10 +1505,6 @@ exit:
 static void lpm_cpuidle_s2idle(struct cpuidle_device *dev,
 		struct cpuidle_driver *drv, int idx)
 {
-	static DEFINE_SPINLOCK(s2idle_lock);
-	static struct cpumask idling_cpus;
-	static s2idle_sleep_attempts;
-	static bool s2idle_aborted;
 	struct lpm_cpu *cpu = per_cpu(cpu_lpm, dev->cpu);
 	const struct cpumask *cpumask = get_cpu_mask(dev->cpu);
 	bool success = false;
@@ -1552,28 +1518,6 @@ static void lpm_cpuidle_s2idle(struct cpuidle_device *dev,
 		return;
 	}
 
-	spin_lock(&s2idle_lock);
-	if (cpumask_empty(&idling_cpus)) {
-		s2idle_sleep_attempts = 0;
-		s2idle_aborted = false;
-	} else if (s2idle_aborted) {
-		spin_unlock(&s2idle_lock);
-		return;
-	}
-
-	cpumask_or(&idling_cpus, &idling_cpus, cpumask);
-	if (++s2idle_sleep_attempts > MAX_S2IDLE_CPU_ATTEMPTS) {
-		s2idle_aborted = true;
-	}
-	spin_unlock(&s2idle_lock);
-
-	if (s2idle_aborted) {
-		pr_err("Aborting s2idle suspend: too many iterations\n");
-		log_abnormal_wakeup_reason("s2idle soft watchdog");
-		pm_system_wakeup();
-		goto exit;
-	}
-
 	cpu_prepare(cpu, idx, true);
 	cluster_prepare(cpu->parent, cpumask, idx, false, 0);
 
@@ -1581,11 +1525,6 @@ static void lpm_cpuidle_s2idle(struct cpuidle_device *dev,
 
 	cluster_unprepare(cpu->parent, cpumask, idx, false, 0, success);
 	cpu_unprepare(cpu, idx, true);
-
-exit:
-	spin_lock(&s2idle_lock);
-	cpumask_andnot(&idling_cpus, &idling_cpus, cpumask);
-	spin_unlock(&s2idle_lock);
 }
 
 #ifdef CONFIG_CPU_IDLE_MULTIPLE_DRIVERS
@@ -1594,7 +1533,6 @@ static int cpuidle_register_cpu(struct cpuidle_driver *drv,
 {
 	struct cpuidle_device *device;
 	int cpu, ret;
-
 
 	if (!mask || !drv)
 		return -EINVAL;
@@ -1667,8 +1605,8 @@ static int cluster_cpuidle_register(struct lpm_cluster *cl)
 			struct lpm_cpu_level *cpu_level = &lpm_cpu->levels[i];
 
 			snprintf(st->name, CPUIDLE_NAME_LEN, "C%u\n", i);
-			snprintf(st->desc, CPUIDLE_DESC_LEN, "%s",
-					cpu_level->name);
+			strlcpy(st->desc, cpu_level->name, CPUIDLE_DESC_LEN);
+
 			st->flags = 0;
 			st->exit_latency = cpu_level->pwr.exit_latency;
 			st->target_residency = 0;
@@ -1769,7 +1707,6 @@ static void register_cluster_lpm_stats(struct lpm_cluster *cl,
 	kfree(level_name);
 
 	list_for_each_entry(cpu, &cl->cpu, list) {
-		pr_err("%s()\n", __func__);
 		register_cpu_lpm_stats(cpu, cl);
 	}
 	if (!list_empty(&cl->cpu))
@@ -1810,8 +1747,19 @@ static int lpm_suspend_enter(suspend_state_t state)
 		pr_err("Failed suspend\n");
 		return 0;
 	}
+
+	/*
+	 * Print the clocks and regulators which are enabled during
+	 * system suspend.  This debug information is useful to know
+	 * which resources are enabled and preventing the system level
+	 * LPMs (XO and Vmin).
+	 */
+	clock_debug_print_enabled();
+	regulator_debug_print_enabled();
+
 	cpu_prepare(lpm_cpu, idx, false);
 	cluster_prepare(cluster, cpumask, idx, false, 0);
+
 	success = psci_enter_sleep(lpm_cpu, idx, false);
 
 	cluster_unprepare(cluster, cpumask, idx, false, 0, success);
@@ -1902,12 +1850,15 @@ static int lpm_probe(struct platform_device *pdev)
 		goto failed;
 	}
 
+	set_update_ipi_history_callback(update_ipi_history);
+
 	/* Add lpm_debug to Minidump*/
 	strlcpy(md_entry.name, "KLPMDEBUG", sizeof(md_entry.name));
 	md_entry.virt_addr = (uintptr_t)lpm_debug;
 	md_entry.phys_addr = lpm_debug_phys;
 	md_entry.size = size;
-	if (msm_minidump_add_region(&md_entry))
+	md_entry.id = MINIDUMP_DEFAULT_ID;
+	if (msm_minidump_add_region(&md_entry) < 0)
 		pr_info("Failed to add lpm_debug in Minidump\n");
 
 	return 0;
@@ -1926,7 +1877,6 @@ static struct platform_driver lpm_driver = {
 	.probe = lpm_probe,
 	.driver = {
 		.name = "lpm-levels",
-		.owner = THIS_MODULE,
 		.suppress_bind_attrs = true,
 		.of_match_table = lpm_mtch_tbl,
 	},

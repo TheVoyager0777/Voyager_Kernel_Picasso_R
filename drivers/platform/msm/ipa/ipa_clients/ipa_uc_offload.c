@@ -1,13 +1,6 @@
-/* Copyright (c) 2016-2018, 2020 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2015-2019, 2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/ipa_uc_offload.h>
@@ -77,9 +70,6 @@ struct ipa_uc_offload_ctx {
 
 static struct ipa_uc_offload_ctx *ipa_uc_offload_ctx[IPA_UC_MAX_PROT_SIZE];
 
-static int ipa_uc_ntn_cons_release(void);
-static int ipa_uc_ntn_cons_request(void);
-static void ipa_uc_offload_rm_notify(void *, enum ipa_rm_event, unsigned long);
 
 static int ipa_commit_partial_hdr(
 	struct ipa_ioc_add_hdr *hdr,
@@ -130,11 +120,7 @@ static int ipa_uc_offload_ntn_register_pm_client(
 	struct ipa_pm_register_params params;
 
 	memset(&params, 0, sizeof(params));
-
-	if (ntn_ctx->proto == IPA_UC_NTN_V2X)
-		params.name = "ETH_v2x";
-	else
-		params.name = "ETH";
+	params.name = "ETH";
 	params.callback = ipa_uc_offload_ntn_pm_cb;
 	params.user_data = ntn_ctx;
 	params.group = IPA_PM_GROUP_DEFAULT;
@@ -143,16 +129,11 @@ static int ipa_uc_offload_ntn_register_pm_client(
 		IPA_UC_OFFLOAD_ERR("fail to register with PM %d\n", res);
 		return res;
 	}
-	if (ntn_ctx->proto == IPA_UC_NTN_V2X)
-		res = ipa_pm_associate_ipa_cons_to_client(ntn_ctx->pm_hdl,
-			IPA_CLIENT_ETHERNET2_CONS);
-	else
-		res = ipa_pm_associate_ipa_cons_to_client(ntn_ctx->pm_hdl,
-			IPA_CLIENT_ETHERNET_CONS);
 
+	res = ipa_pm_associate_ipa_cons_to_client(ntn_ctx->pm_hdl,
+		IPA_CLIENT_ETHERNET_CONS);
 	if (res) {
-		IPA_UC_OFFLOAD_ERR("fail to assoc. PM (%d) Prot:%d\n",
-			res, ntn_ctx->proto);
+		IPA_UC_OFFLOAD_ERR("fail to associate cons with PM %d\n", res);
 		ipa_pm_deregister(ntn_ctx->pm_hdl);
 		ntn_ctx->pm_hdl = ~0;
 		return res;
@@ -166,36 +147,6 @@ static void ipa_uc_offload_ntn_deregister_pm_client(
 {
 	ipa_pm_deactivate_sync(ntn_ctx->pm_hdl);
 	ipa_pm_deregister(ntn_ctx->pm_hdl);
-}
-static int ipa_uc_offload_ntn_create_rm_resources(
-	struct ipa_uc_offload_ctx *ntn_ctx)
-{
-	int ret;
-	struct ipa_rm_create_params param;
-
-	memset(&param, 0, sizeof(param));
-	param.name = IPA_RM_RESOURCE_ETHERNET_PROD;
-	param.reg_params.user_data = ntn_ctx;
-	param.reg_params.notify_cb = ipa_uc_offload_rm_notify;
-	param.floor_voltage = IPA_VOLTAGE_SVS;
-	ret = ipa_rm_create_resource(&param);
-	if (ret) {
-		IPA_UC_OFFLOAD_ERR("fail to create ETHERNET_PROD resource\n");
-		return -EFAULT;
-	}
-
-	memset(&param, 0, sizeof(param));
-	param.name = IPA_RM_RESOURCE_ETHERNET_CONS;
-	param.request_resource = ipa_uc_ntn_cons_request;
-	param.release_resource = ipa_uc_ntn_cons_release;
-	ret = ipa_rm_create_resource(&param);
-	if (ret) {
-		IPA_UC_OFFLOAD_ERR("fail to create ETHERNET_CONS resource\n");
-		ipa_rm_delete_resource(IPA_RM_RESOURCE_ETHERNET_PROD);
-		return -EFAULT;
-	}
-
-	return 0;
 }
 
 static int ipa_uc_offload_ntn_reg_intf(
@@ -214,12 +165,9 @@ static int ipa_uc_offload_ntn_reg_intf(
 
 	IPA_UC_OFFLOAD_DBG("register interface for netdev %s\n",
 					 inp->netdev_name);
-	if (ipa_pm_is_used())
-		ret = ipa_uc_offload_ntn_register_pm_client(ntn_ctx);
-	else
-		ret = ipa_uc_offload_ntn_create_rm_resources(ntn_ctx);
+	ret = ipa_uc_offload_ntn_register_pm_client(ntn_ctx);
 	if (ret) {
-		IPA_UC_OFFLOAD_ERR("fail to create rm resource\n");
+		IPA_UC_OFFLOAD_ERR("fail to register PM client\n");
 		return -EFAULT;
 	}
 	memcpy(ntn_ctx->netdev_name, inp->netdev_name, IPA_RESOURCE_NAME_MAX);
@@ -334,12 +282,7 @@ static int ipa_uc_offload_ntn_reg_intf(
 fail:
 	kfree(hdr);
 fail_alloc:
-	if (ipa_pm_is_used()) {
-		ipa_uc_offload_ntn_deregister_pm_client(ntn_ctx);
-	} else {
-		ipa_rm_delete_resource(IPA_RM_RESOURCE_ETHERNET_CONS);
-		ipa_rm_delete_resource(IPA_RM_RESOURCE_ETHERNET_PROD);
-	}
+	ipa_uc_offload_ntn_deregister_pm_client(ntn_ctx);
 	return ret;
 }
 
@@ -378,88 +321,16 @@ int ipa_uc_offload_reg_intf(
 		return -EINVAL;
 	}
 
-	/* only register IPA properties for uc_ntn */
 	if (ctx->proto == IPA_UC_NTN) {
 		ret = ipa_uc_offload_ntn_reg_intf(inp, outp, ctx);
 		if (!ret)
 			outp->clnt_hndl = IPA_UC_NTN;
 	}
 
-	/* only register IPA-pm for uc_ntn_v2x */
-	if (ctx->proto == IPA_UC_NTN_V2X) {
-		/* always in vlan mode */
-		IPA_UC_OFFLOAD_INFO("v2x hdr_len %d\n",
-			inp->hdr_info[0].hdr_len);
-		ctx->hdr_len = inp->hdr_info[0].hdr_len;
-		if (ipa_pm_is_used())
-			ret = ipa_uc_offload_ntn_register_pm_client(ctx);
-		else
-			IPA_UC_OFFLOAD_ERR("Not support uc_ntn_v2x ipa_rm\n");
-
-		if (!ret)
-			outp->clnt_hndl = IPA_UC_NTN_V2X;
-		else
-			IPA_UC_OFFLOAD_ERR("fail to create rm resource\n");
-		/* set to initialized state */
-		ctx->state = IPA_UC_OFFLOAD_STATE_INITIALIZED;
-	}
-
 	return ret;
 }
 EXPORT_SYMBOL(ipa_uc_offload_reg_intf);
 
-/* only IPA_UC_NTN might use for ipa_rm */
-static int ipa_uc_ntn_cons_release(void)
-{
-	return 0;
-}
-
-/* only IPA_UC_NTN might use for ipa_rm */
-static int ipa_uc_ntn_cons_request(void)
-{
-	int ret = 0;
-	struct ipa_uc_offload_ctx *ntn_ctx;
-
-	ntn_ctx = ipa_uc_offload_ctx[IPA_UC_NTN];
-	if (!ntn_ctx) {
-		IPA_UC_OFFLOAD_ERR("NTN is not initialized\n");
-		ret = -EFAULT;
-	} else if (ntn_ctx->state != IPA_UC_OFFLOAD_STATE_UP) {
-		IPA_UC_OFFLOAD_ERR("Invalid State: %d\n", ntn_ctx->state);
-		ret = -EFAULT;
-	}
-
-	return ret;
-}
-
-static void ipa_uc_offload_rm_notify(void *user_data, enum ipa_rm_event event,
-		unsigned long data)
-{
-	struct ipa_uc_offload_ctx *offload_ctx;
-
-	offload_ctx = (struct ipa_uc_offload_ctx *)user_data;
-	if (!(offload_ctx && offload_ctx->proto > IPA_UC_INVALID &&
-		  offload_ctx->proto < IPA_UC_MAX_PROT_SIZE)) {
-		IPA_UC_OFFLOAD_ERR("Invalid user data\n");
-		return;
-	}
-
-	if (offload_ctx->state != IPA_UC_OFFLOAD_STATE_INITIALIZED)
-		IPA_UC_OFFLOAD_ERR("Invalid State: %d\n", offload_ctx->state);
-
-	switch (event) {
-	case IPA_RM_RESOURCE_GRANTED:
-		complete_all(&offload_ctx->ntn_completion);
-		break;
-
-	case IPA_RM_RESOURCE_RELEASED:
-		break;
-
-	default:
-		IPA_UC_OFFLOAD_ERR("Invalid RM Evt: %d", event);
-		break;
-	}
-}
 
 static int ipa_uc_ntn_alloc_conn_smmu_info(struct ipa_ntn_setup_info *dest,
 	struct ipa_ntn_setup_info *source)
@@ -530,40 +401,10 @@ int ipa_uc_ntn_conn_pipes(struct ipa_ntn_conn_in_params *inp,
 		return -EINVAL;
 	}
 
-	if (ipa_pm_is_used()) {
-		result = ipa_pm_activate_sync(ntn_ctx->pm_hdl);
-		if (result) {
-			IPA_UC_OFFLOAD_ERR("fail to activate: %d\n", result);
-			return result;
-		}
-	} else {
-		/* not support v2x*/
-		if (ntn_ctx->proto == IPA_UC_NTN_V2X) {
-			IPA_UC_OFFLOAD_ERR("Not support uc_ntn_v2x ipa_rm\n");
-			return -EINVAL;
-		}
-
-		result = ipa_rm_add_dependency(IPA_RM_RESOURCE_ETHERNET_PROD,
-			IPA_RM_RESOURCE_APPS_CONS);
-		if (result) {
-			IPA_UC_OFFLOAD_ERR("fail to add rm dependency: %d\n",
-				result);
-			return result;
-		}
-
-		result = ipa_rm_request_resource(IPA_RM_RESOURCE_ETHERNET_PROD);
-		if (result == -EINPROGRESS) {
-			if (wait_for_completion_timeout(&ntn_ctx->ntn_completion
-				, 10*HZ) == 0) {
-				IPA_UC_OFFLOAD_ERR("ETH_PROD req timeout\n");
-				result = -EFAULT;
-				goto fail;
-			}
-		} else if (result != 0) {
-			IPA_UC_OFFLOAD_ERR("fail to request resource\n");
-			result = -EFAULT;
-			goto fail;
-		}
+	result = ipa_pm_activate_sync(ntn_ctx->pm_hdl);
+	if (result) {
+		IPA_UC_OFFLOAD_ERR("fail to activate: %d\n", result);
+		return result;
 	}
 
 	ntn_ctx->state = IPA_UC_OFFLOAD_STATE_UP;
@@ -577,22 +418,23 @@ int ipa_uc_ntn_conn_pipes(struct ipa_ntn_conn_in_params *inp,
 		goto fail;
 	}
 
-	result = ipa_uc_ntn_alloc_conn_smmu_info(&ntn_ctx->conn.dl, &inp->dl);
-	if (result) {
-		IPA_UC_OFFLOAD_ERR("alloc failure on TX\n");
-		goto fail;
-	}
-	result = ipa_uc_ntn_alloc_conn_smmu_info(&ntn_ctx->conn.ul, &inp->ul);
-	if (result) {
-		ipa_uc_ntn_free_conn_smmu_info(&ntn_ctx->conn.dl);
-		IPA_UC_OFFLOAD_ERR("alloc failure on RX\n");
-		goto fail;
+	if (ntn_ctx->conn.dl.smmu_enabled) {
+		result = ipa_uc_ntn_alloc_conn_smmu_info(&ntn_ctx->conn.dl,
+			&inp->dl);
+		if (result) {
+			IPA_UC_OFFLOAD_ERR("alloc failure on TX\n");
+			goto fail;
+		}
+		result = ipa_uc_ntn_alloc_conn_smmu_info(&ntn_ctx->conn.ul,
+			&inp->ul);
+		if (result) {
+			ipa_uc_ntn_free_conn_smmu_info(&ntn_ctx->conn.dl);
+			IPA_UC_OFFLOAD_ERR("alloc failure on RX\n");
+			goto fail;
+		}
 	}
 
 fail:
-	if (!ipa_pm_is_used())
-		ipa_rm_delete_dependency(IPA_RM_RESOURCE_ETHERNET_PROD,
-			IPA_RM_RESOURCE_APPS_CONS);
 	return result;
 }
 
@@ -616,7 +458,7 @@ int ipa_uc_offload_conn_pipes(struct ipa_uc_offload_conn_in_params *inp,
 
 	offload_ctx = ipa_uc_offload_ctx[inp->clnt_hndl];
 	if (!offload_ctx) {
-		IPA_UC_OFFLOAD_ERR("Invalid ctx %d\n", inp->clnt_hndl);
+		IPA_UC_OFFLOAD_ERR("Invalid Handle\n");
 		return -EINVAL;
 	}
 
@@ -625,12 +467,7 @@ int ipa_uc_offload_conn_pipes(struct ipa_uc_offload_conn_in_params *inp,
 		return -EPERM;
 	}
 
-	/*Store the connection info, required during disconnect pipe */
-	memcpy(&offload_ctx->conn, &inp->u.ntn,
-			sizeof(struct ipa_ntn_conn_in_params));
-
 	switch (offload_ctx->proto) {
-	case IPA_UC_NTN_V2X:
 	case IPA_UC_NTN:
 		ret = ipa_uc_ntn_conn_pipes(&inp->u.ntn, &outp->u.ntn,
 						offload_ctx);
@@ -648,41 +485,23 @@ EXPORT_SYMBOL(ipa_uc_offload_conn_pipes);
 
 int ipa_set_perf_profile(struct ipa_perf_profile *profile)
 {
-	struct ipa_rm_perf_profile rm_profile;
-	enum ipa_rm_resource_name resource_name;
-
-	if (profile == NULL) {
+	if (!profile) {
 		IPA_UC_OFFLOAD_ERR("Invalid input\n");
 		return -EINVAL;
 	}
 
-	if (ipa_pm_is_used()) {
-		return ipa_pm_set_throughput(
-				ipa_uc_offload_ctx[profile->proto]->pm_hdl,
-				profile->max_supported_bw_mbps);
-	} else {
-		if (profile->proto == IPA_UC_NTN_V2X) {
-			IPA_UC_OFFLOAD_ERR("not support NTN_v2x for ipa_rm\n");
-			return -EFAULT;
-		}
-	}
-
-	rm_profile.max_supported_bandwidth_mbps =
-		profile->max_supported_bw_mbps;
-
-	if (profile->client == IPA_CLIENT_ETHERNET_PROD) {
-		resource_name = IPA_RM_RESOURCE_ETHERNET_PROD;
-	} else if (profile->client == IPA_CLIENT_ETHERNET_CONS) {
-		resource_name = IPA_RM_RESOURCE_ETHERNET_CONS;
-	} else {
+	if (profile->client != IPA_CLIENT_ETHERNET_PROD &&
+		profile->client != IPA_CLIENT_ETHERNET_CONS) {
 		IPA_UC_OFFLOAD_ERR("not supported\n");
 		return -EINVAL;
 	}
-	if (ipa_rm_set_perf_profile(resource_name, &rm_profile)) {
-		IPA_UC_OFFLOAD_ERR("fail to setup rm perf profile\n");
-		return -EFAULT;
-	}
-	return 0;
+
+	IPA_UC_OFFLOAD_DBG("setting throughput to %d\n",
+		profile->max_supported_bw_mbps);
+
+	return ipa_pm_set_throughput(
+		ipa_uc_offload_ctx[IPA_UC_NTN]->pm_hdl,
+		profile->max_supported_bw_mbps);
 }
 EXPORT_SYMBOL(ipa_set_perf_profile);
 
@@ -697,54 +516,26 @@ static int ipa_uc_ntn_disconn_pipes(struct ipa_uc_offload_ctx *ntn_ctx)
 	}
 
 	ntn_ctx->state = IPA_UC_OFFLOAD_STATE_INITIALIZED;
-
-	if (ipa_pm_is_used()) {
-		ret = ipa_pm_deactivate_sync(ntn_ctx->pm_hdl);
-		if (ret) {
-			IPA_UC_OFFLOAD_ERR("fail to deactivate res: %d\n",
+	ret = ipa_pm_deactivate_sync(ntn_ctx->pm_hdl);
+	if (ret) {
+		IPA_UC_OFFLOAD_ERR("fail to deactivate res: %d\n",
 			ret);
-			return -EFAULT;
-		}
-	} else {
-		/* not support ntn_v2x to use rm */
-		if (ntn_ctx->proto == IPA_UC_NTN_V2X) {
-			IPA_UC_OFFLOAD_ERR("not support NTN_v2x for ipa_rm\n");
-			return -EFAULT;
-		}
-
-		ret = ipa_rm_release_resource(IPA_RM_RESOURCE_ETHERNET_PROD);
-		if (ret) {
-			IPA_UC_OFFLOAD_ERR("fail release ETHERNET_PROD: %d\n",
-							ret);
-			return -EFAULT;
-		}
-
-		ret = ipa_rm_delete_dependency(IPA_RM_RESOURCE_ETHERNET_PROD,
-			IPA_RM_RESOURCE_APPS_CONS);
-		if (ret) {
-			IPA_UC_OFFLOAD_ERR("fail del dep ETH->APPS, %d\n", ret);
-			return -EFAULT;
-		}
+		return -EFAULT;
 	}
 
-	if (ntn_ctx->proto == IPA_UC_NTN_V2X) {
-		ipa_ep_idx_ul = ipa_get_ep_mapping(IPA_CLIENT_ETHERNET2_PROD);
-		ipa_ep_idx_dl = ipa_get_ep_mapping(IPA_CLIENT_ETHERNET2_CONS);
-	} else {
-		ipa_ep_idx_ul = ipa_get_ep_mapping(IPA_CLIENT_ETHERNET_PROD);
-		ipa_ep_idx_dl = ipa_get_ep_mapping(IPA_CLIENT_ETHERNET_CONS);
-	}
+	ipa_ep_idx_ul = ipa_get_ep_mapping(IPA_CLIENT_ETHERNET_PROD);
+	ipa_ep_idx_dl = ipa_get_ep_mapping(IPA_CLIENT_ETHERNET_CONS);
 	ret = ipa_tear_down_uc_offload_pipes(ipa_ep_idx_ul, ipa_ep_idx_dl,
 		&ntn_ctx->conn);
 	if (ret) {
 		IPA_UC_OFFLOAD_ERR("fail to tear down ntn offload pipes, %d\n",
-						 ret);
+			ret);
 		return -EFAULT;
 	}
-	if (ntn_ctx->conn.dl.smmu_enabled)
+	if (ntn_ctx->conn.dl.smmu_enabled) {
 		ipa_uc_ntn_free_conn_smmu_info(&ntn_ctx->conn.dl);
-
-	ipa_uc_ntn_free_conn_smmu_info(&ntn_ctx->conn.ul);
+		ipa_uc_ntn_free_conn_smmu_info(&ntn_ctx->conn.ul);
+	}
 
 	return ret;
 }
@@ -772,7 +563,6 @@ int ipa_uc_offload_disconn_pipes(u32 clnt_hdl)
 	}
 
 	switch (offload_ctx->proto) {
-	case IPA_UC_NTN_V2X:
 	case IPA_UC_NTN:
 		ret = ipa_uc_ntn_disconn_pipes(offload_ctx);
 		break;
@@ -792,19 +582,7 @@ static int ipa_uc_ntn_cleanup(struct ipa_uc_offload_ctx *ntn_ctx)
 	int len, result = 0;
 	struct ipa_ioc_del_hdr *hdr;
 
-	if (ipa_pm_is_used()) {
-		ipa_uc_offload_ntn_deregister_pm_client(ntn_ctx);
-	} else {
-		if (ipa_rm_delete_resource(IPA_RM_RESOURCE_ETHERNET_PROD)) {
-			IPA_UC_OFFLOAD_ERR("fail to delete ETHERNET_PROD\n");
-			return -EFAULT;
-		}
-
-		if (ipa_rm_delete_resource(IPA_RM_RESOURCE_ETHERNET_CONS)) {
-			IPA_UC_OFFLOAD_ERR("fail to delete ETHERNET_CONS\n");
-			return -EFAULT;
-		}
-	}
+	ipa_uc_offload_ntn_deregister_pm_client(ntn_ctx);
 
 	len = sizeof(struct ipa_ioc_del_hdr) + 2 * sizeof(struct ipa_hdr_del);
 	hdr = kzalloc(len, GFP_KERNEL);
@@ -859,13 +637,6 @@ int ipa_uc_offload_cleanup(u32 clnt_hdl)
 	case IPA_UC_NTN:
 		ret = ipa_uc_ntn_cleanup(offload_ctx);
 		break;
-	case IPA_UC_NTN_V2X:
-		/* only clean-up pm_handle */
-		if (ipa_pm_is_used())
-			ipa_uc_offload_ntn_deregister_pm_client(offload_ctx);
-		else
-			IPA_UC_OFFLOAD_ERR("Not support uc_ntn_v2x ipa_rm\n");
-		break;
 
 	default:
 		IPA_UC_OFFLOAD_ERR("Invalid Proto :%d\n", clnt_hdl);
@@ -901,7 +672,7 @@ int ipa_uc_offload_reg_rdyCB(struct ipa_uc_ready_params *inp)
 		return -EINVAL;
 	}
 
-	if (inp->proto == IPA_UC_NTN || inp->proto == IPA_UC_NTN_V2X)
+	if (inp->proto == IPA_UC_NTN)
 		ret = ipa_ntn_uc_reg_rdyCB(inp->notify, inp->priv);
 
 	if (ret == -EEXIST) {
@@ -916,7 +687,7 @@ EXPORT_SYMBOL(ipa_uc_offload_reg_rdyCB);
 
 void ipa_uc_offload_dereg_rdyCB(enum ipa_uc_offload_proto proto)
 {
-	if (proto == IPA_UC_NTN || proto == IPA_UC_NTN_V2X)
+	if (proto == IPA_UC_NTN)
 		ipa_ntn_uc_dereg_rdyCB();
 }
 EXPORT_SYMBOL(ipa_uc_offload_dereg_rdyCB);

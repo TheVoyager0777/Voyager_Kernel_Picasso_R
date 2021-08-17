@@ -1,16 +1,8 @@
-/*
- * Copyright (c) 2016, Linaro Ltd
- * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
  */
+
+#define pr_fmt(fmt) "%s: " fmt, __func__
 
 #include <linux/delay.h>
 #include <linux/interrupt.h>
@@ -25,15 +17,15 @@
 
 #include "qrtr.h"
 
-#define FIFO_MAGIC_KEY 0x24495043 /* "$IPC" */
-#define FIFO_SIZE 0x4000
-#define FIFO_0_START 0x1000
-#define FIFO_1_START (FIFO_0_START + FIFO_SIZE)
-#define FIFO_MAGIC_IDX 0x0
-#define TAIL_0_IDX 0x1
-#define HEAD_0_IDX 0x2
-#define TAIL_1_IDX 0x3
-#define HEAD_1_IDX 0x4
+#define FIFO_MAGIC_KEY	0x24495043 /* "$IPC" */
+#define FIFO_SIZE	0x4000
+#define FIFO_0_START	0x1000
+#define FIFO_1_START	(FIFO_0_START + FIFO_SIZE)
+#define FIFO_MAGIC_IDX	0x0
+#define TAIL_0_IDX	0x1
+#define HEAD_0_IDX	0x2
+#define TAIL_1_IDX	0x3
+#define HEAD_1_IDX	0x4
 
 struct fifo_pipe {
 	__le32 *tail;
@@ -117,8 +109,8 @@ static size_t fifo_tx_avail(struct fifo_pipe *pipe)
 	u32 tail;
 	u32 avail;
 
-	 head = le32_to_cpu(*pipe->head);
-	 tail = le32_to_cpu(*pipe->tail);
+	head = le32_to_cpu(*pipe->head);
+	tail = le32_to_cpu(*pipe->tail);
 
 	if (tail <= head)
 		avail = pipe->length - head + tail;
@@ -167,7 +159,6 @@ static int xprt_write(struct qrtr_endpoint *ep, struct sk_buff *skb)
 		return rc;
 	}
 
-	/* TODO: FIFO write : check if we can write full packet at one shot */
 	if (fifo_tx_avail(&xprtp->tx_pipe) < skb->len) {
 		pr_err("No Space in FIFO\n");
 		return -EAGAIN;
@@ -193,9 +184,8 @@ static void xprt_read_data(struct qrtr_fifo_xprt *xprtp)
 	while (fifo_rx_avail(&xprtp->rx_pipe)) {
 		fifo_rx_peak(&xprtp->rx_pipe, &hdr, 0, hdr_len);
 		pkt_len = qrtr_peek_pkt_size((void *)&hdr);
-
-		if (pkt_len < 0) {
-			pr_err("%s invalid pkt_len %zu\n", __func__, pkt_len);
+		if ((int)pkt_len < 0) {
+			pr_err("invalid pkt_len %zu\n", pkt_len);
 			break;
 		}
 
@@ -205,8 +195,8 @@ static void xprt_read_data(struct qrtr_fifo_xprt *xprtp)
 
 		rx_avail = fifo_rx_avail(&xprtp->rx_pipe);
 		if (rx_avail < pkt_len) {
-			pr_err("%s Not FULL pkt in FIFO %zu %zu\n",
-			       __func__, rx_avail, pkt_len);
+			pr_err_ratelimited("Not FULL pkt in FIFO %zu %zu\n",
+					   rx_avail, pkt_len);
 			break;
 		}
 
@@ -215,7 +205,7 @@ static void xprt_read_data(struct qrtr_fifo_xprt *xprtp)
 
 		rc = qrtr_endpoint_post(&xprtp->ep, data, pkt_len);
 		if (rc == -EINVAL)
-			pr_err("%s invalid ipcrouter packet\n", __func__);
+			pr_err("invalid ipcrouter packet\n");
 		kfree(data);
 		data = NULL;
 	}
@@ -243,7 +233,7 @@ static irqreturn_t qrtr_fifo_virq_handler(int irq, void *dev_id)
  * This function is called to initialize the FIFO XPRT pointer with
  * the FIFO XPRT configurations either from device tree or static arrays.
  */
-static int qrtr_fifo_config_init(struct qrtr_fifo_xprt *xprtp)
+static void qrtr_fifo_config_init(struct qrtr_fifo_xprt *xprtp)
 {
 	__le32 *descs;
 
@@ -275,8 +265,6 @@ static int qrtr_fifo_config_init(struct qrtr_fifo_xprt *xprtp)
 	/* Reset respective index */
 	*xprtp->tx_pipe.head = 0;
 	*xprtp->rx_pipe.tail = 0;
-
-	return 0;
 }
 
 /**
@@ -327,31 +315,30 @@ static int qrtr_fifo_xprt_probe(struct platform_device *pdev)
 		return -ENODEV;
 
 	ipc_shm_dev = of_find_device_by_node(ipc_shm_np);
-	if (!ipc_shm_dev)
+	if (!ipc_shm_dev) {
+		of_node_put(ipc_shm_np);
 		return -ENODEV;
+	}
 
 	r = platform_get_resource(ipc_shm_dev, IORESOURCE_MEM, 0);
 	if (!r) {
-		pr_err("%s failed to get shared FIFO\n", __func__);
+		pr_err("failed to get shared FIFO\n");
+		of_node_put(ipc_shm_np);
 		return -ENODEV;
 	}
 
 	xprtp->tx_fifo_idx = of_property_read_bool(ipc_shm_np,
 						   "qcom,tx-is-first");
+	of_node_put(ipc_shm_np);
 
 	xprtp->fifo_size = resource_size(r);
 	xprtp->fifo_base = devm_ioremap_nocache(&pdev->dev, r->start,
 						resource_size(r));
 	if (!xprtp->fifo_base) {
-		pr_err("%s ioreamp_nocache() failed\n", __func__);
+		pr_err("ioreamp_nocache() failed\n");
 		return -ENOMEM;
 	}
-
-	ret = qrtr_fifo_config_init(xprtp);
-	if (ret) {
-		pr_err("%s init failed ret[%d]\n", __func__, ret);
-		return ret;
-	}
+	qrtr_fifo_config_init(xprtp);
 
 	xprtp->ep.xmit = xprt_write;
 	ret = qrtr_endpoint_register(&xprtp->ep, QRTR_EP_NID_AUTO, false);
@@ -373,7 +360,6 @@ static struct platform_driver qrtr_fifo_xprt_driver = {
 	.probe = qrtr_fifo_xprt_probe,
 	.driver = {
 		.name = "qcom_fifo_qrtr",
-		.owner = THIS_MODULE,
 		.of_match_table = qrtr_fifo_xprt_match_table,
 	 },
 };
@@ -384,7 +370,7 @@ static int __init qrtr_fifo_xprt_init(void)
 
 	rc = platform_driver_register(&qrtr_fifo_xprt_driver);
 	if (rc) {
-		pr_err("%s: driver register failed %d\n", __func__, rc);
+		pr_err("driver register failed %d\n", rc);
 		return rc;
 	}
 

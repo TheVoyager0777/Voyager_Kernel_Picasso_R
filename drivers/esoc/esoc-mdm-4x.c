@@ -1,13 +1,7 @@
-/* Copyright (c) 2014-2015, 2017-2018, 2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2014-2015, 2017-2019, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #include <linux/coresight.h>
@@ -16,6 +10,12 @@
 #include <linux/sched/clock.h>
 #include <soc/qcom/sysmon.h>
 #include "esoc-mdm.h"
+#include <linux/seq_file.h>
+#include <linux/proc_fs.h>
+
+#define MAX_SSR_REASON_LEN	130U
+static char last_modem_sfr_reason[MAX_SSR_REASON_LEN] = "none";
+static struct proc_dir_entry *last_modem_sfr_entry;
 
 enum gpio_update_config {
 	GPIO_UPDATE_BOOTING_CONFIG = 1,
@@ -392,7 +392,10 @@ static void mdm_get_restart_reason(struct work_struct *work)
 		esoc_mdm_log("restart reason not obtained. err: %d\n", ret);
 		dev_dbg(dev, "%s: Error retrieving restart reason: %d\n",
 						__func__, ret);
-	}
+	} else {
+	    strlcpy(last_modem_sfr_reason, sfr_buf, MAX_SSR_REASON_LEN);
+	    pr_err("modem subsystem failure reason: %s.\n", last_modem_sfr_reason);
+    }
 	mdm->get_restart_reason = false;
 }
 
@@ -563,6 +566,7 @@ static irqreturn_t mdm_status_change(int irq, void *dev_id)
 		cancel_delayed_work(&mdm->mdm2ap_status_check_work);
 		dev_dbg(dev, "status = 1: mdm is now ready\n");
 		mdm->ready = true;
+		esoc_clink_evt_notify(ESOC_BOOT_STATE, esoc);
 		mdm_trigger_dbg(mdm);
 		queue_work(mdm->mdm_queue, &mdm->mdm_status_work);
 		if (mdm->get_restart_reason)
@@ -1051,43 +1055,103 @@ err_destroy_wrkq:
 	return ret;
 }
 
-static int sdxprairie_setup_hw(struct mdm_ctrl *mdm,
+static int sdx55m_setup_hw(struct mdm_ctrl *mdm,
 					const struct mdm_ops *ops,
 					struct platform_device *pdev)
 {
 	int ret;
+	struct device_node *node;
+	struct esoc_clink *esoc;
+	const struct esoc_clink_ops *const clink_ops = ops->clink_ops;
+	const struct mdm_pon_ops *pon_ops = ops->pon_ops;
 
-	/* Same configuration as that of sdx50, except for the name */
-	ret = sdx50m_setup_hw(mdm, ops, pdev);
-	if (ret) {
-		dev_err(mdm->dev, "Hardware setup failed for sdxprairie\n");
-		esoc_mdm_log("Hardware setup failed for sdxprairie\n");
-		return ret;
+	mdm->dev = &pdev->dev;
+	mdm->pon_ops = pon_ops;
+	node = pdev->dev.of_node;
+
+	esoc = devm_kzalloc(mdm->dev, sizeof(*esoc), GFP_KERNEL);
+	if (IS_ERR_OR_NULL(esoc)) {
+		dev_err(mdm->dev, "cannot allocate esoc device\n");
+		return PTR_ERR(esoc);
+	}
+	esoc->pdev = pdev;
+
+	mdm->mdm_queue = alloc_workqueue("mdm_queue", 0, 0);
+	if (!mdm->mdm_queue) {
+		dev_err(mdm->dev, "could not create mdm_queue\n");
+		return -ENOMEM;
 	}
 
-	mdm->esoc->name = SDXPRAIRIE_LABEL;
-	esoc_mdm_log("Hardware setup done for sdxprairie\n");
+	mdm->irq_mask = 0;
+	mdm->ready = false;
 
-	return ret;
-}
-
-static int marmot_setup_hw(struct mdm_ctrl *mdm,
-					const struct mdm_ops *ops,
-					struct platform_device *pdev)
-{
-	int ret;
-
-	/* Same configuration as that of sdx50, except for the name */
-	ret = sdx50m_setup_hw(mdm, ops, pdev);
+	ret = mdm_dt_parse_gpios(mdm);
 	if (ret) {
-		dev_err(mdm->dev, "Hardware setup failed for marmot\n");
-		esoc_mdm_log("Hardware setup failed for marmot\n");
-		return ret;
+		esoc_mdm_log("Failed to parse DT gpios\n");
+		dev_err(mdm->dev, "Failed to parse DT gpios\n");
+		goto err_destroy_wrkq;
 	}
 
-	mdm->esoc->name = MARMOT_LABEL;
-	esoc_mdm_log("Hardware setup done for marmot\n");
+	ret = mdm_pinctrl_init(mdm);
+	if (ret) {
+		esoc_mdm_log("Failed to init pinctrl\n");
+		dev_err(mdm->dev, "Failed to init pinctrl\n");
+		goto err_destroy_wrkq;
+	}
 
+	ret = mdm_configure_ipc(mdm, pdev);
+	if (ret) {
+		esoc_mdm_log("Failed to configure the ipc\n");
+		dev_err(mdm->dev, "Failed to configure the ipc\n");
+		goto err_release_ipc;
+	}
+
+	esoc->name = SDX55M_LABEL;
+	mdm->dual_interface = of_property_read_bool(node,
+						"qcom,mdm-dual-link");
+	esoc->link_name = SDX55M_PCIE;
+	ret = of_property_read_string(node, "qcom,mdm-link-info",
+					&esoc->link_info);
+	if (ret)
+		dev_info(mdm->dev, "esoc link info missing\n");
+
+	mdm->skip_restart_for_mdm_crash = of_property_read_bool(node,
+				"qcom,esoc-skip-restart-for-mdm-crash");
+
+	esoc->clink_ops = clink_ops;
+	esoc->parent = mdm->dev;
+	esoc->owner = THIS_MODULE;
+	esoc->np = pdev->dev.of_node;
+	set_esoc_clink_data(esoc, mdm);
+
+	ret = esoc_clink_register(esoc);
+	if (ret) {
+		esoc_mdm_log("esoc registration failed\n");
+		dev_err(mdm->dev, "esoc registration failed\n");
+		goto err_free_irq;
+	}
+	dev_dbg(mdm->dev, "esoc registration done\n");
+	esoc_mdm_log("Done configuring the GPIOs and esoc registration\n");
+
+	init_completion(&mdm->debug_done);
+	INIT_WORK(&mdm->mdm_status_work, mdm_status_fn);
+	INIT_WORK(&mdm->restart_reason_work, mdm_get_restart_reason);
+	INIT_DELAYED_WORK(&mdm->mdm2ap_status_check_work, mdm2ap_status_check);
+	mdm->get_restart_reason = false;
+	mdm->debug_fail = false;
+	mdm->esoc = esoc;
+	mdm->init = 0;
+
+	mdm_debug_gpio_ipc_log(mdm);
+
+	return 0;
+
+err_free_irq:
+	mdm_free_irq(mdm);
+err_release_ipc:
+	mdm_release_ipc_gpio(mdm);
+err_destroy_wrkq:
+	destroy_workqueue(mdm->mdm_queue);
 	return ret;
 }
 
@@ -1110,16 +1174,10 @@ static struct mdm_ops sdx50m_ops = {
 	.pon_ops = &sdx50m_pon_ops,
 };
 
-static struct mdm_ops sdxprairie_ops = {
+static struct mdm_ops sdx55m_ops = {
 	.clink_ops = &mdm_cops,
-	.config_hw = sdxprairie_setup_hw,
-	.pon_ops = &sdx50m_pon_ops,
-};
-
-static struct mdm_ops marmot_ops = {
-	.clink_ops = &mdm_cops,
-	.config_hw = marmot_setup_hw,
-	.pon_ops = &sdxmarmot_pon_ops,
+	.config_hw = sdx55m_setup_hw,
+	.pon_ops = &sdx55m_pon_ops,
 };
 
 static const struct of_device_id mdm_dt_match[] = {
@@ -1127,10 +1185,8 @@ static const struct of_device_id mdm_dt_match[] = {
 		.data = &mdm9x55_ops, },
 	{ .compatible = "qcom,ext-sdx50m",
 		.data = &sdx50m_ops, },
-	{ .compatible = "qcom,ext-sdxprairie",
-		.data = &sdxprairie_ops, },
-	{ .compatible = "qcom,ext-marmot",
-		.data = &marmot_ops, },
+	{ .compatible = "qcom,ext-sdx55m",
+		.data = &sdx55m_ops, },
 	{},
 };
 MODULE_DEVICE_TABLE(of, mdm_dt_match);
@@ -1162,6 +1218,25 @@ static int mdm_probe(struct platform_device *pdev)
 	return ret;
 }
 
+static int last_modem_sfr_proc_show(struct seq_file *m, void *v)
+{
+	seq_printf(m, "%s\n", last_modem_sfr_reason);
+	return 0;
+}
+
+static int last_modem_sfr_proc_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, last_modem_sfr_proc_show, NULL);
+}
+
+static const struct file_operations last_modem_sfr_file_ops = {
+	.owner   = THIS_MODULE,
+	.open    = last_modem_sfr_proc_open,
+	.read    = seq_read,
+	.llseek  = seq_lseek,
+	.release = single_release,
+};
+
 static struct platform_driver mdm_driver = {
 	.probe		= mdm_probe,
 	.driver = {
@@ -1173,12 +1248,20 @@ static struct platform_driver mdm_driver = {
 
 static int __init mdm_register(void)
 {
+	last_modem_sfr_entry = proc_create("last_mcrash", S_IFREG | S_IRUGO, NULL, &last_modem_sfr_file_ops);
+	if (!last_modem_sfr_entry) {
+		printk(KERN_ERR "pil: cannot create proc entry last_mcrash\n");
+	}
 	return platform_driver_register(&mdm_driver);
 }
 module_init(mdm_register);
 
 static void __exit mdm_unregister(void)
 {
+	if (last_modem_sfr_entry) {
+		remove_proc_entry("last_mcrash", NULL);
+		last_modem_sfr_entry = NULL;
+	}
 	platform_driver_unregister(&mdm_driver);
 }
 module_exit(mdm_unregister);

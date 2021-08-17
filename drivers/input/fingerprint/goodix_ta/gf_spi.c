@@ -47,7 +47,7 @@
 #include <linux/pm_wakeup.h>
 #include <drm/drm_bridge.h>
 #ifndef GOODIX_DRM_INTERFACE_WA
-#include <linux/msm_drm_notify.h>
+#include <drm/drm_notifier_mi.h>
 #endif
 
 #include "gf_spi.h"
@@ -82,7 +82,7 @@ static int SPIDEV_MAJOR;
 static DECLARE_BITMAP(minors, N_SPI_MINORS);
 static LIST_HEAD(device_list);
 static DEFINE_MUTEX(device_list_lock);
-static struct wakeup_source fp_wakelock;
+static struct wakeup_source *fp_wakelock = NULL;
 static struct gf_dev gf;
 
 struct gf_key_map maps[] = {
@@ -551,7 +551,8 @@ static irqreturn_t gf_irq(int irq, void *handle)
 	uint32_t key_input = 0;
 	temp[0] = GF_NET_EVENT_IRQ;
 	pr_debug("%s enter\n", __func__);
-	__pm_wakeup_event(&fp_wakelock, WAKELOCK_HOLD_TIME);
+	if(fp_wakelock != NULL)
+		__pm_wakeup_event(fp_wakelock, WAKELOCK_HOLD_TIME);
 	sendnlmsg(temp);
 
 	if ((gf_dev->wait_finger_down == true) && (gf_dev->device_available == 1) &&
@@ -618,6 +619,7 @@ static int gf_open(struct inode *inode, struct file *filp)
 #endif
 
 	if (status == 0) {
+#ifdef GF_PW_CTL
 		rc = gpio_request(gf_dev->pwr_gpio, "goodix_pwr");
 
 		if (rc) {
@@ -626,6 +628,7 @@ static int gf_open(struct inode *inode, struct file *filp)
 			err = -EPERM;
 			goto open_error1;
 		}
+#endif
 
 		rc = gpio_request(gf_dev->reset_gpio, "gpio-reset");
 
@@ -721,7 +724,9 @@ static int gf_release(struct inode *inode, struct file *filp)
 		gpio_free(gf_dev->irq_gpio);
 		gpio_free(gf_dev->reset_gpio);
 		gf_power_off(gf_dev);
+#ifdef GF_PW_CTL
 		gpio_free(gf_dev->pwr_gpio);
+#endif
 	}
 
 	mutex_unlock(&device_list_lock);
@@ -751,11 +756,11 @@ static int goodix_fb_state_chg_callback(struct notifier_block *nb,
 					unsigned long val, void *data)
 {
 	struct gf_dev *gf_dev;
-	struct msm_drm_notifier *evdata = data;
+	struct fb_event *evdata = data;
 	unsigned int blank;
 	char temp[4] = { 0x0 };
 
-	if (val != MSM_DRM_EVENT_BLANK) {
+	if (val != MI_DRM_EVENT_BLANK) {
 		return 0;
 	}
 
@@ -763,11 +768,11 @@ static int goodix_fb_state_chg_callback(struct notifier_block *nb,
 		 __func__, (int)val);
 	gf_dev = container_of(nb, struct gf_dev, notifier);
 
-	if (evdata && evdata->data && val == MSM_DRM_EVENT_BLANK && gf_dev) {
+	if (evdata && evdata->data && val == MI_DRM_EVENT_BLANK && gf_dev) {
 		blank = *(int *)(evdata->data);
 
 		switch (blank) {
-			case MSM_DRM_BLANK_POWERDOWN:
+			case MI_DRM_BLANK_POWERDOWN:
 				if (gf_dev->device_available == 1) {
 					gf_dev->fb_black = 1;
 					gf_dev->wait_finger_down = true;
@@ -784,7 +789,7 @@ static int goodix_fb_state_chg_callback(struct notifier_block *nb,
 				}
 				break;
 
-			case MSM_DRM_BLANK_UNBLANK:
+			case MI_DRM_BLANK_UNBLANK:
 				if (gf_dev->device_available == 1) {
 					gf_dev->fb_black = 0;
 #if defined(GF_NETLINK_ENABLE)
@@ -914,12 +919,18 @@ static int gf_probe(struct platform_device *pdev)
 #endif
 #ifndef GOODIX_DRM_INTERFACE_WA
 	gf_dev->notifier = goodix_noti_block;
-	msm_drm_register_client(&gf_dev->notifier);
+	mi_drm_register_client(&gf_dev->notifier);
 #endif
 	gf_dev->irq = gf_irq_num(gf_dev);
-	wakeup_source_init(&fp_wakelock, "fp_wakelock");
+        fp_wakelock = wakeup_source_register(&gf_dev->spi->dev, "fp_wakelock");
+	if(fp_wakelock==NULL)
+		goto error_wakelock;
 	pr_debug("version V%d.%d.%02d\n", VER_MAJOR, VER_MINOR, PATCH_LEVEL);
 	return status;
+
+error_wakelock:
+	pr_debug("create fp wakelock failed.\n");
+
 #ifdef AP_CONTROL_CLK
 gfspi_probe_clk_enable_failed:
 	gfspi_ioctl_clk_uninit(gf_dev);
@@ -956,7 +967,8 @@ static int gf_remove(struct platform_device *pdev)
 #endif
 {
 	struct gf_dev *gf_dev = &gf;
-	wakeup_source_trash(&fp_wakelock);
+	wakeup_source_unregister(fp_wakelock);
+	fp_wakelock = NULL;
 
 	/* make sure ops on existing fds can abort cleanly */
 	if (gf_dev->irq) {
@@ -979,7 +991,7 @@ static int gf_remove(struct platform_device *pdev)
 	}
 
 #ifndef GOODIX_DRM_INTERFACE_WA
-	msm_drm_unregister_client(&gf_dev->notifier);
+	mi_drm_unregister_client(&gf_dev->notifier);
 #endif
 	mutex_unlock(&device_list_lock);
 	return 0;

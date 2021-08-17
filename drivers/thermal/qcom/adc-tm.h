@@ -1,15 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
- *
- * This software is licensed under the terms of the GNU General Public
- * License version 2, as published by the Free Software Foundation, and
- * may be copied, distributed, and modified under those terms.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
+
 #ifndef __QCOM_ADC_TM_H__
 #define __QCOM_ADC_TM_H__
 
@@ -22,7 +15,7 @@
 #include <linux/qpnp/qpnp-revid.h>
 #include <linux/adc-tm-clients.h>
 
-#define ADC_TM_DECIMATION_DEFAULT	840
+#define ADC_TM_DECIMATION_DEFAULT	2
 #define ADC_TM_DECIMATION_SAMPLES_MAX	3
 #define ADC_TM_DEF_AVG_SAMPLES		0 /* 1 sample */
 #define ADC_TM_DEF_HW_SETTLE_TIME	0 /* 15 us */
@@ -32,7 +25,13 @@
 #define ADC_TM_TIMER2			10 /* 1 second */
 #define ADC_TM_TIMER3			4 /* 4 second */
 #define ADC_HC_VDD_REF			1875000
-#define MAX_PROP_NAME_LEN					32
+#define MAX_PROP_NAME_LEN		32
+#define R_PU_100K			100000
+#define RATIO_MAX_ADC7			0x4000
+#define MAX_CODE_VOLT			0x70e4
+#define ADC_CHANNEL_OFFSET		8
+#define V_CHAN(x)		(((x).sid << ADC_CHANNEL_OFFSET) | (x).adc_ch)
+#define ADC_CHANNEL_MASK		0xff
 
 enum adc_cal_method {
 	ADC_NO_CAL = 0,
@@ -52,6 +51,14 @@ enum adc_timer_select {
 	ADC_TIMER_SEL_2,
 	ADC_TIMER_SEL_3,
 	ADC_TIMER_SEL_NONE,
+};
+
+enum adc_time_select {
+	MEAS_INT_50MS = 0,
+	MEAS_INT_100MS,
+	MEAS_INT_1S,
+	MEAS_INT_SET,
+	MEAS_INT_NONE,
 };
 
 /**
@@ -80,12 +87,21 @@ struct adc_tm_sensor {
 	unsigned int			btm_ch;
 	unsigned int			prescaling;
 	unsigned int			timer_select;
+	unsigned int			decimation;		/* PMIC7 */
+	unsigned int			fast_avg_samples;	/* PMIC7 */
+	unsigned int			sid;			/* PMIC7 */
+	unsigned int			meas_time;		/* PMIC7 */
+	int64_t				high_thr_voltage;	/* PMIC7 */
+	int64_t				low_thr_voltage;	/* PMIC7 */
 	enum adc_tm_rscale_fn_type	adc_rscale_fn;
 	struct iio_channel		*adc;
 	struct list_head		thr_list;
-	bool					non_thermal;
+	bool				non_thermal;
 	bool				high_thr_triggered;
 	bool				low_thr_triggered;
+	int				high_thr_en;		/* PMIC7 */
+	int				low_thr_en;		/* PMIC7 */
+	int				meas_en;		/* PMIC7 */
 	struct workqueue_struct		*req_wq;
 	struct work_struct		work;
 };
@@ -111,11 +127,17 @@ struct adc_tm_cmn_prop {
 };
 
 struct adc_tm_ops {
-	int (*get_temp)(struct adc_tm_sensor *, int *);
-	int (*init)(struct adc_tm_chip *, uint32_t);
-	int (*set_trips)(struct adc_tm_sensor *, int, int);
-	int (*interrupts_reg)(struct adc_tm_chip *);
-	int (*shutdown)(struct adc_tm_chip *);
+	int (*get_temp)(struct adc_tm_sensor *sensor, int *temp);
+	int (*init)(struct adc_tm_chip *chip, uint32_t dt_chans);
+	int (*set_trips)(struct adc_tm_sensor *sensor, int low_temp,
+							int high_temp);
+	int32_t (*channel_measure)(struct adc_tm_chip *chip,
+					struct adc_tm_param *param);
+	int32_t (*disable_chan)(struct adc_tm_chip *chip,
+					struct adc_tm_param *param);
+	void (*notify)(struct adc_tm_sensor *adc_tm);
+	int (*interrupts_reg)(struct adc_tm_chip *chip);
+	int (*shutdown)(struct adc_tm_chip *chip);
 };
 
 struct adc_tm_chip {
@@ -141,7 +163,9 @@ struct adc_tm_data {
 };
 
 extern const struct adc_tm_data data_adc_tm5;
+extern const struct adc_tm_data data_adc_tm7;
 extern const struct adc_tm_data data_adc_tm_rev2;
+
 /**
  * Channel index for the corresponding index to adc_tm_channel_select
  */
@@ -233,8 +257,12 @@ struct adc_tm_config {
  *	which takes the adc properties and returns the physical result
  */
 struct adc_tm_reverse_scale_fn {
-	int32_t (*chan)(const struct adc_tm_data *,
-		struct adc_tm_config *);
+	int32_t (*chan)(const struct adc_tm_data *data,
+		struct adc_tm_config *tm_config);
+};
+
+struct adc_tm_reverse_scale_fn_adc7 {
+	int32_t (*chan)(struct adc_tm_config *tm_config);
 };
 
 /**
@@ -272,7 +300,11 @@ void adc_tm_scale_therm_voltage_100k(struct adc_tm_config *param,
 int32_t adc_tm_absolute_rthr(const struct adc_tm_data *data,
 			struct adc_tm_config *tm_config);
 
-void notify_adc_tm_fn(struct work_struct *work);
+int therm_fwd_scale_adc7(int64_t code);
+
+void adc_tm_scale_therm_voltage_100k_adc7(struct adc_tm_config *param);
+
+int32_t adc_tm_absolute_rthr_adc7(struct adc_tm_config *tm_config);
 
 int adc_tm_is_valid(struct adc_tm_chip *chip);
 

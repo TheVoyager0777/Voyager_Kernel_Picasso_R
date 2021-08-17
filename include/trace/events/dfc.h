@@ -1,13 +1,5 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
  */
 
 #undef TRACE_SYSTEM
@@ -157,8 +149,7 @@ TRACE_EVENT(dfc_client_state_up,
 		__entry->iface = iface;
 	),
 
-	TP_printk("Client[%d]: Connection established with DFC Service "
-		  "instance=%u ep_type=%u iface_id=%u",
+	TP_printk("DFC Client[%d] connect: instance=%u ep_type=%u iface_id=%u",
 		__entry->idx, __entry->instance,
 		__entry->ep_type, __entry->iface)
 );
@@ -179,8 +170,7 @@ TRACE_EVENT(dfc_client_state_down,
 		__entry->from_cb = from_cb;
 	),
 
-	TP_printk("Client[%d]: Connection with DFC service lost. "
-		  "Exit by callback %d",
+	TP_printk("DFC Client[%d] exit: callback %d",
 		  __entry->idx, __entry->from_cb)
 );
 

@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2013-2017, The Linux Foundation. All rights reserved.
+ * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -136,11 +137,10 @@ struct rdbg_device {
 
 int registers[32] = {0};
 static struct rdbg_device g_rdbg_instance = {
-	{ {0} },
-	NULL,
-	0,
-	SMP2P_NUM_PROCS,
-	NULL
+	.class = NULL,
+	.dev_no = 0,
+	.num_devices = SMP2P_NUM_PROCS,
+	.rdbg_data = NULL,
 };
 
 struct processor_specific_info {
@@ -841,7 +841,8 @@ static int rdbg_open(struct inode *inode, struct file *filp)
 	init_completion(&rdbgdata->work);
 
 	err = request_threaded_irq(rdbgdata->in.irq_base_id, NULL,
-	      on_interrupt_from, IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING,
+	      on_interrupt_from,
+	      IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING | IRQF_ONESHOT,
 	      proc_info[device_id].name, (void *)&device->rdbg_data[device_id]);
 	if (err) {
 		dev_err(rdbgdata->device,
@@ -861,7 +862,7 @@ static int rdbg_open(struct inode *inode, struct file *filp)
 		goto smq_bail;
 	}
 
-	rdbgdata->device_opened = 1;
+	rdbgdata->device_opened = true;
 
 	filp->private_data = (void *)rdbgdata;
 	return 0;
@@ -890,10 +891,10 @@ static int rdbg_release(struct inode *inode, struct file *filp)
 	device_id = MINOR(inode->i_rdev);
 	rdbgdata = &rdbgdevice->rdbg_data[device_id];
 
-	if (rdbgdata->device_opened == 1) {
+	if (rdbgdata->device_opened) {
 		dev_dbg(rdbgdata->device, "%s: Destroying %s.\n", __func__,
 			proc_info[device_id].name);
-		rdbgdata->device_opened = 0;
+		rdbgdata->device_opened = false;
 		complete(&(rdbgdata->work));
 		if (rdbgdevice->rdbg_data[device_id].producer_smrb.initialized)
 			smq_dtor(&(
@@ -920,7 +921,7 @@ static ssize_t rdbg_read(struct file *filp, char __user *buf, size_t size,
 	int more = 0;
 
 	if (!rdbgdata) {
-		pr_err("Invalid argument");
+		pr_err("Invalid argument\n");
 		err = -EINVAL;
 		goto bail;
 	}
@@ -966,7 +967,7 @@ static ssize_t rdbg_write(struct file *filp, const char __user *buf,
 	struct rdbg_data *rdbgdata = filp->private_data;
 
 	if (!rdbgdata) {
-		pr_err("Invalid argument");
+		pr_err("Invalid argument\n");
 		err = -EINVAL;
 		goto bail;
 	}
@@ -1096,7 +1097,6 @@ static struct platform_driver rdbg_driver = {
 	.probe = rdbg_probe,
 	.driver = {
 		.name = "rdbg",
-		.owner = THIS_MODULE,
 		.of_match_table = rdbg_match_table,
 	},
 };
@@ -1157,7 +1157,7 @@ static int __init rdbg_init(void)
 			pr_err("Error in device_create\n");
 			goto device_bail;
 		}
-		rdbgdevice->rdbg_data[minor].device_initialized = 1;
+		rdbgdevice->rdbg_data[minor].device_initialized = true;
 		minor_nodes_created++;
 		dev_dbg(rdbgdevice->rdbg_data[minor].device,
 			"%s: created /dev/%s c %d %d'\n", __func__,

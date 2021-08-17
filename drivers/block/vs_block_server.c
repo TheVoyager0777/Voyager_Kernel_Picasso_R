@@ -29,6 +29,7 @@
 #include <vservices/protocol/block/client.h>
 #include <vservices/service.h>
 #include <vservices/wait.h>
+#include "../drivers/md/bcache/util.c"
 
 #define VS_BLOCK_BLKDEV_DEFAULT_MODE FMODE_READ
 /* Must match Linux bio sector_size (512 bytes) */
@@ -599,7 +600,7 @@ static int vs_block_submit_read(struct block_server *server,
 			size -= bvec->bv_len;
 		}
 
-		err = bio_alloc_pages(bio, gfp);
+		err = bch_bio_alloc_pages(bio, gfp);
 		if (!err) {
 			blk_recount_segments(q, bio);
 			req->bounced = true;
@@ -689,7 +690,7 @@ static int vs_block_submit_bounced_write(struct block_server *server,
 	struct bio_vec *bv;
 	int i;
 
-	if (bio_alloc_pages(bio, gfp | __GFP_NOWARN) < 0)
+	if (bch_bio_alloc_pages(bio, gfp | __GFP_NOWARN) < 0)
 		return -ENOMEM;
 	blk_recount_segments(bdev_get_queue(server->bdev), bio);
 	req->bounced = true;
@@ -1043,12 +1044,15 @@ vs_block_server_alloc(struct vs_service_device *service)
 	 * 4 in all mainline kernels). That possibility is the only reason we
 	 * can't enable rx_atomic for this driver.
 	 */
-	server->bioset = bioset_create(min_t(unsigned, service->recv_quota,
-		VSERVICE_BLOCK_IO_READ_MAX_PENDING +
-		VSERVICE_BLOCK_IO_WRITE_MAX_PENDING),
-		offsetof(struct block_server_request, bio), BIOSET_NEED_BVECS);
+	server->bioset = kzalloc(sizeof(struct bio_set), GFP_KERNEL);
+	if (!server->bioset)
+		goto fail_create_bioset;
 
-	if (!server->bioset) {
+	err = bioset_init(server->bioset, min_t(unsigned, service->recv_quota,
+				VSERVICE_BLOCK_IO_READ_MAX_PENDING +
+				VSERVICE_BLOCK_IO_WRITE_MAX_PENDING),
+			offsetof(struct block_server_request, bio), BIOSET_NEED_BVECS);
+	if (err) {
 		dev_err(&service->dev,
 			"Failed to allocate bioset for service %s\n",
 			service->name);
@@ -1083,7 +1087,7 @@ static void vs_block_server_release(struct vs_server_block_state *state)
 	sysfs_remove_group(&server->service->dev.kobj,
 			   &vs_block_server_attr_group);
 
-	bioset_free(server->bioset);
+	bioset_exit(server->bioset);
 
 	kfree(server);
 }

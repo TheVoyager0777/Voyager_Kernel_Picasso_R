@@ -1,4 +1,5 @@
-/* Copyright (c) 2012-2016, 2018-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2016, 2018-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -184,13 +185,11 @@ inline int msm_jpeg_q_in_buf(struct msm_jpeg_q *q_p,
 	struct msm_jpeg_core_buf *buf_p;
 
 	JPEG_DBG("%s:%d]\n", __func__, __LINE__);
-	buf_p = kmalloc(sizeof(struct msm_jpeg_core_buf), GFP_ATOMIC);
+	buf_p = kmemdup(buf, sizeof(struct msm_jpeg_core_buf), GFP_ATOMIC);
 	if (!buf_p) {
 		JPEG_PR_ERR("%s: no mem\n", __func__);
 		return -EFAULT;
 	}
-
-	memcpy(buf_p, buf, sizeof(struct msm_jpeg_core_buf));
 
 	msm_jpeg_q_in(q_p, buf_p);
 	return 0;
@@ -726,7 +725,7 @@ static int msm_jpeg_irq(int event, void *context, void *data)
 int __msm_jpeg_open(struct msm_jpeg_device *pgmn_dev)
 {
 	int rc;
-	irqreturn_t (*core_irq)(int, void *);
+	irqreturn_t (*core_irq)(int irq, void *dev);
 
 	mutex_lock(&pgmn_dev->lock);
 	if (pgmn_dev->open_count) {
@@ -872,17 +871,9 @@ static int msm_jpeg_ioctl_hw_cmds(struct msm_jpeg_device *pgmn_dev,
 
 	len = sizeof(struct msm_jpeg_hw_cmds) +
 		sizeof(struct msm_jpeg_hw_cmd) * (m - 1);
-	hw_cmds_p = kmalloc(len, GFP_KERNEL);
-	if (!hw_cmds_p) {
-		JPEG_PR_ERR("%s:%d] no mem %d\n", __func__, __LINE__, len);
-		return -EFAULT;
-	}
-
-	if (copy_from_user(hw_cmds_p, (const void __user *)arg, len)) {
-		JPEG_PR_ERR("%s:%d] failed\n", __func__, __LINE__);
-		kfree(hw_cmds_p);
-		return -EFAULT;
-	}
+	hw_cmds_p = memdup_user((const void __user *)arg, len);
+		if (IS_ERR(hw_cmds_p))
+			return PTR_ERR(hw_cmds_p);
 
 	hw_cmd_p = (struct msm_jpeg_hw_cmd *) &(hw_cmds_p->hw_cmd);
 
@@ -1121,7 +1112,7 @@ static int msm_jpeg_put_hw_cmd32(void __user *arg,
 	struct msm_jpeg_hw_cmd32 hw_cmd32;
 	struct msm_jpeg_hw_cmd32 *phw_cmd32;
 
-	phw_cmd32 = (__force struct msm_jpeg_hw_cmd32 *) arg;
+	phw_cmd32 = (struct msm_jpeg_hw_cmd32 *) arg;
 	if (copy)
 		phw_cmd32 = &hw_cmd32;
 
@@ -1152,7 +1143,7 @@ static int msm_jpeg_get_hw_cmd32(struct msm_jpeg_hw_cmd *phw_cmd,
 			return -EFAULT;
 		}
 	} else {
-		phw_cmd32 = (__force struct msm_jpeg_hw_cmd32 *) arg;
+		phw_cmd32 = (struct msm_jpeg_hw_cmd32 *) arg;
 	}
 	phw_cmd->type   = phw_cmd32->type;
 	phw_cmd->n      = phw_cmd32->n;
@@ -1184,17 +1175,10 @@ static int msm_jpeg_ioctl_hw_cmds32(struct msm_jpeg_device *pgmn_dev,
 
 	len32 = sizeof(struct msm_jpeg_hw_cmds32) +
 			sizeof(struct msm_jpeg_hw_cmd32) * (m - 1);
-	phw_cmds32 = kmalloc(len32, GFP_KERNEL);
-	if (!phw_cmds32) {
-		JPEG_PR_ERR("%s:%d] no mem %d\n", __func__, __LINE__, len32);
-		return -EFAULT;
-	}
+	phw_cmds32 = memdup_user(arg, len32);
+		if (IS_ERR(phw_cmds32))
+			return PTR_ERR(phw_cmds32);
 
-	if (copy_from_user(phw_cmds32, arg, len32)) {
-		JPEG_PR_ERR("%s:%d] failed\n", __func__, __LINE__);
-		kfree(phw_cmds32);
-		return -EFAULT;
-	}
 	len = sizeof(struct msm_jpeg_hw_cmds) +
 			sizeof(struct msm_jpeg_hw_cmd) * (m - 1);
 	phw_cmds = kmalloc(len, GFP_KERNEL);
@@ -1591,7 +1575,7 @@ int __msm_jpeg_init(struct msm_jpeg_device *pgmn_dev)
 
 	mutex_init(&pgmn_dev->lock);
 
-	pr_err("%s:%d] Jpeg Device id %d", __func__, __LINE__,
+	pr_err("%s:%d] Jpeg Device id %d\n", __func__, __LINE__,
 		   pgmn_dev->pdev->id);
 	idx = pgmn_dev->pdev->id;
 	pgmn_dev->idx = idx;

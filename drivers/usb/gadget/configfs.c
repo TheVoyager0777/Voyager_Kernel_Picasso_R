@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0
 #include <linux/configfs.h>
 #include <linux/module.h>
 #include <linux/slab.h>
@@ -280,16 +281,9 @@ static ssize_t gadget_dev_desc_bcdUSB_store(struct config_item *item,
 
 static ssize_t gadget_dev_desc_UDC_show(struct config_item *item, char *page)
 {
-	struct gadget_info *gi = to_gadget_info(item);
-	char *udc_name;
-	int ret;
+	char *udc_name = to_gadget_info(item)->composite.gadget_driver.udc_name;
 
-	mutex_lock(&gi->lock);
-	udc_name = gi->composite.gadget_driver.udc_name;
-	ret = sprintf(page, "%s\n", udc_name ?: "");
-	mutex_unlock(&gi->lock);
-
-	return ret;
+	return sprintf(page, "%s\n", udc_name ?: "");
 }
 
 static int unregister_gadget(struct gadget_info *gi)
@@ -300,13 +294,11 @@ static int unregister_gadget(struct gadget_info *gi)
 		return -ENODEV;
 
 	gi->unbinding = true;
-
 	ret = usb_gadget_unregister_driver(&gi->composite.gadget_driver);
 	if (ret)
 		return ret;
 
 	gi->unbinding = false;
-
 	kfree(gi->composite.gadget_driver.udc_name);
 	gi->composite.gadget_driver.udc_name = NULL;
 	return 0;
@@ -571,13 +563,13 @@ static struct configfs_attribute *gadget_config_attrs[] = {
 	NULL,
 };
 
-static struct config_item_type gadget_config_type = {
+static const struct config_item_type gadget_config_type = {
 	.ct_item_ops	= &gadget_config_item_ops,
 	.ct_attrs	= gadget_config_attrs,
 	.ct_owner	= THIS_MODULE,
 };
 
-static struct config_item_type gadget_root_type = {
+static const struct config_item_type gadget_root_type = {
 	.ct_item_ops	= &gadget_root_item_ops,
 	.ct_attrs	= gadget_root_attrs,
 	.ct_owner	= THIS_MODULE,
@@ -659,7 +651,7 @@ static struct configfs_group_operations functions_ops = {
 	.drop_item      = &function_drop,
 };
 
-static struct config_item_type functions_type = {
+static const struct config_item_type functions_type = {
 	.ct_group_ops   = &functions_ops,
 	.ct_owner       = THIS_MODULE,
 };
@@ -760,7 +752,7 @@ static struct configfs_group_operations config_desc_ops = {
 	.drop_item      = &config_desc_drop,
 };
 
-static struct config_item_type config_desc_type = {
+static const struct config_item_type config_desc_type = {
 	.ct_group_ops   = &config_desc_ops,
 	.ct_owner       = THIS_MODULE,
 };
@@ -1283,7 +1275,7 @@ static void purge_configs_funcs(struct gadget_info *gi)
 			if (f->unbind) {
 				dev_dbg(&gi->cdev.gadget->dev,
 					"unbind function '%s'/%pK\n",
-				         f->name, f);
+					f->name, f);
 				f->unbind(c, f);
 			}
 		}
@@ -1506,7 +1498,6 @@ static void android_work(struct work_struct *data)
 		pr_info("%s: sent uevent %s\n", __func__, disconnected[0]);
 		uevent_sent = true;
 		gi->isMSOS = false;
-		cdev->isMSOS = false;
 	}
 
 	if (!uevent_sent) {
@@ -1650,7 +1641,6 @@ static int android_setup(struct usb_gadget *gadget,
 		if ((c->bRequest == MSOS_VENDOR_TYPE) &&
 			(c->bRequestType & USB_DIR_IN) && le16_to_cpu(c->wIndex == 4)) {
 			gi->isMSOS = true;
-			cdev->isMSOS = true;
 		}
 	}
 	spin_lock_irqsave(&cdev->lock, flags);
@@ -1660,7 +1650,8 @@ static int android_setup(struct usb_gadget *gadget,
 	}
 	spin_unlock_irqrestore(&cdev->lock, flags);
 	list_for_each_entry(fi, &gi->available_func, cfs_list) {
-		if (fi != NULL && fi->f != NULL && fi->f->setup != NULL) {
+		if (fi != NULL && fi->f != NULL && fi->f->setup != NULL
+		    && fi->f->config != NULL) {
 			value = fi->f->setup(fi->f, c);
 			if (value >= 0)
 				break;
@@ -1835,15 +1826,19 @@ static int android_device_create(struct gadget_info *gi)
 	return 0;
 }
 
-static void android_device_destroy(struct device *dev)
+static void android_device_destroy(struct gadget_info *gi)
 {
 	struct device_attribute **attrs;
 	struct device_attribute *attr;
 
+	if (!gi->dev)
+		return;
+
 	attrs = android_usb_attributes;
 	while ((attr = *attrs++))
-		device_remove_file(dev, attr);
-	device_destroy(dev->class, dev->devt);
+		device_remove_file(gi->dev, attr);
+	device_destroy(gi->dev->class, gi->dev->devt);
+	gi->dev = NULL;
 }
 #else
 static inline int android_device_create(struct gadget_info *gi)
@@ -1851,7 +1846,7 @@ static inline int android_device_create(struct gadget_info *gi)
 	return 0;
 }
 
-static inline void android_device_destroy(struct device *dev)
+static inline void android_device_destroy(struct gadget_info *gi)
 {
 }
 #endif
@@ -1888,7 +1883,7 @@ static struct config_group *gadgets_make(
 	gi->composite.unbind = configfs_do_nothing;
 	gi->composite.suspend = NULL;
 	gi->composite.resume = NULL;
-	gi->composite.max_speed = USB_SPEED_SUPER_PLUS;
+	gi->composite.max_speed = USB_SPEED_SUPER;
 
 	spin_lock_init(&gi->spinlock);
 	mutex_init(&gi->lock);
@@ -1924,10 +1919,7 @@ static void gadgets_drop(struct config_group *group, struct config_item *item)
 
 	gi = container_of(to_config_group(item), struct gadget_info, group);
 	config_item_put(item);
-	if (gi->dev) {
-		android_device_destroy(gi->dev);
-		gi->dev = NULL;
-	}
+	android_device_destroy(gi);
 }
 
 static struct configfs_group_operations gadgets_ops = {
@@ -1935,7 +1927,7 @@ static struct configfs_group_operations gadgets_ops = {
 	.drop_item      = &gadgets_drop,
 };
 
-static struct config_item_type gadgets_type = {
+static const struct config_item_type gadgets_type = {
 	.ct_group_ops   = &gadgets_ops,
 	.ct_owner       = THIS_MODULE,
 };

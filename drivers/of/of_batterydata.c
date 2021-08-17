@@ -1,13 +1,7 @@
-/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
+ * Copyright (C) 2021 XiaoMi, Inc.
  */
 
 #define pr_fmt(fmt)	"%s: " fmt, __func__
@@ -320,7 +314,7 @@ struct device_node *of_batterydata_get_best_profile(
 		int batt_id_kohm, const char *batt_type)
 {
 	struct batt_ids batt_ids;
-	struct device_node *node, *best_node = NULL;
+	struct device_node *node, *best_node = NULL, *generic_node = NULL;
 	const char *battery_type = NULL;
 	int delta = 0, best_delta = 0, best_id_kohm = 0, id_range_pct,
 		i = 0, rc = 0, limit = 0;
@@ -374,17 +368,24 @@ struct device_node *of_batterydata_get_best_profile(
 				}
 			}
 		}
+		rc = of_property_read_string(node, "qcom,battery-type",
+						     &battery_type);
+		if (!rc && strcmp(battery_type, "itech_3000mah") == 0)
+			generic_node = node;
 	}
 
 	if (best_node == NULL) {
-		pr_err("No battery data found\n");
+		/* now that best_node is null, there is no need to
+		 * check whether generic node is null. */
+		best_node = generic_node;
+		pr_err("No battery data found,use generic one\n");
 		return best_node;
 	}
 
 	/* check that profile id is in range of the measured batt_id */
 	if (abs(best_id_kohm - batt_id_kohm) >
 			((best_id_kohm * id_range_pct) / 100)) {
-		pr_err("out of range: profile id %d batt id %d pct %d",
+		pr_err("out of range: profile id %d batt id %d pct %d\n",
 			best_id_kohm, batt_id_kohm, id_range_pct);
 		return NULL;
 	}
@@ -459,7 +460,7 @@ struct device_node *of_batterydata_get_best_aged_profile(
 	/* check that profile id is in range of the measured batt_id */
 	if (abs(best_id_kohm - batt_id_kohm) >
 			((best_id_kohm * id_range_pct) / 100)) {
-		pr_err("out of range: profile id %d batt id %d pct %d",
+		pr_err("out of range: profile id %d batt id %d pct %d\n",
 			best_id_kohm, batt_id_kohm, id_range_pct);
 		return NULL;
 	}

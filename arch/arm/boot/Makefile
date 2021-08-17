@@ -13,11 +13,10 @@
 
 OBJCOPYFLAGS	:=-O binary -R .comment -S
 
-include $(srctree)/arch/arm/boot/dts/Makefile
-ifneq ($(DTSSUBDIR),)
-DTSSUBDIR_INCS=$(foreach DIR, $(DTSSUBDIR), $(addsuffix /Makefile, $(addprefix $(srctree)/arch/arm/boot/dts/, $(DIR))))
-include $(DTSSUBDIR_INCS)
+ifneq ($(MACHINE),)
+include $(MACHINE)/Makefile.boot
 endif
+include $(srctree)/arch/arm/boot/dts/Makefile
 
 # Note: the following conditions must always be true:
 #   ZRELADDR == virt_to_phys(PAGE_OFFSET + TEXT_OFFSET)
@@ -36,13 +35,34 @@ ifneq ($(DTB_NAMES),)
 DTB_LIST := $(addsuffix .dtb,$(DTB_NAMES))
 DTB_OBJS := $(addprefix $(obj)/dts/,$(DTB_LIST))
 else
+# Use the same way as ARM64 does to have dtb files appended
+#  to kernel image.
+# For dt overlay support, currently there isn't have any
+# uniform list for dtb files. There is only one uniform list
+# for overlay's dtbo files which is managered by dtbo-y. And
+# dtb files are derived from each dtbo file's dtbo-base. so
+# it use a simple way just to find all dtb files which
+# generated during the build.
+# Note that dtb obj directory will always be cleaned at the
+# beginning of kernel build.
 DTB_OBJS := $(shell find $(obj)/dts/ -name \*.dtb)
 endif
 
 ifeq ($(CONFIG_XIP_KERNEL),y)
 
+cmd_deflate_xip_data = $(CONFIG_SHELL) -c \
+	'$(srctree)/$(src)/deflate_xip_data.sh $< $@ || { rm -f $@; false; }'
+
+ifeq ($(CONFIG_XIP_DEFLATED_DATA),y)
+quiet_cmd_mkxip = XIPZ    $@
+cmd_mkxip = $(cmd_objcopy) && $(cmd_deflate_xip_data)
+else
+quiet_cmd_mkxip = $(quiet_cmd_objcopy)
+cmd_mkxip = $(cmd_objcopy)
+endif
+
 $(obj)/xipImage: vmlinux FORCE
-	$(call if_changed,objcopy)
+	$(call if_changed,mkxip)
 	@$(kecho) '  Physical Address of xipImage: $(CONFIG_XIP_PHYS_ADDR)'
 
 $(obj)/Image $(obj)/zImage: FORCE
@@ -58,14 +78,6 @@ $(obj)/xipImage: FORCE
 
 $(obj)/Image: vmlinux FORCE
 	$(call if_changed,objcopy)
-
-$(obj)/Image-dtb-hdr: $(obj)/Image FORCE
-	echo -n 'UNCOMPRESSED_IMG' > $@ && \
-	$(call size_append, $(filter-out FORCE,$^)) >> $@
-
-$(obj)/Image-dtb: $(obj)/Image-dtb-hdr $(obj)/Image $(DTB_OBJS) FORCE
-	$(call if_changed,cat)
-	@echo '  Kernel: $@ is ready'
 
 $(obj)/compressed/vmlinux: $(obj)/Image FORCE
 	$(Q)$(MAKE) $(build)=$(obj)/compressed $@

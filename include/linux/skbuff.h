@@ -249,8 +249,8 @@ struct nf_conntrack {
 	atomic_t use;
 };
 #endif
+#include <linux/android_kabi.h>
 
-#if IS_ENABLED(CONFIG_BRIDGE_NETFILTER)
 struct nf_bridge_info {
 	refcount_t		use;
 	enum {
@@ -278,7 +278,6 @@ struct nf_bridge_info {
 		char neigh_header[8];
 	};
 };
-#endif
 
 struct sk_buff_head {
 	/* These two members must be first. */
@@ -466,6 +465,9 @@ struct ubuf_info {
 
 #define skb_uarg(SKB)	((struct ubuf_info *)(skb_shinfo(SKB)->destructor_arg))
 
+int mm_account_pinned_pages(struct mmpin *mmp, size_t size);
+void mm_unaccount_pinned_pages(struct mmpin *mmp);
+
 struct ubuf_info *sock_zerocopy_alloc(struct sock *sk, size_t size);
 struct ubuf_info *sock_zerocopy_realloc(struct sock *sk, size_t size,
 					struct ubuf_info *uarg);
@@ -488,8 +490,9 @@ int skb_zerocopy_iter_stream(struct sock *sk, struct sk_buff *skb,
  * the end of the header data, ie. at skb->end.
  */
 struct skb_shared_info {
-	unsigned short	_unused;
-	unsigned char	nr_frags;
+	__u8		__unused;
+	__u8		meta_len;
+	__u8		nr_frags;
 	__u8		tx_flags;
 	unsigned short	gso_size;
 	/* Warning: this field is not always filled in (UFO)! */
@@ -498,7 +501,6 @@ struct skb_shared_info {
 	struct skb_shared_hwtstamps hwtstamps;
 	unsigned int	gso_type;
 	u32		tskey;
-	__be32          ip6_frag_id;
 
 	/*
 	 * Warning : all fields before dataref are cleared in __alloc_skb()
@@ -619,6 +621,7 @@ typedef unsigned char *sk_buff_data_t;
  *	@nf_trace: netfilter packet trace flag
  *	@protocol: Packet protocol from driver
  *	@destructor: Destruct function
+ *	@tcp_tsorted_anchor: list structure for TCP (tp->tsorted_sent_queue)
  *	@_nfct: Associated connection, if any (with nfctinfo bits)
  *	@nf_bridge: Saved data about a bridged frame - see br_netfilter.c
  *	@skb_iif: ifindex of device we arrived on
@@ -637,6 +640,7 @@ typedef unsigned char *sk_buff_data_t;
  *	@no_fcs:  Request NIC to treat last 4 bytes as Ethernet FCS
  *	@csum_not_inet: use CRC32c to resolve CHECKSUM_PARTIAL
  *	@dst_pending_confirm: need to confirm neighbour
+ *	@decrypted: Decrypted SKB
   *	@napi_id: id of the NAPI struct this skb came from
  *	@secmark: security marking
  *	@mark: Generic packet mark
@@ -694,17 +698,21 @@ struct sk_buff {
 	 */
 	char			cb[48] __aligned(8);
 
-	unsigned long		_skb_refdst;
-	void			(*destructor)(struct sk_buff *skb);
+	union {
+		struct {
+			unsigned long	_skb_refdst;
+			void		(*destructor)(struct sk_buff *skb);
+		};
+		struct list_head	tcp_tsorted_anchor;
+	};
+
 #ifdef CONFIG_XFRM
 	struct	sec_path	*sp;
 #endif
 #if defined(CONFIG_NF_CONNTRACK) || defined(CONFIG_NF_CONNTRACK_MODULE)
 	unsigned long		 _nfct;
 #endif
-#if IS_ENABLED(CONFIG_BRIDGE_NETFILTER)
 	struct nf_bridge_info	*nf_bridge;
-#endif
 	unsigned int		len,
 				data_len;
 	__u16			mac_len,
@@ -774,19 +782,19 @@ struct sk_buff {
 	__u8			ipvs_property:1;
 
 	__u8			inner_protocol_type:1;
-	__u8			fast_forwarded:1;
 	__u8			remcsum_offload:1;
-
-	 /*4 or 6 bit hole */
-
 #ifdef CONFIG_NET_SWITCHDEV
 	__u8			offload_fwd_mark:1;
+	__u8			offload_mr_fwd_mark:1;
 #endif
 #ifdef CONFIG_NET_CLS_ACT
 	__u8			tc_skip_classify:1;
 	__u8			tc_at_ingress:1;
 	__u8			tc_redirected:1;
 	__u8			tc_from_ingress:1;
+#endif
+#ifdef CONFIG_TLS_DEVICE
+	__u8			decrypted:1;
 #endif
 
 #ifdef CONFIG_NET_SCHED
@@ -838,6 +846,9 @@ struct sk_buff {
 	__u32			headers_end[0];
 	/* public: */
 
+	ANDROID_KABI_RESERVE(1);
+	ANDROID_KABI_RESERVE(2);
+
 	/* These elements must be at the end, see alloc_skb() for details.  */
 	sk_buff_data_t		tail;
 	sk_buff_data_t		end;
@@ -851,8 +862,6 @@ struct sk_buff {
 /*
  *	Handling routines are only of interest to the kernel
  */
-#include <linux/slab.h>
-
 
 #define SKB_ALLOC_FCLONE	0x01
 #define SKB_ALLOC_RX		0x02
@@ -1029,8 +1038,10 @@ static inline struct sk_buff *alloc_skb_fclone(unsigned int size,
 }
 
 struct sk_buff *skb_morph(struct sk_buff *dst, struct sk_buff *src);
+void skb_headers_offset_update(struct sk_buff *skb, int off);
 int skb_copy_ubufs(struct sk_buff *skb, gfp_t gfp_mask);
 struct sk_buff *skb_clone(struct sk_buff *skb, gfp_t priority);
+void skb_copy_header(struct sk_buff *new, const struct sk_buff *old);
 struct sk_buff *skb_copy(const struct sk_buff *skb, gfp_t priority);
 struct sk_buff *__pskb_copy_fclone(struct sk_buff *skb, int headroom,
 				   gfp_t gfp_mask, bool fclone);
@@ -1167,7 +1178,7 @@ void __skb_get_hash(struct sk_buff *skb);
 u32 __skb_get_hash_symmetric(const struct sk_buff *skb);
 u32 skb_get_poff(const struct sk_buff *skb);
 u32 __skb_get_poff(const struct sk_buff *skb, void *data,
-		   const struct flow_keys *keys, int hlen);
+		   const struct flow_keys_basic *keys, int hlen);
 __be32 __skb_flow_get_ports(const struct sk_buff *skb, int thoff, u8 ip_proto,
 			    void *data, int hlen_proto);
 
@@ -1204,15 +1215,21 @@ static inline bool skb_flow_dissect_flow_keys(const struct sk_buff *skb,
 				  NULL, 0, 0, 0, flags);
 }
 
-static inline bool skb_flow_dissect_flow_keys_buf(struct flow_keys *flow,
-						  void *data, __be16 proto,
-						  int nhoff, int hlen,
-						  unsigned int flags)
+static inline bool
+skb_flow_dissect_flow_keys_basic(const struct sk_buff *skb,
+				 struct flow_keys_basic *flow, void *data,
+				 __be16 proto, int nhoff, int hlen,
+				 unsigned int flags)
 {
 	memset(flow, 0, sizeof(*flow));
-	return __skb_flow_dissect(NULL, &flow_keys_buf_dissector, flow,
+	return __skb_flow_dissect(skb, &flow_keys_basic_dissector, flow,
 				  data, proto, nhoff, hlen, flags);
 }
+
+void
+skb_flow_dissect_tunnel_info(const struct sk_buff *skb,
+			     struct flow_dissector *flow_dissector,
+			     void *target_container);
 
 static inline __u32 skb_get_hash(struct sk_buff *skb)
 {
@@ -1457,8 +1474,7 @@ static inline struct sk_buff *skb_get(struct sk_buff *skb)
 }
 
 /*
- * If users == 1, we are the only owner and are can avoid redundant
- * atomic change.
+ * If users == 1, we are the only owner and can avoid redundant atomic changes.
  */
 
 /**
@@ -1515,27 +1531,8 @@ static inline int skb_header_unclone(struct sk_buff *skb, gfp_t pri)
 }
 
 /**
- *	skb_header_release - release reference to header
- *	@skb: buffer to operate on
- *
- *	Drop a reference to the header part of the buffer.  This is done
- *	by acquiring a payload reference.  You must not read from the header
- *	part of skb->data after this.
- *	Note : Check if you can use __skb_header_release() instead.
- */
-static inline void skb_header_release(struct sk_buff *skb)
-{
-	BUG_ON(skb->nohdr);
-	skb->nohdr = 1;
-	atomic_add(1 << SKB_DATAREF_SHIFT, &skb_shinfo(skb)->dataref);
-}
-
-/**
  *	__skb_header_release - release reference to header
  *	@skb: buffer to operate on
- *
- *	Variant of skb_header_release() assuming skb is private to caller.
- *	We can avoid one atomic operation.
  */
 static inline void __skb_header_release(struct sk_buff *skb)
 {
@@ -1694,18 +1691,6 @@ static inline struct sk_buff *skb_peek_tail(const struct sk_buff_head *list_)
 static inline __u32 skb_queue_len(const struct sk_buff_head *list_)
 {
 	return list_->qlen;
-}
-
-/**
- *	skb_queue_len_lockless	- get queue length
- *	@list_: list to measure
- *
- *	Return the length of an &sk_buff queue.
- *	This variant can be used in lockless contexts.
- */
-static inline __u32 skb_queue_len_lockless(const struct sk_buff_head *list_)
-{
-	return READ_ONCE(list_->qlen);
 }
 
 /**
@@ -1915,7 +1900,7 @@ static inline void __skb_unlink(struct sk_buff *skb, struct sk_buff_head *list)
 {
 	struct sk_buff *next, *prev;
 
-	WRITE_ONCE(list->qlen, list->qlen - 1);
+	list->qlen--;
 	next	   = skb->next;
 	prev	   = skb->prev;
 	skb->next  = skb->prev = NULL;
@@ -2425,11 +2410,12 @@ static inline void skb_pop_mac_header(struct sk_buff *skb)
 static inline void skb_probe_transport_header(struct sk_buff *skb,
 					      const int offset_hint)
 {
-	struct flow_keys keys;
+	struct flow_keys_basic keys;
 
 	if (skb_transport_header_was_set(skb))
 		return;
-	else if (skb_flow_dissect_flow_keys(skb, &keys, 0))
+
+	if (skb_flow_dissect_flow_keys_basic(skb, &keys, NULL, 0, 0, 0, 0))
 		skb_set_transport_header(skb, keys.control.thoff);
 	else if (offset_hint >= 0)
 		skb_set_transport_header(skb, offset_hint);
@@ -2750,7 +2736,7 @@ static inline struct page *__dev_alloc_pages(gfp_t gfp_mask,
 	 * 4.  __GFP_MEMALLOC is ignored if __GFP_NOMEMALLOC is set due to
 	 *     code in gfp_to_alloc_flags that should be enforcing this.
 	 */
-	gfp_mask |= __GFP_COLD | __GFP_COMP | __GFP_MEMALLOC;
+	gfp_mask |= __GFP_COMP | __GFP_MEMALLOC;
 
 	return alloc_pages_node(NUMA_NO_NODE, gfp_mask, order);
 }
@@ -3033,9 +3019,8 @@ static inline int skb_padto(struct sk_buff *skb, unsigned int len)
  *	is untouched. Otherwise it is extended. Returns zero on
  *	success. The skb is freed on error if @free_on_error is true.
  */
-static inline int __must_check __skb_put_padto(struct sk_buff *skb,
-					       unsigned int len,
-					       bool free_on_error)
+static inline int __skb_put_padto(struct sk_buff *skb, unsigned int len,
+				  bool free_on_error)
 {
 	unsigned int size = skb->len;
 
@@ -3058,7 +3043,7 @@ static inline int __must_check __skb_put_padto(struct sk_buff *skb,
  *	is untouched. Otherwise it is extended. Returns zero on
  *	success. The skb is freed on error.
  */
-static inline int __must_check skb_put_padto(struct sk_buff *skb, unsigned int len)
+static inline int skb_put_padto(struct sk_buff *skb, unsigned int len)
 {
 	return __skb_put_padto(skb, len, true);
 }
@@ -3245,8 +3230,6 @@ static inline int __skb_grow_rcsum(struct sk_buff *skb, unsigned int len)
 }
 
 #define rb_to_skb(rb) rb_entry_safe(rb, struct sk_buff, rbnode)
-
-#define rb_to_skb(rb) rb_entry_safe(rb, struct sk_buff, rbnode)
 #define skb_rb_first(root) rb_to_skb(rb_first(root))
 #define skb_rb_last(root)  rb_to_skb(rb_last(root))
 #define skb_rb_next(skb)   rb_to_skb(rb_next(&(skb)->rbnode))
@@ -3332,7 +3315,7 @@ struct sk_buff *__skb_recv_datagram(struct sock *sk, unsigned flags,
 				    int *peeked, int *off, int *err);
 struct sk_buff *skb_recv_datagram(struct sock *sk, unsigned flags, int noblock,
 				  int *err);
-unsigned int datagram_poll(struct file *file, struct socket *sock,
+__poll_t datagram_poll(struct file *file, struct socket *sock,
 			   struct poll_table_struct *wait);
 int skb_copy_datagram_iter(const struct sk_buff *from, int offset,
 			   struct iov_iter *to, int size);
@@ -3371,8 +3354,7 @@ int skb_zerocopy(struct sk_buff *to, struct sk_buff *from,
 void skb_split(struct sk_buff *skb, struct sk_buff *skb1, const u32 len);
 int skb_shift(struct sk_buff *tgt, struct sk_buff *skb, int shiftlen);
 void skb_scrub_packet(struct sk_buff *skb, bool xnet);
-unsigned int skb_gso_transport_seglen(const struct sk_buff *skb);
-bool skb_gso_validate_mtu(const struct sk_buff *skb, unsigned int mtu);
+bool skb_gso_validate_network_len(const struct sk_buff *skb, unsigned int mtu);
 bool skb_gso_validate_mac_len(const struct sk_buff *skb, unsigned int len);
 struct sk_buff *skb_segment(struct sk_buff *skb, netdev_features_t features);
 struct sk_buff *skb_vlan_untag(struct sk_buff *skb);
@@ -3514,6 +3496,69 @@ static inline ktime_t net_timedelta(ktime_t t)
 static inline ktime_t net_invalid_timestamp(void)
 {
 	return 0;
+}
+
+static inline u8 skb_metadata_len(const struct sk_buff *skb)
+{
+	return skb_shinfo(skb)->meta_len;
+}
+
+static inline void *skb_metadata_end(const struct sk_buff *skb)
+{
+	return skb_mac_header(skb);
+}
+
+static inline bool __skb_metadata_differs(const struct sk_buff *skb_a,
+					  const struct sk_buff *skb_b,
+					  u8 meta_len)
+{
+	const void *a = skb_metadata_end(skb_a);
+	const void *b = skb_metadata_end(skb_b);
+	/* Using more efficient varaiant than plain call to memcmp(). */
+#if defined(CONFIG_HAVE_EFFICIENT_UNALIGNED_ACCESS) && BITS_PER_LONG == 64
+	u64 diffs = 0;
+
+	switch (meta_len) {
+#define __it(x, op) (x -= sizeof(u##op))
+#define __it_diff(a, b, op) (*(u##op *)__it(a, op)) ^ (*(u##op *)__it(b, op))
+	case 32: diffs |= __it_diff(a, b, 64);
+	case 24: diffs |= __it_diff(a, b, 64);
+	case 16: diffs |= __it_diff(a, b, 64);
+	case  8: diffs |= __it_diff(a, b, 64);
+		break;
+	case 28: diffs |= __it_diff(a, b, 64);
+	case 20: diffs |= __it_diff(a, b, 64);
+	case 12: diffs |= __it_diff(a, b, 64);
+	case  4: diffs |= __it_diff(a, b, 32);
+		break;
+	}
+	return diffs;
+#else
+	return memcmp(a - meta_len, b - meta_len, meta_len);
+#endif
+}
+
+static inline bool skb_metadata_differs(const struct sk_buff *skb_a,
+					const struct sk_buff *skb_b)
+{
+	u8 len_a = skb_metadata_len(skb_a);
+	u8 len_b = skb_metadata_len(skb_b);
+
+	if (!(len_a | len_b))
+		return false;
+
+	return len_a != len_b ?
+	       true : __skb_metadata_differs(skb_a, skb_b, len_a);
+}
+
+static inline void skb_metadata_set(struct sk_buff *skb, u8 meta_len)
+{
+	skb_shinfo(skb)->meta_len = meta_len;
+}
+
+static inline void skb_metadata_clear(struct sk_buff *skb)
+{
+	skb_metadata_set(skb, 0);
 }
 
 struct sk_buff *skb_clone_sk(struct sk_buff *skb);
@@ -3669,7 +3714,7 @@ static inline bool __skb_checksum_validate_needed(struct sk_buff *skb,
 	return true;
 }
 
-/* For small packets <= CHECKSUM_BREAK peform checksum complete directly
+/* For small packets <= CHECKSUM_BREAK perform checksum complete directly
  * in checksum_init.
  */
 #define CHECKSUM_BREAK 76
@@ -3856,8 +3901,8 @@ static inline void nf_reset(struct sk_buff *skb)
 #endif
 #if IS_ENABLED(CONFIG_BRIDGE_NETFILTER)
 	nf_bridge_put(skb->nf_bridge);
-	skb->nf_bridge = NULL;
 #endif
+	skb->nf_bridge = NULL;
 }
 
 static inline void nf_reset_trace(struct sk_buff *skb)
@@ -4061,11 +4106,39 @@ static inline bool skb_is_gso_v6(const struct sk_buff *skb)
 	return skb_shinfo(skb)->gso_type & SKB_GSO_TCPV6;
 }
 
+/* Note: Should be called only if skb_is_gso(skb) is true */
+static inline bool skb_is_gso_sctp(const struct sk_buff *skb)
+{
+	return skb_shinfo(skb)->gso_type & SKB_GSO_SCTP;
+}
+
+/* Note: Should be called only if skb_is_gso(skb) is true */
+static inline bool skb_is_gso_tcp(const struct sk_buff *skb)
+{
+	return skb_shinfo(skb)->gso_type & (SKB_GSO_TCPV4 | SKB_GSO_TCPV6);
+}
+
 static inline void skb_gso_reset(struct sk_buff *skb)
 {
 	skb_shinfo(skb)->gso_size = 0;
 	skb_shinfo(skb)->gso_segs = 0;
 	skb_shinfo(skb)->gso_type = 0;
+}
+
+static inline void skb_increase_gso_size(struct skb_shared_info *shinfo,
+					 u16 increment)
+{
+	if (WARN_ON_ONCE(shinfo->gso_size == GSO_BY_FRAGS))
+		return;
+	shinfo->gso_size += increment;
+}
+
+static inline void skb_decrease_gso_size(struct skb_shared_info *shinfo,
+					 u16 decrement)
+{
+	if (WARN_ON_ONCE(shinfo->gso_size == GSO_BY_FRAGS))
+		return;
+	shinfo->gso_size -= decrement;
 }
 
 void __skb_warn_lro_forwarding(const struct sk_buff *skb);
@@ -4125,38 +4198,6 @@ struct sk_buff *skb_checksum_trimmed(struct sk_buff *skb,
 static inline bool skb_head_is_locked(const struct sk_buff *skb)
 {
 	return !skb->head_frag || skb_cloned(skb);
-}
-
-/**
- * skb_gso_network_seglen - Return length of individual segments of a gso packet
- *
- * @skb: GSO skb
- *
- * skb_gso_network_seglen is used to determine the real size of the
- * individual segments, including Layer3 (IP, IPv6) and L4 headers (TCP/UDP).
- *
- * The MAC/L2 header is not accounted for.
- */
-static inline unsigned int skb_gso_network_seglen(const struct sk_buff *skb)
-{
-	unsigned int hdr_len = skb_transport_header(skb) -
-			       skb_network_header(skb);
-	return hdr_len + skb_gso_transport_seglen(skb);
-}
-
-/**
- * skb_gso_mac_seglen - Return length of individual segments of a gso packet
- *
- * @skb: GSO skb
- *
- * skb_gso_mac_seglen is used to determine the real size of the
- * individual segments, including MAC/L2, Layer3 (IP, IPv6) and L4
- * headers (TCP/UDP).
- */
-static inline unsigned int skb_gso_mac_seglen(const struct sk_buff *skb)
-{
-	unsigned int hdr_len = skb_transport_header(skb) - skb_mac_header(skb);
-	return hdr_len + skb_gso_transport_seglen(skb);
 }
 
 /* Local Checksum Offload.

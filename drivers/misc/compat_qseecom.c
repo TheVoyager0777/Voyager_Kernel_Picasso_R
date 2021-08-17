@@ -1,14 +1,6 @@
-/* Copyright (c) 2014-2017,2019 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2014-2018, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/debugfs.h>
@@ -475,18 +467,6 @@ static int compat_put_qseecom_is_es_activated_req(
 	return err;
 }
 
-static int compat_get_qseecom_ice_flag(
-	struct compat_qseecom_ice_data_t __user *data32,
-	struct qseecom_ice_data_t __user *data)
-{
-	int err;
-	compat_int_t ice_flag;
-
-	err = get_user(ice_flag, &data32->flag);
-	err |= put_user(ice_flag, &data->flag);
-	return err;
-}
-
 static unsigned int convert_cmd(unsigned int cmd)
 {
 	switch (cmd) {
@@ -550,8 +530,7 @@ static unsigned int convert_cmd(unsigned int cmd)
 		return QSEECOM_IOCTL_SEND_MODFD_CMD_64_REQ;
 	case COMPAT_QSEECOM_IOCTL_SEND_MODFD_RESP_64:
 		return QSEECOM_IOCTL_SEND_MODFD_RESP_64;
-	case COMPAT_QSEECOM_IOCTL_SET_ICE_INFO:
-		return QSEECOM_IOCTL_SET_ICE_INFO;
+
 	default:
 		return cmd;
 	}
@@ -925,24 +904,6 @@ long compat_qseecom_ioctl(struct file *file,
 
 		return qseecom_ioctl(file, convert_cmd(cmd),
 						(unsigned long)data);
-	}
-	break;
-	case COMPAT_QSEECOM_IOCTL_SET_ICE_INFO: {
-		struct compat_qseecom_ice_data_t __user *data32;
-		struct qseecom_ice_data_t __user *data;
-		int err;
-
-		data32 = compat_ptr(arg);
-		data = compat_alloc_user_space(sizeof(*data));
-		if (data == NULL)
-			return -EFAULT;
-
-		err = compat_get_qseecom_ice_flag(data32, data);
-		if (err)
-			return err;
-
-		return qseecom_ioctl(file, convert_cmd(cmd),
-				(unsigned long)data);
 	}
 	break;
 	default:

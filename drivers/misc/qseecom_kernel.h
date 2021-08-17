@@ -1,13 +1,6 @@
-/* Copyright (c) 2012-2017 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2012-2018, The Linux Foundation. All rights reserved.
  */
 
 #ifndef __QSEECOM_KERNEL_H_
@@ -41,7 +34,4 @@ int qseecom_send_command(struct qseecom_handle *handle, void *send_buf,
 int qseecom_set_bandwidth(struct qseecom_handle *handle, bool high);
 int qseecom_process_listener_from_smcinvoke(struct scm_desc *desc);
 
-#ifdef CONFIG_GHS_VMM
-struct device *qseecom_get_dev(void);
-#endif /*CONFIG_GHS_VMM*/
 #endif /* __QSEECOM_KERNEL_H_ */

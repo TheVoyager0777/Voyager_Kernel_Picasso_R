@@ -1,4 +1,5 @@
-/* Copyright (c) 2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -15,82 +16,37 @@
 
 #define UFS_PHY_NAME "ufs_phy_qmp_v4"
 
-#define check_v1(major, minor, step) \
-	((major == 0x4) && (minor == 0x000) && (step == 0x0000))
-#define check_v2(major, minor, step) \
-	((major == 0x4) && (minor == 0x001) && (step == 0x0000))
-
 static
 int ufs_qcom_phy_qmp_v4_phy_calibrate(struct ufs_qcom_phy *ufs_qcom_phy,
 					bool is_rate_B, bool is_g4)
 {
-	u8 major = ufs_qcom_phy->host_ctrl_rev_major;
-	u16 minor = ufs_qcom_phy->host_ctrl_rev_minor;
-	u16 step = ufs_qcom_phy->host_ctrl_rev_step;
-
 	writel_relaxed(0x01, ufs_qcom_phy->mmio + UFS_PHY_SW_RESET);
 	/* Ensure PHY is in reset before writing PHY calibration data */
 	wmb();
-
 	/*
 	 * Writing PHY calibration in this order:
 	 * 1. Write Rate-A calibration first (1-lane mode).
-	 *    Apply G3 or G4 specific settings (v2 may have additional
-	 *    settings).
 	 * 2. Write 2nd lane configuration if needed.
-	 *    Apply G3 or G4 specific settings (v2 may have additional
-	 *    settings).
 	 * 3. Write Rate-B calibration overrides
 	 */
-	ufs_qcom_phy_write_tbl(ufs_qcom_phy, phy_cal_table_rate_A,
-			       ARRAY_SIZE(phy_cal_table_rate_A));
-	if (!is_g4)
-		ufs_qcom_phy_write_tbl(ufs_qcom_phy, phy_cal_table_rate_A_g3,
-				       ARRAY_SIZE(phy_cal_table_rate_A_g3));
-	else
-		ufs_qcom_phy_write_tbl(ufs_qcom_phy, phy_cal_table_rate_A_g4,
-				       ARRAY_SIZE(phy_cal_table_rate_A_g4));
-
-	if (check_v2(major, minor, step)) {
-		if (!is_g4)
+	if (is_g4) {
+		ufs_qcom_phy_write_tbl(ufs_qcom_phy, phy_cal_table_rate_A,
+				       ARRAY_SIZE(phy_cal_table_rate_A));
+		if (ufs_qcom_phy->lanes_per_direction == 2)
 			ufs_qcom_phy_write_tbl(ufs_qcom_phy,
-				phy_cal_table_rate_A_v2_g3,
-				ARRAY_SIZE(phy_cal_table_rate_A_v2_g3));
-		else
+					phy_cal_table_2nd_lane,
+					ARRAY_SIZE(phy_cal_table_2nd_lane));
+	} else {
+		ufs_qcom_phy_write_tbl(ufs_qcom_phy, phy_cal_table_rate_A_no_g4,
+				       ARRAY_SIZE(phy_cal_table_rate_A_no_g4));
+		if (ufs_qcom_phy->lanes_per_direction == 2)
 			ufs_qcom_phy_write_tbl(ufs_qcom_phy,
-				phy_cal_table_rate_A_v2_g4,
-				ARRAY_SIZE(phy_cal_table_rate_A_v2_g4));
+				      phy_cal_table_2nd_lane_no_g4,
+				      ARRAY_SIZE(phy_cal_table_2nd_lane_no_g4));
 	}
-
-	if (ufs_qcom_phy->lanes_per_direction == 2) {
-		ufs_qcom_phy_write_tbl(ufs_qcom_phy, phy_cal_table_2nd_lane,
-				       ARRAY_SIZE(phy_cal_table_2nd_lane));
-		if (check_v2(major, minor, step)) {
-			if (!is_g4)
-				ufs_qcom_phy_write_tbl(ufs_qcom_phy,
-				   phy_cal_table_2nd_lane_v2_g3,
-				   ARRAY_SIZE(phy_cal_table_2nd_lane_v2_g3));
-			else
-				ufs_qcom_phy_write_tbl(ufs_qcom_phy,
-				   phy_cal_table_2nd_lane_v2_g4,
-				   ARRAY_SIZE(phy_cal_table_2nd_lane_v2_g4));
-		}
-	}
-
 	if (is_rate_B)
 		ufs_qcom_phy_write_tbl(ufs_qcom_phy, phy_cal_table_rate_B,
 				       ARRAY_SIZE(phy_cal_table_rate_B));
-
-	if (check_v1(major, minor, step)) {
-		writel_relaxed(0x01, ufs_qcom_phy->mmio +
-					QSERDES_RX0_AC_JTAG_ENABLE);
-		writel_relaxed(0x01, ufs_qcom_phy->mmio +
-					QSERDES_RX0_AC_JTAG_MODE);
-		writel_relaxed(0x01, ufs_qcom_phy->mmio +
-					QSERDES_RX1_AC_JTAG_ENABLE);
-		writel_relaxed(0x01, ufs_qcom_phy->mmio +
-					QSERDES_RX1_AC_JTAG_MODE);
-	}
 
 	writel_relaxed(0x00, ufs_qcom_phy->mmio + UFS_PHY_SW_RESET);
 	/* flush buffered writes */
@@ -128,6 +84,34 @@ static int ufs_qcom_phy_qmp_v4_exit(struct phy *generic_phy)
 	return 0;
 }
 
+static inline
+void ufs_qcom_phy_qmp_v4_tx_pull_down_ctrl(struct ufs_qcom_phy *phy,
+						bool enable)
+{
+	u32 temp;
+
+	temp = readl_relaxed(phy->mmio + QSERDES_RX0_RX_INTERFACE_MODE);
+	if (enable)
+		temp |= QSERDES_RX_INTERFACE_MODE_CLOCK_EDGE_BIT;
+	else
+		temp &= ~QSERDES_RX_INTERFACE_MODE_CLOCK_EDGE_BIT;
+	writel_relaxed(temp, phy->mmio + QSERDES_RX0_RX_INTERFACE_MODE);
+
+	if (phy->lanes_per_direction == 1)
+		goto out;
+
+	temp = readl_relaxed(phy->mmio + QSERDES_RX1_RX_INTERFACE_MODE);
+	if (enable)
+		temp |= QSERDES_RX_INTERFACE_MODE_CLOCK_EDGE_BIT;
+	else
+		temp &= ~QSERDES_RX_INTERFACE_MODE_CLOCK_EDGE_BIT;
+	writel_relaxed(temp, phy->mmio + QSERDES_RX1_RX_INTERFACE_MODE);
+
+out:
+	/* ensure register value is committed */
+	mb();
+}
+
 static
 void ufs_qcom_phy_qmp_v4_power_control(struct ufs_qcom_phy *phy,
 					 bool power_ctrl)
@@ -140,7 +124,9 @@ void ufs_qcom_phy_qmp_v4_power_control(struct ufs_qcom_phy *phy,
 		 * powered OFF.
 		 */
 		mb();
+		ufs_qcom_phy_qmp_v4_tx_pull_down_ctrl(phy, true);
 	} else {
+		ufs_qcom_phy_qmp_v4_tx_pull_down_ctrl(phy, false);
 		/* bring PHY out of analog power collapse */
 		writel_relaxed(0x1, phy->mmio + UFS_PHY_POWER_DOWN_CONTROL);
 
@@ -275,6 +261,7 @@ out:
 
 static const struct of_device_id ufs_qcom_phy_qmp_v4_of_match[] = {
 	{.compatible = "qcom,ufs-phy-qmp-v4"},
+	{.compatible = "qcom,ufs-phy-qmp-v4-card"},
 	{},
 };
 MODULE_DEVICE_TABLE(of, ufs_qcom_phy_qmp_v4_of_match);
@@ -284,7 +271,6 @@ static struct platform_driver ufs_qcom_phy_qmp_v4_driver = {
 	.driver = {
 		.of_match_table = ufs_qcom_phy_qmp_v4_of_match,
 		.name = "ufs_qcom_phy_qmp_v4",
-		.owner = THIS_MODULE,
 	},
 };
 

@@ -1,16 +1,7 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+ * Copyright (c) 2017-2019, The Linux Foundation. All rights reserved.
  */
-
 
 #include <linux/thermal.h>
 #include <linux/slab.h>
@@ -173,24 +164,14 @@ static const struct virtual_sensor_data qti_virtual_sensors[] = {
 		.logic = VIRT_MAXIMUM,
 	},
 	{
-		.virt_zone_name = "quad-gpuss-max-step",
-		.num_sensors = 4,
-		.sensor_names = {"gpuss-0-usr",
-				"gpuss-1-usr",
-				"gpuss-2-usr",
-				"gpuss-3-usr"},
-		.logic = VIRT_MAXIMUM,
-	},
-	{
-		.virt_zone_name = "hexa-cpu-max-step",
-		.num_sensors = 6,
-		.sensor_names = {"apc1-cpu0-usr",
-				"apc1-cpu1-usr",
-				"apc1-cpu2-usr",
-				"apc1-cpu3-usr",
-				"cpuss0-usr",
-				"cpuss1-usr"},
-		.logic = VIRT_MAXIMUM,
+		.virt_zone_name = "gpu-skin-avg-step",
+		.num_sensors = 2,
+		.sensor_names = {"skin-msm-therm-usr",
+				"gpuss-0-usr"},
+		.logic = VIRT_WEIGHTED_AVG,
+		.coefficient_ct = 2,
+		.coefficients = {30, 70},
+		.avg_denominator = 100,
 	},
 };
 

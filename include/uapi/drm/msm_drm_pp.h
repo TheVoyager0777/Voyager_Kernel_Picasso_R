@@ -1,3 +1,8 @@
+/* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
+/*
+ * Copyright (c) 2017-2020, The Linux Foundation. All rights reserved.
+ */
+
 #ifndef _MSM_DRM_PP_H_
 #define _MSM_DRM_PP_H_
 
@@ -43,6 +48,7 @@ struct drm_msm_pcc_coeff {
  * @b_bb: second order coefficients
  */
 #define DRM_MSM_PCC3
+#define NUM_STRUCT_MASK (0xFUL << 60)
 struct drm_msm_pcc {
 	__u64 flags;
 	struct drm_msm_pcc_coeff r;
@@ -113,6 +119,7 @@ struct drm_msm_pa_hsic {
  * @hue_region: Hue qualifier.
  * @sat_region: Saturation qualifier.
  * @val_region: Value qualifier.
+ * @flags: for customizing operations.
  */
 #define DRM_MSM_MEMCOL
 struct drm_msm_memcol {
@@ -126,6 +133,7 @@ struct drm_msm_memcol {
 	__u32 hue_region;
 	__u32 sat_region;
 	__u32 val_region;
+	__u64 flags;
 };
 
 #define DRM_MSM_SIXZONE
@@ -461,6 +469,97 @@ struct drm_msm_ad4_roi_cfg {
 	__u32 v_y;
 	__u32 factor_in;
 	__u32 factor_out;
+};
+
+#define LTM_FEATURE_DEF 1
+#define LTM_DATA_SIZE_0 32
+#define LTM_DATA_SIZE_1 128
+#define LTM_DATA_SIZE_2 256
+#define LTM_DATA_SIZE_3 33
+#define LTM_BUFFER_SIZE 5
+#define LTM_GUARD_BYTES 255
+#define LTM_BLOCK_SIZE 2
+
+#define LTM_STATS_SAT (1 << 1)
+#define LTM_STATS_MERGE_SAT (1 << 2)
+
+/*
+ * struct drm_msm_ltm_stats_data - LTM stats data structure
+ */
+struct drm_msm_ltm_stats_data {
+	__u32 stats_01[LTM_DATA_SIZE_0][LTM_DATA_SIZE_1];
+	__u32 stats_02[LTM_DATA_SIZE_2];
+	__u32 stats_03[LTM_DATA_SIZE_0];
+	__u32 stats_04[LTM_DATA_SIZE_0];
+	__u32 stats_05[LTM_DATA_SIZE_0];
+	__u32 status_flag;
+	__u32 display_h;
+	__u32 display_v;
+	__u32 init_h[LTM_BLOCK_SIZE];
+	__u32 init_v;
+	__u32 inc_h;
+	__u32 inc_v;
+	__u32 portrait_en;
+	__u32 merge_en;
+	__u32 cfg_param_01;
+	__u32 cfg_param_02;
+	__u32 cfg_param_03;
+	__u32 cfg_param_04;
+};
+
+/*
+ * struct drm_msm_ltm_init_param - LTM init param structure
+ */
+struct drm_msm_ltm_init_param {
+	__u32 init_param_01;
+	__u32 init_param_02;
+	__u32 init_param_03;
+	__u32 init_param_04;
+};
+
+/*
+ * struct drm_msm_ltm_cfg_param - LTM config param structure
+ */
+struct  drm_msm_ltm_cfg_param {
+	__u32 cfg_param_01;
+	__u32 cfg_param_02;
+	__u32 cfg_param_03;
+	__u32 cfg_param_04;
+	__u32 cfg_param_05;
+	__u32 cfg_param_06;
+};
+
+/*
+ * struct drm_msm_ltm_data - LTM data structure
+ */
+struct drm_msm_ltm_data {
+	__u32 data[LTM_DATA_SIZE_0][LTM_DATA_SIZE_3];
+};
+
+/*
+ * struct drm_msm_ltm_buffers_crtl - LTM buffer control structure.
+ *                                   This struct will be used to init and
+ *                                   de-init the LTM buffers in driver.
+ * @num_of_buffers: valid number of buffers used
+ * @fds: fd array to for all the valid buffers
+ */
+struct drm_msm_ltm_buffers_ctrl {
+	__u32 num_of_buffers;
+	__u32 fds[LTM_BUFFER_SIZE];
+};
+
+/*
+ * struct drm_msm_ltm_buffer - LTM buffer structure.
+ *                             This struct will be passed from driver to user
+ *                             space for LTM stats data notification.
+ * @fd: fd assicated with the buffer that has LTM stats data
+ * @offset: offset from base address that used for alignment
+ * @status status flag for error indication
+ */
+struct drm_msm_ltm_buffer {
+	__u32 fd;
+	__u32 offset;
+	__u32 status;
 };
 
 /**

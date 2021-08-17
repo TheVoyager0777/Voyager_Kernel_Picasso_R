@@ -1,19 +1,12 @@
-/* Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2014-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/devfreq.h>
 #include <linux/module.h>
 #include <linux/msm_adreno_devfreq.h>
+#include <linux/of_platform.h>
 #include <linux/slab.h>
 
 #include "devfreq_trace.h"
@@ -52,16 +45,71 @@ static inline int devfreq_get_freq_level(struct devfreq *devfreq,
 	return -EINVAL;
 }
 
-static int devfreq_gpubw_get_target(struct devfreq *df,
-				unsigned long *freq)
+static ssize_t cur_ab_show(struct device *dev,
+	struct device_attribute *attr,
+	char *buf)
 {
-
-	struct devfreq_msm_adreno_tz_data *priv = df->data;
+	struct devfreq *df = to_devfreq(dev);
 	struct msm_busmon_extended_profile *bus_profile = container_of(
 					(df->profile),
 					struct msm_busmon_extended_profile,
 					profile);
-	struct devfreq_dev_status stats;
+
+	return scnprintf(buf, PAGE_SIZE, "%llu\n", bus_profile->ab_mbytes);
+}
+
+static ssize_t sampling_interval_show(struct device *dev,
+		struct device_attribute *attr, char *buf)
+{
+	struct devfreq *df = to_devfreq(dev);
+	struct msm_busmon_extended_profile *bus_profile = container_of(
+					(df->profile),
+					struct msm_busmon_extended_profile,
+					profile);
+
+	return scnprintf(buf, PAGE_SIZE, "%d\n", bus_profile->sampling_ms);
+}
+
+static ssize_t sampling_interval_store(struct device *dev,
+		struct device_attribute *attr,
+		const char *buf, size_t count)
+{
+	struct devfreq *df = to_devfreq(dev);
+	struct msm_busmon_extended_profile *bus_profile = container_of(
+					(df->profile),
+					struct msm_busmon_extended_profile,
+					profile);
+	u32 value;
+	int ret;
+
+	ret = kstrtou32(buf, 0, &value);
+	if (ret)
+		return ret;
+
+	bus_profile->sampling_ms = value;
+
+	return count;
+}
+
+static DEVICE_ATTR_RW(sampling_interval);
+static DEVICE_ATTR_RO(cur_ab);
+
+static const struct device_attribute *gpubw_attr_list[] = {
+	&dev_attr_sampling_interval,
+	&dev_attr_cur_ab,
+	NULL
+};
+
+static int devfreq_gpubw_get_target(struct devfreq *df,
+		unsigned long *freq)
+{
+
+	struct devfreq_msm_adreno_tz_data *priv = df->data;
+	struct msm_busmon_extended_profile *bus_profile = container_of(
+			(df->profile),
+			struct msm_busmon_extended_profile,
+			profile);
+	struct devfreq_dev_status *stats = &df->last_status;
 	struct xstats b;
 	int result;
 	int level = 0;
@@ -81,20 +129,20 @@ static int devfreq_gpubw_get_target(struct devfreq *df,
 	if (priv == NULL)
 		return 0;
 
-	stats.private_data = &b;
+	stats->private_data = &b;
 
-	result = df->profile->get_dev_status(df->dev.parent, &stats);
+	result = devfreq_update_stats(df);
 
-	*freq = stats.current_frequency;
+	*freq = stats->current_frequency;
 
-	priv->bus.total_time += stats.total_time;
-	priv->bus.gpu_time += stats.busy_time;
+	priv->bus.total_time += stats->total_time;
+	priv->bus.gpu_time += stats->busy_time;
 	priv->bus.ram_time += b.ram_time;
 	priv->bus.ram_wait += b.ram_wait;
 
-	level = devfreq_get_freq_level(df, stats.current_frequency);
+	level = devfreq_get_freq_level(df, stats->current_frequency);
 
-	if (priv->bus.total_time < LONG_FLOOR)
+	if (priv->bus.total_time < bus_profile->sampling_ms)
 		return result;
 
 	norm_max_cycles = (unsigned int)(priv->bus.ram_time) /
@@ -108,10 +156,11 @@ static int devfreq_gpubw_get_target(struct devfreq *df,
 
 	/*
 	 * If there's a new high watermark, update the cutoffs and send the
-	 * FAST hint.  Otherwise check the current value against the current
+	 * FAST hint, provided that we are using a floating watermark.
+	 * Otherwise check the current value against the current
 	 * cutoffs.
 	 */
-	if (norm_max_cycles > priv->bus.max) {
+	if (norm_max_cycles > priv->bus.max && priv->bus.floating) {
 		_update_cutoff(priv, norm_max_cycles);
 		bus_profile->flag = DEVFREQ_FLAG_FAST_HINT;
 	} else {
@@ -193,12 +242,21 @@ static int gpubw_start(struct devfreq *devfreq)
 		priv->bus.p_up[priv->bus.num - 1] = 100;
 	_update_cutoff(priv, priv->bus.max);
 
+	bus_profile->sampling_ms = LONG_FLOOR;
+
+	for (i = 0; gpubw_attr_list[i] != NULL; i++)
+		device_create_file(&devfreq->dev, gpubw_attr_list[i]);
+
 	return 0;
 }
 
 static int gpubw_stop(struct devfreq *devfreq)
 {
 	struct devfreq_msm_adreno_tz_data *priv = devfreq->data;
+	int i;
+
+	for (i = 0; gpubw_attr_list[i] != NULL; i++)
+		device_remove_file(&devfreq->dev, gpubw_attr_list[i]);
 
 	if (priv) {
 		kfree(priv->bus.up);
@@ -215,6 +273,14 @@ static int devfreq_gpubw_event_handler(struct devfreq *devfreq,
 {
 	int result = 0;
 	unsigned long freq;
+	struct device_node *node = devfreq->dev.parent->of_node;
+
+	/*
+	 * We want to restrict this governor be set only for
+	 * gpu devfreq devices.
+	 */
+	if (!of_device_is_compatible(node, "qcom,kgsl-busmon"))
+		return -EINVAL;
 
 	mutex_lock(&devfreq->lock);
 	freq = devfreq->previous_freq;

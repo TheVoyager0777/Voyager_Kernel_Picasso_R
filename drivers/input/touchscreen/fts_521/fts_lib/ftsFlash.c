@@ -107,7 +107,7 @@ int getFWdata(const char *pathToFile, u8 **data, int *size)
 	int res, from = 0;
 	char *path = (char *)pathToFile;
 
-	logError(1, "%s %s: getFWdata starting ...\n", tag, __func__);
+	logError(1, "%s getFWdata starting ...\n", tag);
 	if (strncmp(pathToFile, "NULL", 4) == 0) {
 		from = 1;
 		path = (char *)fts_info->board->default_fw_name;
@@ -129,11 +129,11 @@ int getFWdata(const char *pathToFile, u8 **data, int *size)
 		break;
 #endif
 	default:
-		logError(1, "%s %s: Read FW from BIN file %s !\n", tag, __func__, path);
+		logError(1, "%s Read FW from BIN file %s !\n", tag, path);
 		dev = getDev();
 
 		if (dev != NULL) {
-			res = request_firmware(&fw, path, dev);
+			res = request_firmware_direct(&fw, path, dev);
 			if (res == 0) {
 				*size = fw->size;
 				*data =
@@ -164,7 +164,7 @@ int getFWdata(const char *pathToFile, u8 **data, int *size)
 
 	}
 
-	logError(1, "%s %s: getFWdata Finished!\n", tag, __func__);
+	logError(1, "%s getFWdata Finished!\n", tag);
 	return OK;
 
 }
@@ -368,7 +368,7 @@ int parseBinFile(u8 *fw_data, int fw_size, Firmware *fwData, int keep_cx)
 	int dimension, index = 0;
 	u32 temp;
 	int res, i;
-	logError(1, "%s %s: Read Touch Frimware\n", tag, __func__);
+
 	if (fw_size < FW_HEADER_SIZE + FW_BYTES_ALLIGN || fw_data == NULL) {
 		logError(1,
 			 "%s parseBinFile: Read only %d instead of %d... ERROR %08X\n",
@@ -507,42 +507,8 @@ int parseBinFile(u8 *fw_data, int fw_size, Firmware *fwData, int keep_cx)
 
 		fwData->data_size = dimension;
 
-		index = FLASH_ORG_INFO_INDEX;
-		fwData->fw_code_size = fw_data[index++];
-		fwData->panel_config_size = fw_data[index++];
-		fwData->cx_area_size = fw_data[index++];
-		fwData->fw_config_size = fw_data[index];
-
-		logError(1, "%s Code Pages: %d panel area Pages: %d"
-			" cx area Pages: %d fw config Pages: %d !\n", tag,
-			 fwData->fw_code_size, fwData->panel_config_size,
-			fwData->cx_area_size, fwData->fw_config_size);
-
-		if ((fwData->fw_code_size == 0) || (fwData->panel_config_size == 0) ||
-			(fwData->cx_area_size == 0) || (fwData->fw_config_size == 0)) {
-			logError(1, "%s Using default flash Address\n", tag);
-			fwData->code_start_addr = FLASH_ADDR_CODE;
-			fwData->cx_start_addr = FLASH_ADDR_CX;
-			fwData->config_start_addr = FLASH_ADDR_CONFIG;
-		} else {
-			fwData->code_start_addr = FLASH_ADDR_CODE;
-			fwData->cx_start_addr = (FLASH_ADDR_CODE +
-						(((fwData->fw_code_size +
-						fwData->panel_config_size) *
-						FLASH_PAGE_SIZE) / 4));
-			fwData->config_start_addr = (FLASH_ADDR_CODE +
-						(((fwData->fw_code_size +
-						fwData->panel_config_size +
-						fwData->cx_area_size) *
-						FLASH_PAGE_SIZE) / 4));
-		}
-
-		logError(1, "%s Code start addr: 0x%08X cx start addr: 0x%08X"
-			" fw start addr: 0x%08X !\n", tag,
-			 fwData->code_start_addr, fwData->cx_start_addr,
-			fwData->config_start_addr);
-
-		logError(1, "%s %s: READ FW DONE %d bytes!\n", tag, __func__, fwData->data_size);
+		logError(0, "%s READ FW DONE %d bytes!\n", tag,
+			 fwData->data_size);
 		res = OK;
 		goto END;
 	}
@@ -672,52 +638,26 @@ int flash_full_erase(void)
 /**
 * Erase the flash page by page, giving the possibility to skip the CX area and maintain therefore its value
 * @param keep_cx if SKIP_PANEL_INIT the Panel Init pages will be skipped, if > SKIP_PANEL_CX_INIT Cx and Panel Init pages otherwise all the pages will be deleted
-* @param fw raw FW data loaded from system
 * @return OK if success or an error code which specify the type of error encountered
 */
-int flash_erase_page_by_page(ErasePage keep_cx, Firmware *fw)
+int flash_erase_page_by_page(ErasePage keep_cx)
 {
 
 	u8 status, i = 0;
-	u8 flash_cx_start_page = FLASH_CX_PAGE_START;
-	u8 flash_cx_end_page = FLASH_CX_PAGE_END;
-	u8 flash_panel_start_page = FLASH_PANEL_PAGE_START;
-	u8 flash_panel_end_page = FLASH_PANEL_PAGE_END;
 	u8 cmd1[6] = { FTS_CMD_HW_REG_W, 0x20, 0x00, 0x00, FLASH_ERASE_CODE0 + 1, 0x00 };
 	u8 cmd[6] = { FTS_CMD_HW_REG_W, 0x20, 0x00, 0x00, FLASH_ERASE_CODE0, 0xA0 };
 	u8 cmd2[9] = { FTS_CMD_HW_REG_W, 0x20, 0x00, 0x01, 0x28, 0xFF, 0xFF, 0xFF, 0xFF };
 	u8 mask[4] = { 0 };
 
-	if ((fw->fw_code_size == 0) || (fw->panel_config_size == 0) ||
-		(fw->cx_area_size == 0) || (fw->fw_config_size == 0)) {
-		logError(1, "%s using default page addresses!\n", tag);
-	} else {
-		flash_panel_start_page = fw->fw_code_size;
-		if (fw->panel_config_size > 1)
-			flash_panel_end_page = flash_panel_start_page + (fw->panel_config_size - 1);
-		else
-			flash_panel_end_page = flash_panel_start_page;
-
-		flash_cx_start_page = flash_panel_end_page + 1;
-		if (fw->cx_area_size > 1)
-			flash_cx_end_page = flash_cx_start_page + (fw->cx_area_size - 1);
-		else
-			flash_cx_end_page = flash_cx_start_page;
-	}
-
-	logError(1, "%s CX Start page: %d CX End page: %d Panel Start Page: %d Panel End page: %d!\n", tag, flash_cx_start_page, flash_cx_end_page,
-		flash_panel_start_page, flash_panel_end_page);
-
-	for (i = flash_cx_start_page; i <= flash_cx_end_page && keep_cx >=
-	     SKIP_PANEL_CX_INIT; i++) {
+	for (i = FLASH_CX_PAGE_START;
+	     i <= FLASH_CX_PAGE_END && keep_cx >= SKIP_PANEL_CX_INIT; i++) {
 		logError(0, "%s Skipping erase CX page %d! \n", tag, i);
 		fromIDtoMask(i, mask, 4);
 	}
 
-
-	for (i = flash_panel_start_page; i <= flash_panel_end_page && keep_cx >=
-	     SKIP_PANEL_INIT; i++) {
-		logError(0, "%s Skipping erase Panel Init page %d!\n", tag, i);
+	for (i = FLASH_PANEL_PAGE_START;
+	     i <= FLASH_PANEL_PAGE_END && keep_cx >= SKIP_PANEL_INIT; i++) {
+		logError(0, "%s Skipping erase Panel Init page %d! \n", tag, i);
 		fromIDtoMask(i, mask, 4);
 	}
 
@@ -1002,11 +942,11 @@ start:
 	logError(0, "%s 6) FLASH ERASE: \n", tag);
 	if (keep_cx > 0) {
 		if (fw.sec2_size != 0 && force_burn == CRC_CX)
-			res = flash_erase_page_by_page(SKIP_PANEL_INIT, &fw);
+			res = flash_erase_page_by_page(SKIP_PANEL_INIT);
 		else
-			res = flash_erase_page_by_page(SKIP_PANEL_CX_INIT, &fw);
+			res = flash_erase_page_by_page(SKIP_PANEL_CX_INIT);
 	} else {
-		res = flash_erase_page_by_page(SKIP_PANEL_INIT, &fw);
+		res = flash_erase_page_by_page(SKIP_PANEL_INIT);
 		if (fw.sec2_size == 0)
 			logError(1,
 				 "%s WARNING!!! Erasing CX memory but no CX in fw file! touch will not work right after fw update! \n",
@@ -1021,8 +961,8 @@ start:
 		logError(0, "%s   flash erase COMPLETED!\n\n", tag);
 	}
 
-	logError(1, "%s 7) LOAD PROGRAM:\n", tag);
-	res = fillFlash(fw.code_start_addr, &fw.data[0], fw.sec0_size);
+	logError(0, "%s 7) LOAD PROGRAM: \n", tag);
+	res = fillFlash(FLASH_ADDR_CODE, &fw.data[0], fw.sec0_size);
 	if (res < OK) {
 		logError(1, "%s   load program ERROR %08X\n", tag,
 			 ERROR_FLASH_BURN_FAILED);
@@ -1032,7 +972,7 @@ start:
 
 	logError(0, "%s 8) LOAD CONFIG: \n", tag);
 	res =
-	    fillFlash(fw.config_start_addr, &(fw.data[fw.sec0_size]),
+	    fillFlash(FLASH_ADDR_CONFIG, &(fw.data[fw.sec0_size]),
 		      fw.sec1_size);
 	if (res < OK) {
 		logError(1, "%s   load config ERROR %08X\n", tag,
@@ -1045,7 +985,7 @@ start:
 		if ((force_burn == CRC_CX) || (keep_cx <= 0)) {
 			logError(0, "%s 8.1) LOAD CX: \n", tag);
 			res =
-			    fillFlash(fw.cx_start_addr,
+			    fillFlash(FLASH_ADDR_CX,
 				      &(fw.data[fw.sec0_size + fw.sec1_size]),
 				      fw.sec2_size);
 			if (res < OK) {

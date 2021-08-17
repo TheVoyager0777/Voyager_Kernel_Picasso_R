@@ -1,14 +1,8 @@
-/* Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0 */
+/*
+ * Copyright (c) 2015-2020, The Linux Foundation. All rights reserved.
  */
+
 #ifndef GSI_H
 #define GSI_H
 
@@ -27,6 +21,9 @@
 #if defined(CONFIG_IPA_EMULATION)
 # include "gsi_emulation_stubs.h"
 #endif
+
+#define GSI_ASSERT() \
+	BUG()
 
 #define GSI_CHAN_MAX      31
 #define GSI_EVT_RING_MAX  24
@@ -150,7 +147,7 @@ struct gsi_chan_ctx {
 	struct completion compl;
 	bool allocated;
 	atomic_t poll_mode;
-	union gsi_channel_scratch scratch;
+	union __packed gsi_channel_scratch scratch;
 	struct gsi_chan_stats stats;
 	bool enable_dp_stats;
 	bool print_dp_stats;
@@ -169,7 +166,7 @@ struct gsi_evt_ctx {
 	struct completion compl;
 	struct gsi_chan_ctx *chan;
 	atomic_t chan_ref_cnt;
-	union gsi_evt_scratch scratch;
+	union __packed gsi_evt_scratch scratch;
 	struct gsi_evt_stats stats;
 };
 
@@ -204,6 +201,11 @@ struct gsi_generic_ee_cmd_debug_stats {
 	unsigned long flow_ctrl_channel;
 };
 
+struct gsi_coal_chan_info {
+	uint8_t ch_id;
+	uint8_t evchid;
+};
+
 struct gsi_ctx {
 	void __iomem *base;
 	struct device *dev;
@@ -227,6 +229,7 @@ struct gsi_ctx {
 	struct completion gen_ee_cmd_compl;
 	void *ipc_logbuf;
 	void *ipc_logbuf_low;
+	struct gsi_coal_chan_info coal_info;
 	/*
 	 * The following used only on emulation systems.
 	 */

@@ -1,14 +1,5 @@
-/* Copyright (c) 2015-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- */
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2015-2018, 2020, The Linux Foundation. All rights reserved. */
 
 #define pr_fmt(fmt)	"%s: " fmt, __func__
 
@@ -306,7 +297,6 @@ static int hdmi_hdcp2p2_authenticate(void *input)
 	struct hdcp_transport_wakeup_data cdata = {
 			HDCP_TRANSPORT_CMD_AUTHENTICATE};
 	u32 regval;
-	int rc = 0;
 
 	/* Enable authentication success interrupt */
 	regval = DSS_REG_R(ctrl->init_data.core_io, HDMI_HDCP_INT_CTRL2);
@@ -330,7 +320,7 @@ static int hdmi_hdcp2p2_authenticate(void *input)
 		hdmi_hdcp2p2_wakeup(&cdata);
 	}
 
-	return rc;
+	return 0;
 }
 
 static int hdmi_hdcp2p2_reauthenticate(void *input)
@@ -347,7 +337,7 @@ static int hdmi_hdcp2p2_reauthenticate(void *input)
 	return  hdmi_hdcp2p2_authenticate(input);
 }
 
-static ssize_t hdmi_hdcp2p2_sysfs_rda_tethered(struct device *dev,
+static ssize_t tethered_show(struct device *dev,
 			struct device_attribute *attr, char *buf)
 {
 	ssize_t ret;
@@ -360,13 +350,13 @@ static ssize_t hdmi_hdcp2p2_sysfs_rda_tethered(struct device *dev,
 	}
 
 	mutex_lock(&ctrl->mutex);
-	ret = snprintf(buf, PAGE_SIZE, "%d\n", ctrl->tethered);
+	ret = scnprintf(buf, PAGE_SIZE, "%d\n", ctrl->tethered);
 	mutex_unlock(&ctrl->mutex);
 
 	return ret;
 }
 
-static ssize_t hdmi_hdcp2p2_sysfs_wta_tethered(struct device *dev,
+static ssize_t tethered_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct hdmi_hdcp2p2_ctrl *ctrl =
@@ -395,7 +385,7 @@ exit:
 	return count;
 }
 
-static ssize_t hdmi_hdcp2p2_sysfs_wta_min_level_change(struct device *dev,
+static ssize_t min_level_change_store(struct device *dev,
 	struct device_attribute *attr, const char *buf, size_t count)
 {
 	struct hdmi_hdcp2p2_ctrl *ctrl =
@@ -578,7 +568,7 @@ static int hdmi_hdcp2p2_read_version(struct hdmi_hdcp2p2_ctrl *ctrl,
 
 	rc = hdmi_ddc_read(ctrl->init_data.ddc_ctrl);
 	if (rc) {
-		pr_err("Cannot read HDCP2Version register");
+		pr_err("Cannot read HDCP2Version register\n");
 		return rc;
 	}
 
@@ -586,10 +576,8 @@ static int hdmi_hdcp2p2_read_version(struct hdmi_hdcp2p2_ctrl *ctrl,
 	return rc;
 }
 
-static DEVICE_ATTR(min_level_change, 0200, NULL,
-		hdmi_hdcp2p2_sysfs_wta_min_level_change);
-static DEVICE_ATTR(tethered, 0644, hdmi_hdcp2p2_sysfs_rda_tethered,
-		hdmi_hdcp2p2_sysfs_wta_tethered);
+static DEVICE_ATTR_WO(min_level_change);
+static DEVICE_ATTR_RW(tethered);
 
 static struct attribute *hdmi_hdcp2p2_fs_attrs[] = {
 	&dev_attr_min_level_change.attr,
@@ -655,14 +643,13 @@ static void hdmi_hdcp2p2_send_msg(struct hdmi_hdcp2p2_ctrl *ctrl)
 		goto exit;
 	}
 
-	msg = kzalloc(msglen, GFP_KERNEL);
+	msg = kmemdup(ctrl->buf, msglen, GFP_KERNEL);
 	if (!msg) {
 		mutex_unlock(&ctrl->msg_lock);
 		rc = -ENOMEM;
 		goto exit;
 	}
 
-	memcpy(msg, ctrl->buf, msglen);
 	mutex_unlock(&ctrl->msg_lock);
 
 	/* Forward the message to the sink */
@@ -674,9 +661,8 @@ static void hdmi_hdcp2p2_send_msg(struct hdmi_hdcp2p2_ctrl *ctrl)
 		cdata.cmd = HDCP_2X_CMD_MSG_SEND_SUCCESS;
 		cdata.timeout = ctrl->timeout_left;
 	}
-exit:
 	kfree(msg);
-
+exit:
 	hdmi_hdcp2p2_wakeup_lib(ctrl, &cdata);
 }
 
@@ -1120,6 +1106,7 @@ static bool hdmi_hdcp2p2_supported(struct hdmi_hdcp2p2_ctrl *ctrl)
 	u8 hdcp2version = 0;
 
 	int rc = hdmi_hdcp2p2_read_version(ctrl, &hdcp2version);
+
 	if (rc)
 		goto error;
 

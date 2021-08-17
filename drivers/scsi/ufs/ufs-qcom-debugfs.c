@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2015-2019 Linux Foundation. All rights reserved.
+ * Copyright (c) 2015, 2017-2018, Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -46,7 +47,7 @@ static int ufs_qcom_dbg_print_en_set(void *data, u64 attr_id)
 	return 0;
 }
 
-DEFINE_SIMPLE_ATTRIBUTE(ufs_qcom_dbg_print_en_ops,
+DEFINE_DEBUGFS_ATTRIBUTE(ufs_qcom_dbg_print_en_ops,
 			ufs_qcom_dbg_print_en_read,
 			ufs_qcom_dbg_print_en_set,
 			"%llu\n");
@@ -86,7 +87,7 @@ static int ufs_qcom_dbg_testbus_en_set(void *data, u64 attr_id)
 	return ret;
 }
 
-DEFINE_SIMPLE_ATTRIBUTE(ufs_qcom_dbg_testbus_en_ops,
+DEFINE_DEBUGFS_ATTRIBUTE(ufs_qcom_dbg_testbus_en_ops,
 			ufs_qcom_dbg_testbus_en_read,
 			ufs_qcom_dbg_testbus_en_set,
 			"%llu\n");
@@ -123,6 +124,7 @@ static ssize_t ufs_qcom_dbg_testbus_cfg_write(struct file *file,
 
 	ret = simple_write_to_buffer(configuration,
 		TESTBUS_CFG_BUFF_LINE_SIZE - 1,
+
 		&buff_pos, ubuf, cnt);
 	if (ret < 0) {
 		dev_err(host->hba->dev, "%s: failed to read user data\n",
@@ -186,7 +188,6 @@ static const struct file_operations ufs_qcom_dbg_testbus_cfg_desc = {
 	.open		= ufs_qcom_dbg_testbus_cfg_open,
 	.read		= seq_read,
 	.write		= ufs_qcom_dbg_testbus_cfg_write,
-	.release	= single_release,
 };
 
 static int ufs_qcom_dbg_testbus_bus_read(void *data, u64 *attr_val)
@@ -204,7 +205,7 @@ static int ufs_qcom_dbg_testbus_bus_read(void *data, u64 *attr_val)
 	return 0;
 }
 
-DEFINE_SIMPLE_ATTRIBUTE(ufs_qcom_dbg_testbus_bus_ops,
+DEFINE_DEBUGFS_ATTRIBUTE(ufs_qcom_dbg_testbus_bus_ops,
 			ufs_qcom_dbg_testbus_bus_read,
 			NULL,
 			"%llu\n");
@@ -241,7 +242,6 @@ static int ufs_qcom_dbg_dbg_regs_open(struct inode *inode,
 static const struct file_operations ufs_qcom_dbg_dbg_regs_desc = {
 	.open		= ufs_qcom_dbg_dbg_regs_open,
 	.read		= seq_read,
-	.release	= single_release,
 };
 
 static int ufs_qcom_dbg_pm_qos_show(struct seq_file *file, void *data)
@@ -275,7 +275,6 @@ static int ufs_qcom_dbg_pm_qos_open(struct inode *inode,
 static const struct file_operations ufs_qcom_dbg_pm_qos_desc = {
 	.open		= ufs_qcom_dbg_pm_qos_open,
 	.read		= seq_read,
-	.release	= single_release,
 };
 
 void ufs_qcom_dbg_add_debugfs(struct ufs_hba *hba, struct dentry *root)
@@ -298,12 +297,12 @@ void ufs_qcom_dbg_add_debugfs(struct ufs_hba *hba, struct dentry *root)
 		 * create the directory
 		 */
 		dev_err(host->hba->dev,
-			"%s: NULL debugfs root directory, exiting", __func__);
+			"%s: NULL debugfs root directory, exiting\n", __func__);
 		goto err_no_root;
 	}
 
 	host->debugfs_files.dbg_print_en =
-		debugfs_create_file("dbg_print_en", S_IRUSR | S_IWUSR,
+		debugfs_create_file("dbg_print_en", 0600,
 				    host->debugfs_files.debugfs_root, host,
 				    &ufs_qcom_dbg_print_en_ops);
 	if (!host->debugfs_files.dbg_print_en) {
@@ -323,7 +322,7 @@ void ufs_qcom_dbg_add_debugfs(struct ufs_hba *hba, struct dentry *root)
 	}
 
 	host->debugfs_files.testbus_en =
-		debugfs_create_file("enable", S_IRUSR | S_IWUSR,
+		debugfs_create_file("enable", 0600,
 				    host->debugfs_files.testbus, host,
 				    &ufs_qcom_dbg_testbus_en_ops);
 	if (!host->debugfs_files.testbus_en) {
@@ -334,7 +333,7 @@ void ufs_qcom_dbg_add_debugfs(struct ufs_hba *hba, struct dentry *root)
 	}
 
 	host->debugfs_files.testbus_cfg =
-		debugfs_create_file("configuration", S_IRUSR | S_IWUSR,
+		debugfs_create_file("configuration", 0600,
 				    host->debugfs_files.testbus, host,
 				    &ufs_qcom_dbg_testbus_cfg_desc);
 	if (!host->debugfs_files.testbus_cfg) {
@@ -345,7 +344,7 @@ void ufs_qcom_dbg_add_debugfs(struct ufs_hba *hba, struct dentry *root)
 	}
 
 	host->debugfs_files.testbus_bus =
-		debugfs_create_file("TEST_BUS", S_IRUSR,
+		debugfs_create_file("TEST_BUS", 0400,
 				    host->debugfs_files.testbus, host,
 				    &ufs_qcom_dbg_testbus_bus_ops);
 	if (!host->debugfs_files.testbus_bus) {
@@ -356,7 +355,7 @@ void ufs_qcom_dbg_add_debugfs(struct ufs_hba *hba, struct dentry *root)
 	}
 
 	host->debugfs_files.dbg_regs =
-		debugfs_create_file("debug-regs", S_IRUSR,
+		debugfs_create_file("debug-regs", 0400,
 				    host->debugfs_files.debugfs_root, host,
 				    &ufs_qcom_dbg_dbg_regs_desc);
 	if (!host->debugfs_files.dbg_regs) {

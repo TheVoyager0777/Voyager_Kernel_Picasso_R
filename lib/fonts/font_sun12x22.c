@@ -3,8 +3,13 @@
 
 #define FONTDATAMAX 11264
 
+<<<<<<< HEAD
+static const unsigned char fontdata_sun12x22[FONTDATAMAX] = {
+
+=======
 static const struct font_data fontdata_sun12x22 = {
 	{ 0, 0, FONTDATAMAX, 0 }, {
+>>>>>>> 20912a8acc7e (Merge android-4.19-stable.157 (8ee67bc) into msm-4.19)
 	/* 0 0x00 '^@' */
 	0x00, 0x00, /* 000000000000 */
 	0x00, 0x00, /* 000000000000 */
@@ -6148,7 +6153,8 @@ static const struct font_data fontdata_sun12x22 = {
 	0x00, 0x00, /* 000000000000 */
 	0x00, 0x00, /* 000000000000 */
 	0x00, 0x00, /* 000000000000 */
-} };
+
+};
 
 
 const struct font_desc font_sun_12x22 = {
@@ -6156,7 +6162,7 @@ const struct font_desc font_sun_12x22 = {
 	.name	= "SUN12x22",
 	.width	= 12,
 	.height	= 22,
-	.data	= fontdata_sun12x22.data,
+	.data	= fontdata_sun12x22,
 #ifdef __sparc__
 	.pref	= 5,
 #else

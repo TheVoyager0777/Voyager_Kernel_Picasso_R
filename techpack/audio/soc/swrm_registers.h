@@ -1,13 +1,6 @@
-/* Copyright (c) 2015, 2018 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+/* SPDX-License-Identifier: GPL-2.0-only */
+/*
+ * Copyright (c) 2015, 2018-2019 The Linux Foundation. All rights reserved.
  */
 
 #ifndef _SWRM_REGISTERS_H
@@ -24,6 +17,7 @@
 #define SWRM_COMP_CFG_ENABLE_SHFT			0x0
 
 #define SWRM_COMP_SW_RESET		(SWRM_BASE_ADDRESS+0x00000008)
+#define SWRM_COMP_STATUS		(SWRM_BASE_ADDRESS+0x00000014)
 
 #define SWRM_COMP_PARAMS		(SWRM_BASE_ADDRESS+0x100)
 #define SWRM_COMP_PARAMS_DOUT_PORTS_MASK	0x0000001F
@@ -55,6 +49,13 @@
 #define SWRM_INTERRUPT_STATUS_BUS_RESET_FINISHED		0x4000
 #define SWRM_INTERRUPT_STATUS_CLK_STOP_FINISHED			0x8000
 #define SWRM_INTERRUPT_STATUS_ERROR_PORT_TEST			0x10000
+
+#define SWRM_INTERRUPT_STATUS_AUTO_ENUM_FAILED_V2               0x800
+#define SWRM_INTERRUPT_STATUS_AUTO_ENUM_TABLE_IS_FULL_V2        0x1000
+#define SWRM_INTERRUPT_STATUS_BUS_RESET_FINISHED_V2             0x2000
+#define SWRM_INTERRUPT_STATUS_CLK_STOP_FINISHED_V2              0x4000
+#define SWRM_INTERRUPT_STATUS_ERROR_PORT_TEST_V2                0x8000
+#define SWRM_INTERRUPT_STATUS_EXT_CLK_STOP_WAKEUP               0x10000
 
 #define SWRM_INTERRUPT_MASK_ADDR		(SWRM_BASE_ADDRESS+0x00000204)
 #define SWRM_INTERRUPT_MASK_RMSK		0x1FFFF

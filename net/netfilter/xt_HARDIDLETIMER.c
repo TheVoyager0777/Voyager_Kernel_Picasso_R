@@ -1,11 +1,10 @@
-/*
- * linux/net/netfilter/xt_HARDIDLETIMER.c
+// SPDX-License-Identifier: GPL-2.0-only
+/* linux/net/netfilter/xt_HARDIDLETIMER.c
  *
  * Netfilter module to trigger a timer when packet matches.
  * After timer expires a kevent will be sent.
  *
- * Copyright (c) 2014-2015, 2017-2018, The Linux Foundation.
- * All rights reserved.
+ * Copyright (c) 2014-2015, 2017-2019, The Linux Foundation. All rights reserved.
  *
  * Copyright (C) 2004, 2010 Nokia Corporation
  *
@@ -15,16 +14,6 @@
  * by Luciano Coelho <luciano.coelho@nokia.com>
  *
  * Contact: Luciano Coelho <luciano.coelho@nokia.com>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
  */
 
 #define pr_fmt(fmt) KBUILD_MODNAME ": " fmt

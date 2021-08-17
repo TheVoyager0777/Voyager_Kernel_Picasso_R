@@ -1,3 +1,4 @@
+/* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
 #ifndef __UAPI_MSMB_ISP__
 #define __UAPI_MSMB_ISP__
 

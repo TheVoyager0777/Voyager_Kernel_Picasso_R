@@ -1,4 +1,5 @@
-/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -921,7 +922,7 @@ void msm_jpeg_io_dump(void *base, int size)
 	line_str[0] = '\0';
 	for (i = 0; i < size; i = i+4) {
 		if (i % 4 == 0) {
-			used = snprintf(line_str + offset,
+			used = scnprintf(line_str + offset,
 				sizeof_line_str - offset, "%pK", p+i);
 			if ((used < min_range) ||
 				(offset + used >= sizeof_line_str)) {
@@ -933,7 +934,7 @@ void msm_jpeg_io_dump(void *base, int size)
 			}
 		}
 		data = msm_camera_io_r(p+i);
-		used = snprintf(line_str + offset,
+		used = scnprintf(line_str + offset,
 			sizeof_line_str - offset, " - %08x ", data);
 		if ((used < min_range) ||
 			(offset + used >= sizeof_line_str)) {

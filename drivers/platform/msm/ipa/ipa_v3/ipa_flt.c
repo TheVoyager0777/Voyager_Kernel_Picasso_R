@@ -1,13 +1,6 @@
-/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  */
 
 #include "ipa_i.h"
@@ -229,9 +222,6 @@ static int ipa_translate_flt_tbl_to_hw_fmt(enum ipa_ip_type ip,
 			/* only body (no header) */
 			tbl_mem.size = tbl->sz[rlt] -
 				ipahal_get_hw_tbl_hdr_width();
-			/* Add prefetech buf size. */
-			tbl_mem.size +=
-				ipahal_get_hw_prefetch_buf_size();
 			if (ipahal_fltrt_allocate_hw_sys_tbl(&tbl_mem)) {
 				IPAERR("fail to alloc sys tbl of size %d\n",
 					tbl_mem.size);
@@ -857,7 +847,7 @@ static int __ipa_validate_flt_rule(const struct ipa_flt_rule_i *rule,
 					"PDN index should be 0 when action is not pass to NAT\n");
 				goto error;
 			} else {
-				if (rule->pdn_idx >= ipa3_get_max_pdn()) {
+				if (rule->pdn_idx >= IPA_MAX_PDN_NUM) {
 					IPAERR_RL("PDN index %d is too large\n",
 						rule->pdn_idx);
 					goto error;
@@ -949,10 +939,7 @@ static int __ipa_finish_flt_rule_add(struct ipa3_flt_tbl *tbl,
 {
 	int id;
 
-	if (tbl->rule_cnt < IPA_RULE_CNT_MAX)
-		tbl->rule_cnt++;
-	else
-		return -EINVAL;
+	tbl->rule_cnt++;
 	if (entry->rt_tbl)
 		entry->rt_tbl->ref_cnt++;
 	id = ipa3_id_alloc(entry);
@@ -1188,7 +1175,7 @@ static void __ipa_convert_flt_rule_in(struct ipa_flt_rule rule_in,
 {
 	if (unlikely(sizeof(struct ipa_flt_rule) >
 			sizeof(struct ipa_flt_rule_i))) {
-		IPAERR_RL("invalid size in:%ld size out:%ld\n",
+		IPAERR_RL("invalid size in:%d size out:%d\n",
 			sizeof(struct ipa_flt_rule_i),
 			sizeof(struct ipa_flt_rule));
 		return;
@@ -1202,7 +1189,7 @@ static void __ipa_convert_flt_rule_out(struct ipa_flt_rule_i rule_in,
 {
 	if (unlikely(sizeof(struct ipa_flt_rule) >
 			sizeof(struct ipa_flt_rule_i))) {
-		IPAERR_RL("invalid size in:%ld size out:%ld\n",
+		IPAERR_RL("invalid size in:%d size out:%d\n",
 			sizeof(struct ipa_flt_rule_i),
 			sizeof(struct ipa_flt_rule));
 		return;
@@ -1216,7 +1203,7 @@ static void __ipa_convert_flt_mdfy_in(struct ipa_flt_rule_mdfy rule_in,
 {
 	if (unlikely(sizeof(struct ipa_flt_rule_mdfy) >
 			sizeof(struct ipa_flt_rule_mdfy_i))) {
-		IPAERR_RL("invalid size in:%ld size out:%ld\n",
+		IPAERR_RL("invalid size in:%d size out:%d\n",
 			sizeof(struct ipa_flt_rule_mdfy),
 			sizeof(struct ipa_flt_rule_mdfy_i));
 		return;
@@ -1233,7 +1220,7 @@ static void __ipa_convert_flt_mdfy_out(struct ipa_flt_rule_mdfy_i rule_in,
 {
 	if (unlikely(sizeof(struct ipa_flt_rule_mdfy) >
 			sizeof(struct ipa_flt_rule_mdfy_i))) {
-		IPAERR_RL("invalid size in:%ld size out:%ld\n",
+		IPAERR_RL("invalid size in:%d size out:%d\n",
 			sizeof(struct ipa_flt_rule_mdfy),
 			sizeof(struct ipa_flt_rule_mdfy_i));
 		return;
@@ -1304,7 +1291,6 @@ int ipa3_add_flt_rule_usr(struct ipa_ioc_add_flt_rule *rules, bool user_only)
 			 */
 			if (ipa3_ctx->ipa_fltrt_not_hashable)
 				rules->rules[i].rule.hashable = false;
-
 			__ipa_convert_flt_rule_in(
 				rules->rules[i].rule, &rule);
 			result = __ipa_add_ep_flt_rule(rules->ip,
@@ -1317,7 +1303,6 @@ int ipa3_add_flt_rule_usr(struct ipa_ioc_add_flt_rule *rules, bool user_only)
 				&rules->rules[i].rule);
 		} else
 			result = -1;
-
 		if (result) {
 			IPAERR_RL("failed to add flt rule %d\n", i);
 			rules->rules[i].status = IPA_FLT_STATUS_OF_ADD_FAILED;

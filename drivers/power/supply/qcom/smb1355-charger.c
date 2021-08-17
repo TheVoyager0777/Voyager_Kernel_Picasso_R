@@ -1,13 +1,6 @@
-/* Copyright (c) 2016-2018 The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2016-2019 The Linux Foundation. All rights reserved.
  */
 
 #define pr_fmt(fmt) "SMB1355: %s: " fmt, __func__
@@ -148,6 +141,13 @@
 
 #define MISC_CHGR_TRIM_OPTIONS_REG		(MISC_BASE + 0x55)
 #define CMD_RBIAS_EN_BIT			BIT(2)
+
+#define MISC_ENG_SDCDC_RESERVE1_REG		(MISC_BASE + 0xC4)
+#define MINOFF_TIME_MASK			BIT(6)
+
+#define MISC_ENG_SDCDC_CFG8_REG			(MISC_BASE + 0xC7)
+#define DEAD_TIME_MASK				GENMASK(2, 0)
+#define DEAD_TIME_32NS				0x4
 
 #define MISC_ENG_SDCDC_INPUT_CURRENT_CFG1_REG	(MISC_BASE + 0xC8)
 #define PROLONG_ISENSE_MASK			GENMASK(7, 6)
@@ -1204,6 +1204,16 @@ static int smb1355_init_hw(struct smb1355 *chip)
 		return rc;
 	}
 
+	/* disable charging when watchdog bites & set bite-timeout to 8secs */
+	val = BITE_WDOG_DISABLE_CHARGING_CFG_BIT | 0x3;
+	rc = smb1355_masked_write(chip, SNARL_BARK_BITE_WD_CFG_REG,
+				BITE_WDOG_DISABLE_CHARGING_CFG_BIT |
+				BITE_WDOG_TIMEOUT_MASK, val);
+	if (rc < 0) {
+		pr_err("Couldn't configure the watchdog bite rc=%d\n", rc);
+		return rc;
+	}
+
 	/* enable watchdog bark and bite interrupts, and disable the watchdog */
 	rc = smb1355_masked_write(chip, WD_CFG_REG, WDOG_TIMER_EN_BIT
 			| WDOG_TIMER_EN_ON_PLUGIN_BIT | BITE_WDOG_INT_EN_BIT
@@ -1211,15 +1221,6 @@ static int smb1355_init_hw(struct smb1355 *chip)
 			BITE_WDOG_INT_EN_BIT | BARK_WDOG_INT_EN_BIT);
 	if (rc < 0) {
 		pr_err("Couldn't configure the watchdog rc=%d\n", rc);
-		return rc;
-	}
-
-	/* disable charging when watchdog bites */
-	rc = smb1355_masked_write(chip, SNARL_BARK_BITE_WD_CFG_REG,
-				 BITE_WDOG_DISABLE_CHARGING_CFG_BIT,
-				 BITE_WDOG_DISABLE_CHARGING_CFG_BIT);
-	if (rc < 0) {
-		pr_err("Couldn't configure the watchdog bite rc=%d\n", rc);
 		return rc;
 	}
 
@@ -1272,6 +1273,22 @@ static int smb1355_init_hw(struct smb1355 *chip)
 	if (rc < 0) {
 		pr_err("Couldn't set PRE_TO_FAST_CHARGE_THRESHOLD rc=%d\n",
 			rc);
+		return rc;
+	}
+
+	/* Extend min-offtime same as blanking time */
+	rc = smb1355_masked_write(chip, MISC_ENG_SDCDC_RESERVE1_REG,
+						MINOFF_TIME_MASK, 0);
+	if (rc < 0) {
+		pr_err("Couldn't set MINOFF_TIME rc=%d\n", rc);
+		return rc;
+	}
+
+	/* Set dead-time to 32ns */
+	rc = smb1355_masked_write(chip, MISC_ENG_SDCDC_CFG8_REG,
+					DEAD_TIME_MASK, DEAD_TIME_32NS);
+	if (rc < 0) {
+		pr_err("Couldn't set DEAD_TIME to 32ns rc=%d\n", rc);
 		return rc;
 	}
 
@@ -1696,7 +1713,6 @@ static SIMPLE_DEV_PM_OPS(smb1355_pm_ops, smb1355_suspend, smb1355_resume);
 static struct platform_driver smb1355_driver = {
 	.driver	= {
 		.name		= "qcom,smb1355-charger",
-		.owner		= THIS_MODULE,
 		.pm		= &smb1355_pm_ops,
 		.of_match_table	= match_table,
 	},

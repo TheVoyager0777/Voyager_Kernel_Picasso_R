@@ -1,14 +1,6 @@
-/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
- * GNU General Public License for more details.
- */
+/* SPDX-License-Identifier: GPL-2.0-only */
+/* Copyright (c) 2018-2020, The Linux Foundation. All rights reserved.*/
+
 #ifndef _MHI_QCOM_
 #define _MHI_QCOM_
 
@@ -67,16 +59,12 @@ extern const char * const mhi_suspend_mode_str[MHI_SUSPEND_MODE_MAX];
 struct mhi_dev {
 	struct pci_dev *pci_dev;
 	bool drv_supported;
-	u32 smmu_cfg;
 	int resn;
 	void *arch_info;
 	bool powered_on;
-	bool allow_m1;
-	bool mdm_state;
 	dma_addr_t iova_start;
 	dma_addr_t iova_stop;
 	enum mhi_suspend_mode suspend_mode;
-	struct work_struct fatal_worker;
 
 	/* hardware info */
 	u32 serial_num;
@@ -93,28 +81,12 @@ void mhi_reg_write_work(struct work_struct *w);
 int mhi_arch_link_lpm_disable(struct mhi_controller *mhi_cntrl);
 int mhi_arch_link_lpm_enable(struct mhi_controller *mhi_cntrl);
 void mhi_arch_mission_mode_enter(struct mhi_controller *mhi_cntrl);
-int mhi_arch_power_up(struct mhi_controller *mhi_cntrl);
 int mhi_arch_pcie_init(struct mhi_controller *mhi_cntrl);
 void mhi_arch_pcie_deinit(struct mhi_controller *mhi_cntrl);
-int mhi_arch_iommu_init(struct mhi_controller *mhi_cntrl);
-void mhi_arch_iommu_deinit(struct mhi_controller *mhi_cntrl);
 int mhi_arch_link_suspend(struct mhi_controller *mhi_cntrl);
 int mhi_arch_link_resume(struct mhi_controller *mhi_cntrl);
 
 #else
-
-static inline int mhi_arch_iommu_init(struct mhi_controller *mhi_cntrl)
-{
-	struct mhi_dev *mhi_dev = mhi_controller_get_devdata(mhi_cntrl);
-
-	mhi_cntrl->dev = &mhi_dev->pci_dev->dev;
-
-	return dma_set_mask_and_coherent(mhi_cntrl->dev, DMA_BIT_MASK(64));
-}
-
-static inline void mhi_arch_iommu_deinit(struct mhi_controller *mhi_cntrl)
-{
-}
 
 static inline int mhi_arch_pcie_init(struct mhi_controller *mhi_cntrl)
 {
@@ -131,11 +103,6 @@ static inline int mhi_arch_link_suspend(struct mhi_controller *mhi_cntrl)
 }
 
 static inline int mhi_arch_link_resume(struct mhi_controller *mhi_cntrl)
-{
-	return 0;
-}
-
-static inline int mhi_arch_power_up(struct mhi_controller *mhi_cntrl)
 {
 	return 0;
 }

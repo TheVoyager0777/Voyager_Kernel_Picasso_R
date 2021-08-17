@@ -1,15 +1,6 @@
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2015,2017-2018, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
- *
  */
 #ifndef SERVICE_LOCATOR_V01_H
 #define SERVICE_LOCATOR_V01_H
@@ -98,7 +89,7 @@ struct qmi_elem_info qmi_servreg_loc_database_updated_ind_msg_v01_ei[];
 	.data_type = QMI_EOTI,	\
 	.elem_len  = 0,		\
 	.elem_size = 0,		\
-	.is_array  = NO_ARRAY,	\
+	.array_type  = NO_ARRAY,	\
 	.tlv_type  = 0x00,	\
 	.offset    = 0,		\
 	.ei_array  = NULL,	\
@@ -109,7 +100,7 @@ static struct qmi_elem_info servreg_loc_entry_v01_ei[] = {
 		.data_type      = QMI_STRING,
 		.elem_len       = QMI_SERVREG_LOC_NAME_LENGTH_V01 + 1,
 		.elem_size      = sizeof(char),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0,
 		.offset         = offsetof(struct servreg_loc_entry_v01,
 					   name),
@@ -118,7 +109,7 @@ static struct qmi_elem_info servreg_loc_entry_v01_ei[] = {
 		.data_type      = QMI_UNSIGNED_4_BYTE,
 		.elem_len       = 1,
 		.elem_size      = sizeof(uint32_t),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0,
 		.offset         = offsetof(struct servreg_loc_entry_v01,
 					   instance_id),
@@ -127,7 +118,7 @@ static struct qmi_elem_info servreg_loc_entry_v01_ei[] = {
 		.data_type      = QMI_UNSIGNED_1_BYTE,
 		.elem_len       = 1,
 		.elem_size      = sizeof(uint8_t),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0,
 		.offset         = offsetof(struct servreg_loc_entry_v01,
 					   service_data_valid),
@@ -136,7 +127,7 @@ static struct qmi_elem_info servreg_loc_entry_v01_ei[] = {
 		.data_type      = QMI_UNSIGNED_4_BYTE,
 		.elem_len       = 1,
 		.elem_size      = sizeof(uint32_t),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0,
 		.offset         = offsetof(struct servreg_loc_entry_v01,
 					   service_data),
@@ -149,7 +140,7 @@ struct qmi_elem_info qmi_servreg_loc_indication_register_req_msg_v01_ei[] = {
 		.data_type      = QMI_OPT_FLAG,
 		.elem_len       = 1,
 		.elem_size      = sizeof(uint8_t),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0x10,
 		.offset         = offsetof(struct
 				qmi_servreg_loc_indication_register_req_msg_v01,
@@ -159,7 +150,7 @@ struct qmi_elem_info qmi_servreg_loc_indication_register_req_msg_v01_ei[] = {
 		.data_type      = QMI_UNSIGNED_1_BYTE,
 		.elem_len       = 1,
 		.elem_size      = sizeof(uint8_t),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0x10,
 		.offset         = offsetof(struct
 				qmi_servreg_loc_indication_register_req_msg_v01,
@@ -173,7 +164,7 @@ struct qmi_elem_info qmi_servreg_loc_indication_register_resp_msg_v01_ei[] = {
 		.data_type      = QMI_STRUCT,
 		.elem_len       = 1,
 		.elem_size      = sizeof(struct qmi_response_type_v01),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0x02,
 		.offset         = offsetof(struct
 			qmi_servreg_loc_indication_register_resp_msg_v01,
@@ -188,7 +179,7 @@ struct qmi_elem_info qmi_servreg_loc_get_domain_list_req_msg_v01_ei[] = {
 		.data_type      = QMI_STRING,
 		.elem_len       = QMI_SERVREG_LOC_NAME_LENGTH_V01 + 1,
 		.elem_size      = sizeof(char),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0x01,
 		.offset         = offsetof(struct
 				qmi_servreg_loc_get_domain_list_req_msg_v01,
@@ -198,7 +189,7 @@ struct qmi_elem_info qmi_servreg_loc_get_domain_list_req_msg_v01_ei[] = {
 		.data_type      = QMI_OPT_FLAG,
 		.elem_len       = 1,
 		.elem_size      = sizeof(uint8_t),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0x10,
 		.offset         = offsetof(struct
 				qmi_servreg_loc_get_domain_list_req_msg_v01,
@@ -208,7 +199,7 @@ struct qmi_elem_info qmi_servreg_loc_get_domain_list_req_msg_v01_ei[] = {
 		.data_type      = QMI_UNSIGNED_4_BYTE,
 		.elem_len       = 1,
 		.elem_size      = sizeof(uint32_t),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0x10,
 		.offset         = offsetof(struct
 				qmi_servreg_loc_get_domain_list_req_msg_v01,
@@ -222,7 +213,7 @@ struct qmi_elem_info qmi_servreg_loc_get_domain_list_resp_msg_v01_ei[] = {
 		.data_type      = QMI_STRUCT,
 		.elem_len       = 1,
 		.elem_size      = sizeof(struct qmi_response_type_v01),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0x02,
 		.offset         = offsetof(struct
 				qmi_servreg_loc_get_domain_list_resp_msg_v01,
@@ -233,7 +224,7 @@ struct qmi_elem_info qmi_servreg_loc_get_domain_list_resp_msg_v01_ei[] = {
 		.data_type      = QMI_OPT_FLAG,
 		.elem_len       = 1,
 		.elem_size      = sizeof(uint8_t),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0x10,
 		.offset         = offsetof(struct
 				qmi_servreg_loc_get_domain_list_resp_msg_v01,
@@ -243,7 +234,7 @@ struct qmi_elem_info qmi_servreg_loc_get_domain_list_resp_msg_v01_ei[] = {
 		.data_type      = QMI_UNSIGNED_2_BYTE,
 		.elem_len       = 1,
 		.elem_size      = sizeof(uint16_t),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0x10,
 		.offset         = offsetof(struct
 				qmi_servreg_loc_get_domain_list_resp_msg_v01,
@@ -253,7 +244,7 @@ struct qmi_elem_info qmi_servreg_loc_get_domain_list_resp_msg_v01_ei[] = {
 		.data_type      = QMI_OPT_FLAG,
 		.elem_len       = 1,
 		.elem_size      = sizeof(uint8_t),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0x11,
 		.offset         = offsetof(struct
 				qmi_servreg_loc_get_domain_list_resp_msg_v01,
@@ -263,7 +254,7 @@ struct qmi_elem_info qmi_servreg_loc_get_domain_list_resp_msg_v01_ei[] = {
 		.data_type      = QMI_UNSIGNED_2_BYTE,
 		.elem_len       = 1,
 		.elem_size      = sizeof(uint16_t),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0x11,
 		.offset         = offsetof(struct
 				qmi_servreg_loc_get_domain_list_resp_msg_v01,
@@ -273,7 +264,7 @@ struct qmi_elem_info qmi_servreg_loc_get_domain_list_resp_msg_v01_ei[] = {
 		.data_type      = QMI_OPT_FLAG,
 		.elem_len       = 1,
 		.elem_size      = sizeof(uint8_t),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0x12,
 		.offset         = offsetof(struct
 				qmi_servreg_loc_get_domain_list_resp_msg_v01,
@@ -283,7 +274,7 @@ struct qmi_elem_info qmi_servreg_loc_get_domain_list_resp_msg_v01_ei[] = {
 		.data_type      = QMI_DATA_LEN,
 		.elem_len       = 1,
 		.elem_size      = sizeof(uint8_t),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0x12,
 		.offset         = offsetof(struct
 				qmi_servreg_loc_get_domain_list_resp_msg_v01,
@@ -293,7 +284,7 @@ struct qmi_elem_info qmi_servreg_loc_get_domain_list_resp_msg_v01_ei[] = {
 		.data_type      = QMI_STRUCT,
 		.elem_len       = QMI_SERVREG_LOC_LIST_LENGTH_V01,
 		.elem_size      = sizeof(struct servreg_loc_entry_v01),
-		.is_array       = VAR_LEN_ARRAY,
+		.array_type       = VAR_LEN_ARRAY,
 		.tlv_type       = 0x12,
 		.offset         = offsetof(struct
 				qmi_servreg_loc_get_domain_list_resp_msg_v01,
@@ -308,7 +299,7 @@ struct qmi_elem_info qmi_servreg_loc_register_service_list_req_msg_v01_ei[] = {
 		.data_type      = QMI_STRING,
 		.elem_len       = QMI_SERVREG_LOC_NAME_LENGTH_V01 + 1,
 		.elem_size      = sizeof(char),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0x01,
 		.offset         = offsetof(struct
 			qmi_servreg_loc_register_service_list_req_msg_v01,
@@ -318,7 +309,7 @@ struct qmi_elem_info qmi_servreg_loc_register_service_list_req_msg_v01_ei[] = {
 		.data_type      = QMI_DATA_LEN,
 		.elem_len       = 1,
 		.elem_size      = sizeof(uint8_t),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0x02,
 		.offset         = offsetof(struct
 			qmi_servreg_loc_register_service_list_req_msg_v01,
@@ -328,7 +319,7 @@ struct qmi_elem_info qmi_servreg_loc_register_service_list_req_msg_v01_ei[] = {
 		.data_type      = QMI_STRUCT,
 		.elem_len       = QMI_SERVREG_LOC_LIST_LENGTH_V01,
 		.elem_size      = sizeof(struct servreg_loc_entry_v01),
-		.is_array       = VAR_LEN_ARRAY,
+		.array_type       = VAR_LEN_ARRAY,
 		.tlv_type       = 0x02,
 		.offset         = offsetof(struct
 			qmi_servreg_loc_register_service_list_req_msg_v01,
@@ -343,7 +334,7 @@ struct qmi_elem_info qmi_servreg_loc_register_service_list_resp_msg_v01_ei[] = {
 		.data_type      = QMI_STRUCT,
 		.elem_len       = 1,
 		.elem_size      = sizeof(struct qmi_response_type_v01),
-		.is_array       = NO_ARRAY,
+		.array_type       = NO_ARRAY,
 		.tlv_type       = 0x02,
 		.offset         = offsetof(struct
 			qmi_servreg_loc_register_service_list_resp_msg_v01,

@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2012 Red Hat, Inc.
- * Copyright (C) 2021 XiaoMi, Inc.
  * Copyright (C) 2015 Google, Inc.
  *
  * Author: Mikulas Patocka <mpatocka@redhat.com>
@@ -13,7 +12,7 @@
 #ifndef DM_VERITY_H
 #define DM_VERITY_H
 
-#include "dm-bufio.h"
+#include <linux/dm-bufio.h>
 #include <linux/device-mapper.h>
 #include <crypto/hash.h>
 
@@ -92,11 +91,6 @@ struct dm_verity_io {
 	 */
 };
 
-struct verity_result {
-	struct completion completion;
-	int err;
-};
-
 static inline struct ahash_request *verity_io_hash_req(struct dm_verity *v,
 						     struct dm_verity_io *io)
 {
@@ -143,4 +137,5 @@ extern void verity_dtr(struct dm_target *ti);
 extern int verity_ctr(struct dm_target *ti, unsigned argc, char **argv);
 extern int verity_map(struct dm_target *ti, struct bio *bio);
 extern void dm_verity_avb_error_handler(void);
+
 #endif /* DM_VERITY_H */

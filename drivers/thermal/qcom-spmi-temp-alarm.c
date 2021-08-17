@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011-2015, 2017-2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2011-2015, 2017, 2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -78,7 +78,6 @@ struct qpnp_tm_chip {
 	unsigned int			stage;
 	unsigned int			prev_stage;
 	unsigned int			base;
-	int				irq;
 	u32				init_thresh;
 	struct iio_channel		*adc;
 	const long			(*temp_map)[THRESH_COUNT][STAGE_COUNT];
@@ -190,7 +189,7 @@ static int qpnp_tm_get_temp(void *data, int *temp)
 	if (!temp)
 		return -EINVAL;
 
-	if (IS_ERR(chip->adc)) {
+	if (!chip->adc) {
 		ret = qpnp_tm_update_temp_no_adc(chip);
 		if (ret < 0)
 			return ret;
@@ -272,9 +271,8 @@ static int qpnp_tm_probe(struct platform_device *pdev)
 	struct qpnp_tm_chip *chip;
 	struct device_node *node;
 	u8 type, subtype, dig_major;
-	unsigned long int flags;
 	u32 res;
-	int ret;
+	int ret, irq;
 
 	node = pdev->dev.of_node;
 
@@ -302,41 +300,44 @@ static int qpnp_tm_probe(struct platform_device *pdev)
 		}
 	}
 
-	chip->irq = platform_get_irq(pdev, 0);
-	if (chip->irq < 0)
-		return chip->irq;
+	irq = platform_get_irq(pdev, 0);
+	if (irq < 0)
+		return irq;
 
 	/* ADC based measurements are optional */
-	chip->adc = iio_channel_get(&pdev->dev, "thermal");
-	if (PTR_ERR(chip->adc) == -EPROBE_DEFER)
-		return PTR_ERR(chip->adc);
+	chip->adc = devm_iio_channel_get(&pdev->dev, "thermal");
+	if (IS_ERR(chip->adc)) {
+		ret = PTR_ERR(chip->adc);
+		chip->adc = NULL;
+		if (ret == -EPROBE_DEFER)
+			return ret;
+	}
 
 	chip->base = res;
 
 	ret = qpnp_tm_read(chip, QPNP_TM_REG_TYPE, &type);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "could not read type\n");
-		goto fail;
+		return ret;
 	}
 
 	ret = qpnp_tm_read(chip, QPNP_TM_REG_SUBTYPE, &subtype);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "could not read subtype\n");
-		goto fail;
+		return ret;
 	}
 
 	ret = qpnp_tm_read(chip, QPNP_TM_REG_DIG_MAJOR, &dig_major);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "could not read dig_major\n");
-		goto fail;
+		return ret;
 	}
 
 	if (type != QPNP_TM_TYPE || (subtype != QPNP_TM_SUBTYPE_GEN1
 				     && subtype != QPNP_TM_SUBTYPE_GEN2)) {
 		dev_err(&pdev->dev, "invalid type 0x%02x or subtype 0x%02x\n",
 			type, subtype);
-		ret = -ENODEV;
-		goto fail;
+		return -ENODEV;
 	}
 
 	chip->subtype = subtype;
@@ -349,104 +350,23 @@ static int qpnp_tm_probe(struct platform_device *pdev)
 	ret = qpnp_tm_init(chip);
 	if (ret < 0) {
 		dev_err(&pdev->dev, "init failed\n");
-		goto fail;
+		return ret;
 	}
 
-	if (subtype == QPNP_TM_SUBTYPE_GEN2) {
-		/*
-		 * The interrupt signal on TEMP_GEN2 modules is low when the
-		 * over-temperature stage is 0 and high when the stage is
-		 * greater than 0.  Therefore, triggering on both edges is
-		 * required in order to detect both stage 0 -> 1 and 1 -> 0
-		 * transitions.
-		 *
-		 * There is no mechanism to receive interrupts on other stage
-		 * transitions (e.g. 1 -> 2 or 2 -> 1).
-		 */
-		flags = IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
-	} else {
-		/*
-		 * The interrupt signal on older modules provides a short pulse
-		 * on every over-temperature stage transition (e.g. 0 -> 1,
-		 * 1 -> 0, 1 -> 2, 2 -> 1, etc).  Therefore, triggering should
-		 * only be performed on the rising edge.
-		 */
-		flags = IRQF_TRIGGER_RISING;
-	}
-
-	ret = devm_request_threaded_irq(&pdev->dev, chip->irq, NULL,
-			qpnp_tm_isr, flags | IRQF_ONESHOT, node->name, chip);
+	ret = devm_request_threaded_irq(&pdev->dev, irq, NULL, qpnp_tm_isr,
+					IRQF_ONESHOT, node->name, chip);
 	if (ret < 0)
-		goto fail;
+		return ret;
 
 	chip->tz_dev = devm_thermal_zone_of_sensor_register(&pdev->dev, 0, chip,
 							&qpnp_tm_sensor_ops);
 	if (IS_ERR(chip->tz_dev)) {
 		dev_err(&pdev->dev, "failed to register sensor\n");
-		ret = PTR_ERR(chip->tz_dev);
-		goto fail;
+		return PTR_ERR(chip->tz_dev);
 	}
 
 	return 0;
-
-fail:
-	if (!IS_ERR(chip->adc))
-		iio_channel_release(chip->adc);
-
-	return ret;
 }
-
-static int qpnp_tm_remove(struct platform_device *pdev)
-{
-	struct qpnp_tm_chip *chip = dev_get_drvdata(&pdev->dev);
-
-	if (!IS_ERR(chip->adc))
-		iio_channel_release(chip->adc);
-
-	return 0;
-}
-
-static int qpnp_tm_restore(struct device *dev)
-{
-	int ret = 0;
-	struct qpnp_tm_chip *chip = dev_get_drvdata(dev);
-	struct device_node *node = dev->of_node;
-	unsigned long int flags;
-
-	if (chip->subtype == QPNP_TM_SUBTYPE_GEN2)
-		flags = IRQF_TRIGGER_RISING | IRQF_TRIGGER_FALLING;
-	else
-		flags = IRQF_TRIGGER_RISING;
-
-	if (chip->irq > 0) {
-		ret = devm_request_threaded_irq(dev, chip->irq, NULL,
-			qpnp_tm_isr, flags | IRQF_ONESHOT, node->name, chip);
-		if (ret < 0)
-			return ret;
-	}
-
-	ret = qpnp_tm_init(chip);
-	if (ret < 0)
-		dev_err(dev, "init failed\n");
-
-	return ret;
-}
-
-static int qpnp_tm_freeze(struct device *dev)
-{
-	struct qpnp_tm_chip *chip = dev_get_drvdata(dev);
-
-	if (chip->irq > 0)
-		devm_free_irq(dev, chip->irq, chip);
-
-	return 0;
-}
-
-static const struct dev_pm_ops qpnp_tm_pm_ops = {
-	.freeze = qpnp_tm_freeze,
-	.restore = qpnp_tm_restore,
-	.thaw = qpnp_tm_restore,
-};
 
 static const struct of_device_id qpnp_tm_match_table[] = {
 	{ .compatible = "qcom,spmi-temp-alarm" },
@@ -458,10 +378,8 @@ static struct platform_driver qpnp_tm_driver = {
 	.driver = {
 		.name = "spmi-temp-alarm",
 		.of_match_table = qpnp_tm_match_table,
-		.pm = &qpnp_tm_pm_ops,
 	},
 	.probe  = qpnp_tm_probe,
-	.remove = qpnp_tm_remove,
 };
 module_platform_driver(qpnp_tm_driver);
 

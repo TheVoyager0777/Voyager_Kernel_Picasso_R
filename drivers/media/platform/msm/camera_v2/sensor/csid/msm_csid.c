@@ -1,3 +1,4 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /* Copyright (c) 2011-2020, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -337,7 +338,7 @@ static int msm_csid_reset(struct csid_device *csid_dev)
 static bool msm_csid_find_max_clk_rate(struct csid_device *csid_dev)
 {
 	int i;
-	bool ret = FALSE;
+	bool ret = false;
 
 	for (i = 0; i < csid_dev->num_clk; i++) {
 		if (!strcmp(csid_dev->csid_clk_info[i].clk_name,
@@ -348,7 +349,7 @@ static bool msm_csid_find_max_clk_rate(struct csid_device *csid_dev)
 			csid_dev->csid_max_clk =
 				 csid_dev->csid_clk_info[i].clk_rate;
 			csid_dev->csid_clk_index = i;
-			ret = TRUE;
+			ret = true;
 			break;
 		}
 	}
@@ -679,7 +680,7 @@ static int msm_csid_irq_routine(struct v4l2_subdev *sd, u32 status,
 
 	CDBG("%s E\n", __func__);
 	ret = msm_csid_irq(csid_dev->irq->start, csid_dev);
-	*handled = TRUE;
+	*handled = true;
 	return 0;
 }
 
@@ -854,14 +855,6 @@ static int msm_csid_release(struct csid_device *csid_dev)
 
 	msm_camera_enable_irq(csid_dev->irq, false);
 
-	if (msm_camera_tz_is_secured(
-		MSM_CAMERA_TZ_IO_REGION_CSIDCORE0 + csid_dev->pdev->id) == 0) {
-		msm_camera_vio_w(csid_dev->ctrl_reg->csid_reg.csid_rst_stb_all,
-			csid_dev->base,
-			csid_dev->ctrl_reg->csid_reg.csid_rst_cmd_addr,
-			csid_dev->pdev->id);
-	}
-
 	msm_camera_clk_enable(&csid_dev->pdev->dev,
 		csid_dev->csid_clk_info,
 		csid_dev->csid_clk,
@@ -944,20 +937,14 @@ static int32_t msm_csid_cmd(struct csid_device *csid_dev, void *arg)
 			break;
 		}
 		for (i = 0; i < csid_params.lut_params.num_cid; i++) {
-			vc_cfg = kzalloc(sizeof(struct msm_camera_csid_vc_cfg),
-				GFP_KERNEL);
-			if (!vc_cfg) {
-				rc = -ENOMEM;
-				goto MEM_CLEAN;
-			}
-			if (copy_from_user(vc_cfg,
+			vc_cfg = memdup_user(
 				(void __user *)csid_params.lut_params.vc_cfg[i],
-				sizeof(struct msm_camera_csid_vc_cfg))) {
-				pr_err("%s: %d failed\n", __func__, __LINE__);
-				kfree(vc_cfg);
-				rc = -EFAULT;
+					sizeof(struct msm_camera_csid_vc_cfg));
+			if (IS_ERR(vc_cfg)) {
 				goto MEM_CLEAN;
+				return PTR_ERR(vc_cfg);
 			}
+
 			csid_params.lut_params.vc_cfg[i] = vc_cfg;
 		}
 		csid_dev->current_csid_params = csid_params;
@@ -1332,7 +1319,7 @@ static int csid_probe(struct platform_device *pdev)
 	rc = msm_camera_get_clk_info(pdev, &new_csid_dev->csid_clk_info,
 		&new_csid_dev->csid_clk, &new_csid_dev->num_clk);
 	if (rc < 0) {
-		pr_err("%s: msm_camera_get_clk_info failed", __func__);
+		pr_err("%s: msm_camera_get_clk_info failed\n", __func__);
 		rc = -EFAULT;
 		goto csid_no_resource;
 	}
@@ -1390,7 +1377,7 @@ static int csid_probe(struct platform_device *pdev)
 	}
 	rc = msm_camera_enable_irq(new_csid_dev->irq, false);
 	if (rc < 0) {
-		pr_err("%s Error registering irq ", __func__);
+		pr_err("%s Error registering irq\n", __func__);
 		rc = -EBUSY;
 		goto csid_invalid_irq;
 	}
@@ -1474,7 +1461,7 @@ static int csid_probe(struct platform_device *pdev)
 			csid_lane_assign_v3_5_1;
 		new_csid_dev->hw_dts_version = CSID_VERSION_V35_1;
 	} else {
-		pr_err("%s:%d, invalid hw version : 0x%x", __func__, __LINE__,
+		pr_err("%s:%d, invalid hw version : 0x%x\n", __func__, __LINE__,
 			new_csid_dev->hw_dts_version);
 		rc = -EINVAL;
 		goto csid_invalid_irq;
@@ -1519,7 +1506,6 @@ static struct platform_driver csid_driver = {
 	.remove = msm_csid_exit,
 	.driver = {
 		.name = MSM_CSID_DRV_NAME,
-		.owner = THIS_MODULE,
 		.of_match_table = msm_csid_dt_match,
 	},
 };

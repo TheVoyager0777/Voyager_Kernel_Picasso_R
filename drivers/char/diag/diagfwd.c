@@ -1,13 +1,5 @@
-/* Copyright (c) 2008-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2008-2020, The Linux Foundation. All rights reserved.
  */
 #include <linux/slab.h>
 #include <linux/init.h>
@@ -49,6 +41,8 @@
 #define STM_RSP_STATUS_INDEX		8
 #define STM_RSP_NUM_BYTES		9
 #define RETRY_MAX_COUNT		1000
+
+#define SET_APPS_FEATURE(driver, n) ((driver->apps_feature) |= (1 << (n)))
 
 struct diag_md_hdlc_reset_work {
 	int pid;
@@ -582,70 +576,10 @@ void diag_process_stm_mask(uint8_t cmd, uint8_t data_mask, int data_type)
 	}
 }
 
-int diag_process_stm_cmd(unsigned char *buf, int len, unsigned char *dest_buf)
+static uint8_t diag_get_stm_peripheral_mask(void)
 {
-	uint8_t version, mask, cmd;
 	uint8_t rsp_supported = 0;
-	uint8_t rsp_status = 0;
-	int i;
 
-	if (!buf || !dest_buf) {
-		pr_err("diag: Invalid pointers buf: %pK, dest_buf %pK in %s\n",
-		       buf, dest_buf, __func__);
-		return -EIO;
-	}
-	if (len < STM_CMD_NUM_BYTES) {
-		pr_err("diag: Invalid buffer length: %d in %s\n", len,
-			__func__);
-		return -EINVAL;
-	}
-	version = *(buf + STM_CMD_VERSION_OFFSET);
-	mask = *(buf + STM_CMD_MASK_OFFSET);
-	cmd = *(buf + STM_CMD_DATA_OFFSET);
-
-	/*
-	 * Check if command is valid. If the command is asking for
-	 * status, then the processor mask field is to be ignored.
-	 */
-	if ((version != 2) || (cmd > STM_AUTO_QUERY) ||
-		((cmd != STATUS_STM && cmd != STM_AUTO_QUERY) &&
-		((mask == 0) || (0 != (mask >> (NUM_PERIPHERALS + 1)))))) {
-		/* Command is invalid. Send bad param message response */
-		dest_buf[0] = BAD_PARAM_RESPONSE_MESSAGE;
-		for (i = 0; i < STM_CMD_NUM_BYTES; i++)
-			dest_buf[i+1] = *(buf + i);
-		return STM_CMD_NUM_BYTES+1;
-	} else if (cmd != STATUS_STM && cmd != STM_AUTO_QUERY) {
-		if (mask & DIAG_STM_MODEM)
-			diag_process_stm_mask(cmd, DIAG_STM_MODEM,
-					      PERIPHERAL_MODEM);
-
-		if (mask & DIAG_STM_LPASS)
-			diag_process_stm_mask(cmd, DIAG_STM_LPASS,
-					      PERIPHERAL_LPASS);
-
-		if (mask & DIAG_STM_WCNSS)
-			diag_process_stm_mask(cmd, DIAG_STM_WCNSS,
-					      PERIPHERAL_WCNSS);
-
-		if (mask & DIAG_STM_SENSORS)
-			diag_process_stm_mask(cmd, DIAG_STM_SENSORS,
-						PERIPHERAL_SENSORS);
-		if (mask & DIAG_STM_CDSP)
-			diag_process_stm_mask(cmd, DIAG_STM_CDSP,
-						PERIPHERAL_CDSP);
-		if (mask & DIAG_STM_NPU)
-			diag_process_stm_mask(cmd, DIAG_STM_NPU,
-						PERIPHERAL_NPU);
-
-		if (mask & DIAG_STM_APPS)
-			diag_process_stm_mask(cmd, DIAG_STM_APPS, APPS_DATA);
-	}
-
-	for (i = 0; i < STM_CMD_NUM_BYTES; i++)
-		dest_buf[i] = *(buf + i);
-
-	/* Set mask denoting which peripherals support STM */
 	if (driver->feature[PERIPHERAL_MODEM].stm_support)
 		rsp_supported |= DIAG_STM_MODEM;
 
@@ -666,7 +600,13 @@ int diag_process_stm_cmd(unsigned char *buf, int len, unsigned char *dest_buf)
 
 	rsp_supported |= DIAG_STM_APPS;
 
-	/* Set mask denoting STM state/status for each peripheral/APSS */
+	return rsp_supported;
+}
+
+static uint8_t diag_get_stm_state_for_peripherals(void)
+{
+	uint8_t rsp_status = 0;
+
 	if (driver->stm_state[PERIPHERAL_MODEM])
 		rsp_status |= DIAG_STM_MODEM;
 
@@ -688,6 +628,78 @@ int diag_process_stm_cmd(unsigned char *buf, int len, unsigned char *dest_buf)
 	if (driver->stm_state[APPS_DATA])
 		rsp_status |= DIAG_STM_APPS;
 
+	return rsp_status;
+}
+
+static void diag_process_stm_mask_for_peripherals(uint8_t cmd, uint8_t mask)
+{
+	if (mask & DIAG_STM_MODEM)
+		diag_process_stm_mask(cmd, DIAG_STM_MODEM,
+					      PERIPHERAL_MODEM);
+
+	if (mask & DIAG_STM_LPASS)
+		diag_process_stm_mask(cmd, DIAG_STM_LPASS,
+					      PERIPHERAL_LPASS);
+
+	if (mask & DIAG_STM_WCNSS)
+		diag_process_stm_mask(cmd, DIAG_STM_WCNSS,
+					      PERIPHERAL_WCNSS);
+
+	if (mask & DIAG_STM_SENSORS)
+		diag_process_stm_mask(cmd, DIAG_STM_SENSORS,
+						PERIPHERAL_SENSORS);
+	if (mask & DIAG_STM_CDSP)
+		diag_process_stm_mask(cmd, DIAG_STM_CDSP,
+						PERIPHERAL_CDSP);
+	if (mask & DIAG_STM_NPU)
+		diag_process_stm_mask(cmd, DIAG_STM_NPU,
+						PERIPHERAL_NPU);
+
+	if (mask & DIAG_STM_APPS)
+		diag_process_stm_mask(cmd, DIAG_STM_APPS, APPS_DATA);
+}
+
+int diag_process_stm_cmd(unsigned char *buf, unsigned char *dest_buf)
+{
+	uint8_t version, mask, cmd;
+	uint8_t rsp_supported = 0;
+	uint8_t rsp_status = 0;
+	int i;
+
+	if (!buf || !dest_buf) {
+		pr_err("diag: Invalid pointers buf: %pK, dest_buf %pK in %s\n",
+		       buf, dest_buf, __func__);
+		return -EIO;
+	}
+
+	version = *(buf + STM_CMD_VERSION_OFFSET);
+	mask = *(buf + STM_CMD_MASK_OFFSET);
+	cmd = *(buf + STM_CMD_DATA_OFFSET);
+
+	/*
+	 * Check if command is valid. If the command is asking for
+	 * status, then the processor mask field is to be ignored.
+	 */
+	if ((version != 2) || (cmd > STM_AUTO_QUERY) ||
+		((cmd != STATUS_STM && cmd != STM_AUTO_QUERY) &&
+		((mask == 0) || (0 != (mask >> (NUM_PERIPHERALS + 1)))))) {
+		/* Command is invalid. Send bad param message response */
+		dest_buf[0] = BAD_PARAM_RESPONSE_MESSAGE;
+		for (i = 0; i < STM_CMD_NUM_BYTES; i++)
+			dest_buf[i+1] = *(buf + i);
+		return STM_CMD_NUM_BYTES+1;
+	} else if (cmd != STATUS_STM && cmd != STM_AUTO_QUERY)
+		diag_process_stm_mask_for_peripherals(cmd, mask);
+
+	for (i = 0; i < STM_CMD_NUM_BYTES; i++)
+		dest_buf[i] = *(buf + i);
+
+	/* Set mask denoting which peripherals support STM */
+	rsp_supported = diag_get_stm_peripheral_mask();
+
+	/* Set mask denoting STM state/status for each peripheral/APSS */
+	rsp_status = diag_get_stm_state_for_peripherals();
+
 	dest_buf[STM_RSP_SUPPORTED_INDEX] = rsp_supported;
 	dest_buf[STM_RSP_STATUS_INDEX] = rsp_status;
 
@@ -703,7 +715,7 @@ int diag_process_time_sync_query_cmd(unsigned char *src_buf, int src_len,
 
 	if (!src_buf || !dest_buf || src_len <= 0 || dest_len <= 0 ||
 		src_len < sizeof(struct diag_cmd_time_sync_query_req_t)) {
-		pr_err("diag: Invalid input in %s, src_buf: %pK, src_len: %d, dest_buf: %pK, dest_len: %d",
+		pr_err("diag: Invalid input in %s, src_buf: %pK, src_len: %d, dest_buf: %pK, dest_len: %d\n",
 			__func__, src_buf, src_len, dest_buf, dest_len);
 		return -EINVAL;
 	}
@@ -769,30 +781,6 @@ int diag_process_diag_id_query_cmd(unsigned char *src_buf, int src_len,
 	memcpy(dest_buf, &rsp, rsp_len);
 	return  write_len;
 }
-
-int diag_process_diag_transport_query_cmd(unsigned char *src_buf, int src_len,
-				      unsigned char *dest_buf, int dest_len)
-{
-	struct diag_query_transport_req_t *req;
-	struct diag_query_transport_rsp_t rsp;
-
-	if (!src_buf || !dest_buf || src_len <= 0 || dest_len <= 0 ||
-		src_len < sizeof(struct diag_query_transport_req_t) ||
-		sizeof(rsp) > dest_len) {
-		pr_err("diag: Invalid input in %s, src_buf: %pK, src_len: %d, dest_buf: %pK, dest_len: %d",
-			__func__, src_buf, src_len, dest_buf, dest_len);
-		return -EINVAL;
-	}
-
-	req = (struct diag_query_transport_req_t *)src_buf;
-	rsp.header.cmd_code = req->header.cmd_code;
-	rsp.header.subsys_id = req->header.subsys_id;
-	rsp.header.subsys_cmd_code = req->header.subsys_cmd_code;
-	rsp.transport = driver->transport_set;
-	memcpy(dest_buf, &rsp, sizeof(rsp));
-	return sizeof(rsp);
-}
-
 int diag_process_time_sync_switch_cmd(unsigned char *src_buf, int src_len,
 				      unsigned char *dest_buf, int dest_len)
 {
@@ -805,7 +793,7 @@ int diag_process_time_sync_switch_cmd(unsigned char *src_buf, int src_len,
 
 	if (!src_buf || !dest_buf || src_len <= 0 || dest_len <= 0 ||
 		src_len < sizeof(struct diag_cmd_time_sync_switch_req_t)) {
-		pr_err("diag: Invalid input in %s, src_buf: %pK, src_len: %d, dest_buf: %pK, dest_len: %d",
+		pr_err("diag: Invalid input in %s, src_buf: %pK, src_len: %d, dest_buf: %pK, dest_len: %d\n",
 			__func__, src_buf, src_len, dest_buf, dest_len);
 		return -EINVAL;
 	}
@@ -877,7 +865,7 @@ int diag_cmd_log_on_demand(unsigned char *src_buf, int src_len,
 		return 0;
 
 	if (!src_buf || !dest_buf || src_len <= 0 || dest_len <= 0) {
-		pr_err("diag: Invalid input in %s, src_buf: %pK, src_len: %d, dest_buf: %pK, dest_len: %d",
+		pr_err("diag: Invalid input in %s, src_buf: %pK, src_len: %d, dest_buf: %pK, dest_len: %d\n",
 		       __func__, src_buf, src_len, dest_buf, dest_len);
 		return -EINVAL;
 	}
@@ -1020,6 +1008,45 @@ static int diag_cmd_disable_hdlc(unsigned char *src_buf, int src_len,
 	return write_len;
 }
 
+int diag_cmd_feature_query(unsigned char *src_buf, int src_len,
+				      unsigned char *dest_buf, int dest_len)
+{
+	int write_len = 0;
+	struct diag_pkt_header_t *header = NULL;
+	struct diag_cmd_feature_query_rsp_t rsp;
+
+	if (!src_buf || !dest_buf || src_len <= sizeof(struct diag_pkt_header_t)
+			|| dest_len <= 0 || dest_len > DIAG_MAX_RSP_SIZE) {
+		pr_err("diag: Feature query, invalid input src_buf: %pK, src_len: %d, dest_buf: %pK, dest_len: %d\n",
+			src_buf, src_len, dest_buf, dest_len);
+		return -EINVAL;
+	}
+
+	header = (struct diag_pkt_header_t *)src_buf;
+
+	rsp.header.cmd_code = header->cmd_code;
+	rsp.header.subsys_id = header->subsys_id;
+	rsp.header.subsys_cmd_code = header->subsys_cmd_code;
+	rsp.version = 1;
+	rsp.feature_len = sizeof(driver->apps_feature);
+	if (dest_len < (sizeof(rsp) + sizeof(driver->apps_feature)))
+		return -EINVAL;
+	memcpy(dest_buf, &rsp, sizeof(rsp));
+	memcpy(dest_buf + sizeof(rsp), &(driver->apps_feature),
+			sizeof(driver->apps_feature));
+	write_len = sizeof(rsp) + sizeof(driver->apps_feature);
+	return write_len;
+}
+
+static void diag_init_apps_feature(void)
+{
+	driver->apps_feature = 0;
+
+	SET_APPS_FEATURE(driver, F_DIAG_EVENT_REPORT);
+	SET_APPS_FEATURE(driver, F_DIAG_HW_ACCELERATION);
+	SET_APPS_FEATURE(driver, F_DIAG_MULTI_SIM_MASK);
+}
+
 void diag_send_error_rsp(unsigned char *buf, int len,
 			int pid)
 {
@@ -1034,11 +1061,129 @@ void diag_send_error_rsp(unsigned char *buf, int len,
 	diag_send_rsp(driver->apps_rsp_buf, len + 1, pid);
 }
 
+static int diag_process_ss_diag_cmd(unsigned char *buf, int len, int pid)
+{
+	int ret = 0, write_len = 0, i;
+
+	if (len < (2 * sizeof(uint8_t) + sizeof(uint16_t)))
+		return -EINVAL;
+
+	switch (*(uint16_t *)(buf + DIAG_SS_CMD_OFFSET)) {
+	case DIAG_DIAG_MAX_PKT_SZ:
+		/*
+		 * Check for the command/respond msg
+		 * for the maximum packet length
+		 */
+		for (i = 0; i < 4; i++)
+			*(driver->apps_rsp_buf+i) = *(buf+i);
+		*(uint32_t *)(driver->apps_rsp_buf+4) = DIAG_MAX_REQ_SIZE;
+		diag_send_rsp(driver->apps_rsp_buf, 8, pid);
+		ret = 0;
+		break;
+	case DIAG_DIAG_STM:
+		/* Check for STM command */
+		len = diag_process_stm_cmd(buf, driver->apps_rsp_buf);
+		if (len > 0) {
+			diag_send_rsp(driver->apps_rsp_buf, len, pid);
+			ret = 0;
+		} else {
+			ret = len;
+		}
+		break;
+	case DIAG_GET_TIME_API:
+		/* Check for time sync query command */
+		write_len = diag_process_time_sync_query_cmd(buf, len,
+						driver->apps_rsp_buf,
+						DIAG_MAX_RSP_SIZE);
+		if (write_len > 0)
+			diag_send_rsp(driver->apps_rsp_buf, write_len, pid);
+		ret = 0;
+		break;
+	case DIAG_SET_TIME_API:
+		/* Check for time sync switch command */
+		write_len = diag_process_time_sync_switch_cmd(buf, len,
+						driver->apps_rsp_buf,
+						DIAG_MAX_RSP_SIZE);
+		if (write_len > 0)
+			diag_send_rsp(driver->apps_rsp_buf, write_len, pid);
+		ret = 0;
+		break;
+	case DIAG_GET_DIAG_ID:
+		/* Check for diag id command */
+		write_len = diag_process_diag_id_query_cmd(buf, len,
+						driver->apps_rsp_buf,
+						DIAG_MAX_RSP_SIZE);
+		if (write_len > 0)
+			diag_send_rsp(driver->apps_rsp_buf, write_len, pid);
+		ret = 0;
+		break;
+	case DIAG_FEATURE_QUERY:
+		/* Check for Diag Feature Query command */
+		write_len = diag_cmd_feature_query(buf, len,
+						driver->apps_rsp_buf,
+						DIAG_MAX_RSP_SIZE);
+		if (write_len > 0)
+			diag_send_rsp(driver->apps_rsp_buf, write_len, pid);
+		ret = 0;
+		break;
+	default:
+		ret = -EINVAL;
+		break;
+	}
+	return ret;
+}
+
+static int diag_process_ss_diag_params(unsigned char *buf, int len, int pid)
+{
+	int ret = 0, write_len = 0, i;
+
+	if (len < (2 * sizeof(uint8_t) + sizeof(uint16_t)))
+		return -EINVAL;
+
+	switch (*(uint16_t *)(buf + DIAG_SS_CMD_OFFSET)) {
+	case DIAG_DIAG_POLL:
+		/* Check for polling for Apps only DIAG */
+		if (chk_polling_response()) {
+			/* Respond to polling for Apps only DIAG */
+			for (i = 0; i < 3; i++)
+				driver->apps_rsp_buf[i] = *(buf+i);
+			for (i = 0; i < 13; i++)
+				driver->apps_rsp_buf[i+3] = 0;
+			diag_send_rsp(driver->apps_rsp_buf, 16, pid);
+		}
+		break;
+	case DIAG_DEL_RSP_WRAP:
+		/* Return the Delayed Response Wrap Status */
+		memcpy(driver->apps_rsp_buf, buf, 4);
+		driver->apps_rsp_buf[4] = wrap_enabled;
+		diag_send_rsp(driver->apps_rsp_buf, 5, pid);
+		break;
+	case DIAG_DEL_RSP_WRAP_CNT:
+		/* Wrap the Delayed Rsp ID */
+		wrap_enabled = true;
+		memcpy(driver->apps_rsp_buf, buf, 4);
+		driver->apps_rsp_buf[4] = wrap_count;
+		diag_send_rsp(driver->apps_rsp_buf, 6, pid);
+		break;
+	case DIAG_EXT_MOBILE_ID:
+		/* Mobile ID Rsp */
+		write_len = diag_cmd_get_mobile_id(buf, len,
+		   driver->apps_rsp_buf, DIAG_MAX_RSP_SIZE);
+		if (write_len > 0)
+			diag_send_rsp(driver->apps_rsp_buf, write_len, pid);
+		break;
+	default:
+		ret = -EINVAL;
+		break;
+	}
+	return ret;
+}
+
 int diag_process_apps_pkt(unsigned char *buf, int len, int pid)
 {
 	int i, p_mask = 0;
 	int mask_ret, peripheral = -EINVAL;
-	int write_len = 0;
+	int ret = 0, write_len = 0;
 	unsigned char *temp = NULL;
 	struct diag_cmd_reg_entry_t entry;
 	struct diag_cmd_reg_entry_t *temp_entry = NULL;
@@ -1117,8 +1262,7 @@ int diag_process_apps_pkt(unsigned char *buf, int len, int pid)
 				diag_send_error_rsp(buf, len, pid);
 				return write_len;
 			}
-			else
-				write_len = diag_send_data(reg_item, buf, len);
+			write_len = diag_send_data(reg_item, buf, len);
 		}
 		mutex_unlock(&driver->cmd_reg_mutex);
 		return write_len;
@@ -1126,77 +1270,15 @@ int diag_process_apps_pkt(unsigned char *buf, int len, int pid)
 	mutex_unlock(&driver->cmd_reg_mutex);
 
 #if defined(CONFIG_DIAG_OVER_USB)
-	/* Check for the command/respond msg for the maximum packet length */
-	if ((len >= (4 * sizeof(uint8_t))) &&
-		(*buf == 0x4b) && (*(buf+1) == 0x12) &&
-		(*(uint16_t *)(buf+2) == 0x0055)) {
-		for (i = 0; i < 4; i++)
-			*(driver->apps_rsp_buf+i) = *(buf+i);
-		*(uint32_t *)(driver->apps_rsp_buf+4) = DIAG_MAX_REQ_SIZE;
-		diag_send_rsp(driver->apps_rsp_buf, 8, pid);
-		return 0;
-	} else if ((len >= ((2 * sizeof(uint8_t)) + sizeof(uint16_t))) &&
-		(*buf == 0x4b) && (*(buf+1) == 0x12) &&
-		(*(uint16_t *)(buf+2) == DIAG_DIAG_STM)) {
-		write_len = diag_process_stm_cmd(buf, len,
-			driver->apps_rsp_buf);
-		if (write_len > 0) {
-			diag_send_rsp(driver->apps_rsp_buf, write_len, pid);
-			return 0;
-		}
-		return write_len;
-	}
-	/* Check for time sync query command */
-	else if ((len >= ((2 * sizeof(uint8_t)) + sizeof(uint16_t))) &&
+	if ((len >= 2 * sizeof(uint8_t)) &&
 		(*buf == DIAG_CMD_DIAG_SUBSYS) &&
-		(*(buf+1) == DIAG_SS_DIAG) &&
-		(*(uint16_t *)(buf+2) == DIAG_GET_TIME_API)) {
-		write_len = diag_process_time_sync_query_cmd(buf, len,
-							driver->apps_rsp_buf,
-							DIAG_MAX_RSP_SIZE);
-		if (write_len > 0)
-			diag_send_rsp(driver->apps_rsp_buf, write_len, pid);
-		return 0;
-	}
-	/* Check for time sync switch command */
-	else if ((len >= ((2 * sizeof(uint8_t)) + sizeof(uint16_t))) &&
-		(*buf == DIAG_CMD_DIAG_SUBSYS) &&
-		(*(buf+1) == DIAG_SS_DIAG) &&
-		(*(uint16_t *)(buf+2) == DIAG_SET_TIME_API)) {
-		write_len = diag_process_time_sync_switch_cmd(buf, len,
-							driver->apps_rsp_buf,
-							DIAG_MAX_RSP_SIZE);
-		if (write_len > 0)
-			diag_send_rsp(driver->apps_rsp_buf, write_len, pid);
-		return 0;
-	}
-	/* Check for diag id command */
-	else if ((len >= ((2 * sizeof(uint8_t)) + sizeof(uint16_t))) &&
-		(*buf == DIAG_CMD_DIAG_SUBSYS) &&
-		(*(buf+1) == DIAG_SS_DIAG) &&
-		(*(uint16_t *)(buf+2) == DIAG_GET_DIAG_ID)) {
-		write_len = diag_process_diag_id_query_cmd(buf, len,
-							driver->apps_rsp_buf,
-							DIAG_MAX_RSP_SIZE);
-		if (write_len > 0)
-			diag_send_rsp(driver->apps_rsp_buf, write_len, pid);
-		return 0;
-	}
-	/* Check for transport command*/
-	else if ((len >= ((2 * sizeof(uint8_t)) + sizeof(uint16_t))) &&
-		(*buf == DIAG_CMD_DIAG_SUBSYS) &&
-		(*(buf+1) == DIAG_SS_DIAG) &&
-		(*(uint16_t *)(buf+2) == DIAG_QUERY_TRANSPORT)) {
-		write_len = diag_process_diag_transport_query_cmd(buf, len,
-							driver->apps_rsp_buf,
-							DIAG_MAX_RSP_SIZE);
-		if (write_len > 0)
-			diag_send_rsp(driver->apps_rsp_buf, write_len, pid);
-		return 0;
-	}
-	/* Check for download command */
-	else if ((len >= sizeof(uint8_t)) && (chk_apps_master()) &&
-		(*buf == 0x3A)) {
+			(*(buf+1) == DIAG_SS_DIAG)) {
+		ret = diag_process_ss_diag_cmd(buf, len, pid);
+		if (ret == 0)
+			return ret;
+	} else if ((len >= sizeof(uint8_t)) && (chk_apps_master()) &&
+			(*buf == 0x3A)) {
+		/* Check for download command */
 		/* send response back */
 		driver->apps_rsp_buf[0] = *buf;
 		diag_send_rsp(driver->apps_rsp_buf, 1, pid);
@@ -1207,53 +1289,12 @@ int diag_process_apps_pkt(unsigned char *buf, int len, int pid)
 		kernel_restart(NULL);
 		/* Not required, represents that command isn't sent to modem */
 		return 0;
-	}
-	/* Check for polling for Apps only DIAG */
-	else if ((len >= (3 * sizeof(uint8_t))) &&
-		(*buf == 0x4b) && (*(buf+1) == 0x32) && (*(buf+2) == 0x03)) {
-		/* If no one has registered for polling */
-		if (chk_polling_response()) {
-			/* Respond to polling for Apps only DIAG */
-			for (i = 0; i < 3; i++)
-				driver->apps_rsp_buf[i] = *(buf+i);
-			for (i = 0; i < 13; i++)
-				driver->apps_rsp_buf[i+3] = 0;
-
-			diag_send_rsp(driver->apps_rsp_buf, 16, pid);
-			return 0;
-		}
-	}
-	/* Return the Delayed Response Wrap Status */
-	else if ((len >= (4 * sizeof(uint8_t))) &&
-		(*buf == 0x4b) && (*(buf+1) == 0x32) &&
-		(*(buf+2) == 0x04) && (*(buf+3) == 0x0)) {
-		memcpy(driver->apps_rsp_buf, buf, 4);
-		driver->apps_rsp_buf[4] = wrap_enabled;
-		diag_send_rsp(driver->apps_rsp_buf, 5, pid);
-		return 0;
-	}
-	/* Wrap the Delayed Rsp ID */
-	else if ((len >= (4 * sizeof(uint8_t))) &&
-		(*buf == 0x4b) && (*(buf+1) == 0x32) &&
-		(*(buf+2) == 0x05) && (*(buf+3) == 0x0)) {
-		wrap_enabled = true;
-		memcpy(driver->apps_rsp_buf, buf, 4);
-		driver->apps_rsp_buf[4] = wrap_count;
-		diag_send_rsp(driver->apps_rsp_buf, 6, pid);
-		return 0;
-	}
-	/* Mobile ID Rsp */
-	else if ((len >= (4 * sizeof(uint8_t))) &&
-		(*buf == DIAG_CMD_DIAG_SUBSYS) &&
-			(*(buf+1) == DIAG_SS_PARAMS) &&
-			(*(buf+2) == DIAG_EXT_MOBILE_ID) && (*(buf+3) == 0x0)) {
-		write_len = diag_cmd_get_mobile_id(buf, len,
-						   driver->apps_rsp_buf,
-						   DIAG_MAX_RSP_SIZE);
-		if (write_len > 0) {
-			diag_send_rsp(driver->apps_rsp_buf, write_len, pid);
-			return 0;
-		}
+	} else if ((len >= 2 * sizeof(uint8_t)) &&
+			(*buf == DIAG_CMD_DIAG_SUBSYS) &&
+			(*(buf+1) == DIAG_SS_PARAMS)) {
+		ret = diag_process_ss_diag_params(buf, len, pid);
+		if (ret == 0)
+			return ret;
 	}
 	 /*
 	  * If the apps processor is master and no other
@@ -1337,8 +1378,8 @@ int diag_process_apps_pkt(unsigned char *buf, int len, int pid)
 			}
 		}
 		mutex_unlock(&driver->md_session_lock);
-		diag_update_md_clients(HDLC_SUPPORT_TYPE);
 		mutex_unlock(&driver->hdlc_disable_mutex);
+		diag_update_md_clients(HDLC_SUPPORT_TYPE);
 		return 0;
 	}
 #endif
@@ -1444,9 +1485,6 @@ static int diagfwd_mux_open(int id, int mode)
 		break;
 	case DIAG_MEMORY_DEVICE_MODE:
 		break;
-	case DIAG_PCIE_MODE:
-		driver->pcie_connected = 1;
-		break;
 	default:
 		return -EINVAL;
 	}
@@ -1479,9 +1517,6 @@ static int diagfwd_mux_close(int id, int mode)
 		driver->usb_connected = 0;
 		break;
 	case DIAG_MEMORY_DEVICE_MODE:
-		break;
-	case DIAG_PCIE_MODE:
-		driver->pcie_connected = 0;
 		break;
 	default:
 		return -EINVAL;
@@ -1623,7 +1658,7 @@ static void diag_md_timer_work_fn(struct work_struct *work)
 	mutex_unlock(&driver->hdlc_disable_mutex);
 }
 
-static void hdlc_reset_timer_func(unsigned long data)
+static void hdlc_reset_timer_func(struct timer_list *tlist)
 {
 	pr_debug("diag: In %s, re-enabling HDLC encoding\n",
 		       __func__);
@@ -1635,9 +1670,12 @@ static void hdlc_reset_timer_func(unsigned long data)
 	hdlc_timer_in_progress = 0;
 }
 
-void diag_md_hdlc_reset_timer_func(unsigned long pid)
+void diag_md_hdlc_reset_timer_func(struct timer_list *tlist)
 {
 	struct diag_md_hdlc_reset_work *hdlc_reset_work = NULL;
+	struct diag_md_session_t *session_info =
+		container_of(tlist, struct diag_md_session_t, hdlc_reset_timer);
+
 
 	pr_debug("diag: In %s, re-enabling HDLC encoding\n",
 		       __func__);
@@ -1649,8 +1687,8 @@ void diag_md_hdlc_reset_timer_func(unsigned long pid)
 		return;
 	}
 	if (hdlc_reset) {
-		hdlc_reset_work->pid = pid;
 		INIT_WORK(&hdlc_reset_work->work, diag_md_timer_work_fn);
+		hdlc_reset_work->pid = session_info->pid;
 		queue_work(driver->diag_wq, &(hdlc_reset_work->work));
 		queue_work(driver->diag_wq, &(driver->update_md_clients));
 	}
@@ -1789,7 +1827,7 @@ void diag_process_non_hdlc_pkt(unsigned char *buf, int len, int pid)
 		if (*(uint8_t *)(data_ptr + actual_pkt->length) !=
 						CONTROL_CHAR) {
 			mutex_unlock(&driver->hdlc_recovery_mutex);
-			diag_hdlc_start_recovery(buf, (len - read_bytes), pid);
+			diag_hdlc_start_recovery(buf, len, pid);
 			mutex_lock(&driver->hdlc_recovery_mutex);
 		}
 		err = diag_process_apps_pkt(data_ptr,
@@ -1815,8 +1853,8 @@ start:
 		pkt_len = actual_pkt->length;
 
 		if (actual_pkt->start != CONTROL_CHAR) {
-			diag_hdlc_start_recovery(buf, (len - read_bytes), pid);
-			diag_send_error_rsp(buf, (len - read_bytes), pid);
+			diag_hdlc_start_recovery(buf, len, pid);
+			diag_send_error_rsp(buf, len, pid);
 			goto end;
 		}
 		mutex_lock(&driver->hdlc_recovery_mutex);
@@ -1824,7 +1862,7 @@ start:
 			pr_err("diag: In %s, incoming data is too large for the request buffer %d\n",
 			       __func__, pkt_len);
 			mutex_unlock(&driver->hdlc_recovery_mutex);
-			diag_hdlc_start_recovery(buf, (len - read_bytes), pid);
+			diag_hdlc_start_recovery(buf, len, pid);
 			break;
 		}
 		if ((pkt_len + header_len) > (len - read_bytes)) {
@@ -1841,7 +1879,7 @@ start:
 		if (*(uint8_t *)(data_ptr + actual_pkt->length) !=
 						CONTROL_CHAR) {
 			mutex_unlock(&driver->hdlc_recovery_mutex);
-			diag_hdlc_start_recovery(buf, (len - read_bytes), pid);
+			diag_hdlc_start_recovery(buf, len, pid);
 			mutex_lock(&driver->hdlc_recovery_mutex);
 		} else
 			hdlc_reset = 0;
@@ -1975,6 +2013,7 @@ int diagfwd_init(void)
 	driver->supports_apps_hdlc_encoding = 1;
 	driver->supports_apps_header_untagging = 1;
 	driver->supports_pd_buffering = 1;
+	driver->supports_diagid_v2_feature_mask = 1;
 	for (i = 0; i < NUM_PERIPHERALS; i++)
 		driver->peripheral_untag[i] = 0;
 	mutex_init(&driver->diag_hdlc_mutex);
@@ -1989,7 +2028,7 @@ int diagfwd_init(void)
 			      GFP_KERNEL);
 	if (!hdlc_decode)
 		goto err;
-	setup_timer(&driver->hdlc_reset_timer, hdlc_reset_timer_func, 0);
+	timer_setup(&driver->hdlc_reset_timer, hdlc_reset_timer_func, 0);
 	kmemleak_not_leak(hdlc_decode);
 	driver->encoded_rsp_len = 0;
 	driver->rsp_buf_busy = 0;
@@ -2015,7 +2054,11 @@ int diagfwd_init(void)
 		driver->feature[i].log_on_demand = 0;
 		driver->feature[i].sent_feature_mask = 0;
 		driver->feature[i].diag_id_support = 0;
+		driver->feature[i].diagid_v2_feature_mask = 0;
+		driver->feature[i].multi_sim_support = 0;
 	}
+
+	diag_init_apps_feature();
 
 	for (i = 0; i < NUM_MD_SESSIONS; i++) {
 		driver->buffering_mode[i].peripheral = i;

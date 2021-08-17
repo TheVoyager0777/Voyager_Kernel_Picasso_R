@@ -1,9 +1,9 @@
-/*
- * linux/include/linux/netfilter/xt_HARDIDLETIMER.h
+/* SPDX-License-Identifier: GPL-2.0-only WITH Linux-syscall-note */
+/* linux/include/linux/netfilter/xt_HARDIDLETIMER.h
  *
  * Header file for Xtables timer target module.
  *
- * Copyright (c) 2014, 2017 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2014, 2017, 2019 The Linux Foundation. All rights reserved.
  *
  * Copyright (C) 2004, 2010 Nokia Corporation
  *
@@ -13,16 +13,6 @@
  * by Luciano Coelho <luciano.coelho@nokia.com>
  *
  * Contact: Luciano Coelho <luciano.coelho@nokia.com>
- *
- * This program is free software; you can redistribute it and/or
- * modify it under the terms of the GNU General Public License
- * version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful, but
- * WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
- * General Public License for more details.
- *
  */
 
 #ifndef _XT_HARDIDLETIMER_H

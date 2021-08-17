@@ -1,13 +1,6 @@
-/* Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2014-2019, The Linux Foundation. All rights reserved.
  */
 #include <linux/kernel.h>
 #include <linux/init.h>
@@ -17,7 +10,6 @@
 #include <linux/rtmutex.h>
 #include <linux/clk.h>
 #include <linux/msm-bus.h>
-#include <dt-bindings/msm/msm-bus-ids.h>
 #include "msm_bus_core.h"
 #include "msm_bus_rpmh.h"
 
@@ -69,7 +61,6 @@ static void copy_remaining_nodes(struct list_head *edge_list, struct list_head
 	search_node = kzalloc(sizeof(struct bus_search_type), GFP_KERNEL);
 	if (!search_node)
 		return;
-
 	INIT_LIST_HEAD(&search_node->node_list);
 	list_splice_init(edge_list, traverse_list);
 	list_splice_init(traverse_list, &search_node->node_list);
@@ -419,6 +410,9 @@ static int getpath(struct device *src_dev, int dest, const char *cl_name)
 	src = src_node->node_info->id;
 	list_add_tail(&src_node->link, &traverse_list);
 
+	/* Setup list of black-listed nodes */
+	setup_bl_list(src_node, &black_list);
+
 	while ((!found && !list_empty(&traverse_list))) {
 		struct msm_bus_node_device_type *bus_node = NULL;
 		unsigned int i;
@@ -432,28 +426,20 @@ static int getpath(struct device *src_dev, int dest, const char *cl_name)
 
 		/* Setup the new edge list */
 		list_for_each_entry(bus_node, &traverse_list, link) {
-			/* Setup list of black-listed nodes */
-			setup_bl_list(bus_node, &black_list);
-
 			for (i = 0; i < bus_node->node_info->num_connections;
 									i++) {
-				bool skip = false;
+				bool skip;
 				struct msm_bus_node_device_type
 						*node_conn;
 				node_conn =
 				to_msm_bus_node(
 				bus_node->node_info->dev_connections[i]);
-				if (node_conn->node_info->is_traversed &&
-				    node_conn->node_info->num_connections) {
+				if (node_conn->node_info->is_traversed) {
 					MSM_BUS_ERR("Circ Path %d\n",
 					node_conn->node_info->id);
 					goto reset_traversed;
 				}
-				if (node_conn->node_info->is_traversed &&
-				    !node_conn->node_info->num_connections)
-					skip = true;
-
-				skip |= chk_bl_list(&black_list,
+				skip = chk_bl_list(&black_list,
 					bus_node->node_info->connections[i]);
 				if (!skip) {
 					list_add_tail(&node_conn->link,
@@ -467,8 +453,7 @@ static int getpath(struct device *src_dev, int dest, const char *cl_name)
 		search_node = kzalloc(sizeof(struct bus_search_type),
 				 GFP_KERNEL);
 		if (!search_node)
-			goto exit_getpath;
-
+			return -ENOMEM;
 		INIT_LIST_HEAD(&search_node->node_list);
 		list_splice_init(&traverse_list,
 				 &search_node->node_list);
@@ -1400,16 +1385,6 @@ static int update_client_paths(struct msm_bus_client *client, bool log_trns,
 			goto exit_update_client_paths;
 		}
 
-		if (dest == MSM_BUS_SLAVE_IPA_CORE && cur_idx <= 0 && idx > 0) {
-			struct device *dev;
-
-			dev = bus_find_device(&msm_bus_type, NULL,
-				(void *) &dest, msm_bus_device_match_adhoc);
-
-			if (dev)
-				msm_bus_commit_single(dev);
-		}
-
 		if (log_trns)
 			getpath_debug(src, lnode, pdata->active_only);
 	}
@@ -1936,7 +1911,7 @@ register_adhoc(uint32_t mas, uint32_t slv, char *name, bool active_only)
 	rt_mutex_lock(&msm_bus_adhoc_lock);
 
 	if (!(mas && slv && name)) {
-		pr_err("%s: Error: src dst name num_paths are required",
+		pr_err("%s: Error: src dst name num_paths are required\n",
 								 __func__);
 		goto exit_register;
 	}

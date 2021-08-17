@@ -1,4 +1,5 @@
-/* Copyright (c) 2015-2016, 2018, The Linux Foundation. All rights reserved.
+// SPDX-License-Identifier: GPL-2.0-only
+/* Copyright (c) 2015-2016, 2018, 2020 The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -75,14 +76,15 @@ int cam_ahb_clk_init(struct platform_device *pdev)
 	of_node = pdev->dev.of_node;
 	data.cnt = of_property_count_strings(of_node, "bus-vectors");
 	if (data.cnt == 0) {
-		pr_err("no vectors strings found in device tree, count=%d",
+		pr_err("no vectors strings found in device tree, count=%d\n",
 			data.cnt);
 		return 0;
 	}
 
 	cnt = of_property_count_u32_elems(of_node, "qcom,bus-votes");
 	if (cnt == 0) {
-		pr_err("no vector values found in device tree, count=%d", cnt);
+		pr_err("no vector values found in device tree, count=%d\n",
+			cnt);
 		return 0;
 	}
 
@@ -195,19 +197,14 @@ int cam_ahb_clk_init(struct platform_device *pdev)
 err6:
 	msm_bus_scale_unregister_client(data.ahb_client);
 err5:
-	devm_kfree(&pdev->dev, data.votes);
 	data.votes = NULL;
 err4:
-	devm_kfree(&pdev->dev, data.pbus_data);
 	data.pbus_data = NULL;
 err3:
-	devm_kfree(&pdev->dev, data.usecases);
 	data.usecases = NULL;
 err2:
-	devm_kfree(&pdev->dev, data.paths);
 	data.paths = NULL;
 err1:
-	devm_kfree(&pdev->dev, data.vectors);
 	data.vectors = NULL;
 	return rc;
 }

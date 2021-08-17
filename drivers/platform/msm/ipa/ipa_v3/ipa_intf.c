@@ -1,13 +1,6 @@
-/* Copyright (c) 2013-2019, The Linux Foundation. All rights reserved.
- *
- * This program is free software; you can redistribute it and/or modify
- * it under the terms of the GNU General Public License version 2 and
- * only version 2 as published by the Free Software Foundation.
- *
- * This program is distributed in the hope that it will be useful,
- * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
- * GNU General Public License for more details.
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Copyright (c) 2013-2020, The Linux Foundation. All rights reserved.
  */
 
 #include <linux/fs.h>
@@ -116,7 +109,7 @@ int ipa3_register_intf_ext(const char *name, const struct ipa_tx_intf *tx,
 	if (tx) {
 		intf->num_tx_props = tx->num_props;
 		len = tx->num_props * sizeof(struct ipa_ioc_tx_intf_prop);
-		intf->tx = kzalloc(len, GFP_KERNEL);
+		intf->tx = kmemdup(tx->prop, len, GFP_KERNEL);
 		if (intf->tx == NULL) {
 			kfree(intf);
 			return -ENOMEM;
@@ -127,7 +120,7 @@ int ipa3_register_intf_ext(const char *name, const struct ipa_tx_intf *tx,
 	if (rx) {
 		intf->num_rx_props = rx->num_props;
 		len = rx->num_props * sizeof(struct ipa_ioc_rx_intf_prop);
-		intf->rx = kzalloc(len, GFP_KERNEL);
+		intf->rx = kmemdup(rx->prop, len, GFP_KERNEL);
 		if (intf->rx == NULL) {
 			kfree(intf->tx);
 			kfree(intf);
@@ -139,7 +132,7 @@ int ipa3_register_intf_ext(const char *name, const struct ipa_tx_intf *tx,
 	if (ext) {
 		intf->num_ext_props = ext->num_props;
 		len = ext->num_props * sizeof(struct ipa_ioc_ext_intf_prop);
-		intf->ext = kzalloc(len, GFP_KERNEL);
+		intf->ext = kmemdup(ext->prop, len, GFP_KERNEL);
 		if (intf->ext == NULL) {
 			kfree(intf->rx);
 			kfree(intf->tx);
@@ -427,7 +420,7 @@ static int wlan_msg_process(struct ipa_msg_meta *meta, void *buff)
 		}
 		msg_dup->meta = *meta;
 		if (meta->msg_len > 0 && buff) {
-			data_dup = kmalloc(meta->msg_len, GFP_KERNEL);
+			data_dup = kmemdup(buff, meta->msg_len, GFP_KERNEL);
 			if (data_dup == NULL) {
 				kfree(msg_dup);
 				mutex_unlock(&ipa3_ctx->msg_wlan_client_lock);
@@ -527,12 +520,11 @@ int ipa3_send_msg(struct ipa_msg_meta *meta, void *buff,
 
 	msg->meta = *meta;
 	if (meta->msg_len > 0 && buff) {
-		data = kmalloc(meta->msg_len, GFP_KERNEL);
+		data = kmemdup(buff, meta->msg_len, GFP_KERNEL);
 		if (data == NULL) {
 			kfree(msg);
 			return -ENOMEM;
 		}
-		memcpy(data, buff, meta->msg_len);
 		msg->buff = data;
 		msg->callback = ipa3_send_msg_free;
 	}
@@ -593,13 +585,12 @@ int ipa3_resend_wlan_msg(void)
 			return -ENOMEM;
 		}
 		msg->meta = entry->meta;
-		data = kmalloc(entry->meta.msg_len, GFP_KERNEL);
+		data = kmemdup(entry->buff, entry->meta.msg_len, GFP_KERNEL);
 		if (data == NULL) {
 			kfree(msg);
 			mutex_unlock(&ipa3_ctx->msg_wlan_client_lock);
 			return -ENOMEM;
 		}
-		memcpy(data, entry->buff, entry->meta.msg_len);
 		msg->buff = data;
 		msg->callback = ipa3_send_msg_free;
 		mutex_lock(&ipa3_ctx->msg_lock);

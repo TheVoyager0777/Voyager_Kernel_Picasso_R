@@ -1,5 +1,6 @@
+// SPDX-License-Identifier: GPL-2.0-only
 /*
- * Copyright (c) 2018, 2020 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2018-2019, The Linux Foundation. All rights reserved.
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License version 2 and
@@ -250,7 +251,6 @@ int fastcvpd_video_shutdown(uint32_t session_flag)
 	int srcVM[DEST_VM_NUM] = {VMID_HLOS, VMID_CDSP_Q6};
 	int destVM[SRC_VM_NUM] = {VMID_HLOS};
 	int destVMperm[SRC_VM_NUM] = { PERM_READ | PERM_WRITE | PERM_EXEC };
-	unsigned long ret;
 
 	local_cmd_msg.cmd_msg_type = FASTCVPD_VIDEO_SHUTDOWN;
 	err = fastcvpd_send_cmd
@@ -259,11 +259,8 @@ int fastcvpd_video_shutdown(uint32_t session_flag)
 		pr_err("%s: fastcvpd_send_cmd failed with err=%d\n",
 			__func__, err);
 
-	ret = wait_for_completion_timeout(&work, msecs_to_jiffies(1000));
-	if (!ret) {
-		pr_err("%s: wait timeout", __func__);
-		return -EBUSY;
-	}
+	wait_for_completion(&work);
+
 	mutex_lock(&me->smd_mutex);
 	me->video_shutdown = STATUS_SSR;
 	local_cmd_msg.msg_ptr = cmd_msg.msg_ptr;
