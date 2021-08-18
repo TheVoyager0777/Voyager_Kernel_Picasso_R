@@ -261,7 +261,7 @@ static int get_step_chg_jeita_setting_from_profile(struct step_chg_info *chip)
 	u32 max_fv_uv, max_fcc_ma;
 	const char *batt_type_str;
 	const __be32 *handle;
-	int batt_id_ohms, rc, hysteresis[2] = {0};
+	int batt_id_ohms, rc;
 	union power_supply_propval prop = {0, };
 
 	handle = of_get_property(chip->dev->of_node,
@@ -518,6 +518,7 @@ static int get_val(struct range_data *range, int hysteresis, int current_index,
 	 * of our current index.
 	 */
 	if (*new_index == current_index + 1) {
+	
 #ifdef CONFIG_BQ2597X_CHARGE_PUMP
 		if (threshold < range[*new_index].low_threshold) {
 #else
@@ -1111,7 +1112,6 @@ int qcom_step_chg_init(struct device *dev,
 	chip->jeita_fv_config->param.hysteresis = 5;
 
 	chip->dynamic_fv_config->prop_name = "BATT_CYCLE_COUNT";
-
 	INIT_DELAYED_WORK(&chip->status_change_work, status_change_work);
 	INIT_DELAYED_WORK(&chip->get_config_work, get_config_work);
 
