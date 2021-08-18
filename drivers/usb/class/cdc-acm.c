@@ -147,28 +147,16 @@ static inline int acm_set_control(struct acm *acm, int control)
 #define acm_send_break(acm, ms) \
 	acm_ctrl_msg(acm, USB_CDC_REQ_SEND_BREAK, ms, NULL, 0)
 
-static void acm_poison_urbs(struct acm *acm)
+static void acm_kill_urbs(struct acm *acm)
 {
 	int i;
 
-	usb_poison_urb(acm->ctrlurb);
+	usb_kill_urb(acm->ctrlurb);
 	for (i = 0; i < ACM_NW; i++)
-		usb_poison_urb(acm->wb[i].urb);
+		usb_kill_urb(acm->wb[i].urb);
 	for (i = 0; i < acm->rx_buflimit; i++)
-		usb_poison_urb(acm->read_urbs[i]);
+		usb_kill_urb(acm->read_urbs[i]);
 }
-
-static void acm_unpoison_urbs(struct acm *acm)
-{
-	int i;
-
-	for (i = 0; i < acm->rx_buflimit; i++)
-		usb_unpoison_urb(acm->read_urbs[i]);
-	for (i = 0; i < ACM_NW; i++)
-		usb_unpoison_urb(acm->wb[i].urb);
-	usb_unpoison_urb(acm->ctrlurb);
-}
-
 
 /*
  * Write buffer management.
@@ -237,10 +225,9 @@ static int acm_start_wb(struct acm *acm, struct acm_wb *wb)
 
 	rc = usb_submit_urb(wb->urb, GFP_ATOMIC);
 	if (rc < 0) {
-		if (rc != -EPERM)
-			dev_err(&acm->data->dev,
-				"%s - usb_submit_urb(write bulk) failed: %d\n",
-				__func__, rc);
+		dev_err(&acm->data->dev,
+			"%s - usb_submit_urb(write bulk) failed: %d\n",
+			__func__, rc);
 		acm_write_done(acm, wb);
 	}
 	return rc;
@@ -325,10 +312,8 @@ static void acm_process_notification(struct acm *acm, unsigned char *buf)
 			acm->iocount.dsr++;
 		if (difference & ACM_CTRL_DCD)
 			acm->iocount.dcd++;
-		if (newctrl & ACM_CTRL_BRK) {
+		if (newctrl & ACM_CTRL_BRK)
 			acm->iocount.brk++;
-			tty_insert_flip_char(&acm->port, 0, TTY_BREAK);
-		}
 		if (newctrl & ACM_CTRL_RI)
 			acm->iocount.rng++;
 		if (newctrl & ACM_CTRL_FRAMING)
@@ -393,19 +378,21 @@ static void acm_ctrl_irq(struct urb *urb)
 	if (current_size < expected_size) {
 		/* notification is transmitted fragmented, reassemble */
 		if (acm->nb_size < expected_size) {
-			u8 *new_buffer;
-			alloc_size = roundup_pow_of_two(expected_size);
-			/* Final freeing is done on disconnect. */
-			new_buffer = krealloc(acm->notification_buffer,
-					      alloc_size, GFP_ATOMIC);
-			if (!new_buffer) {
-				acm->nb_index = 0;
-				goto exit;
+			if (acm->nb_size) {
+				kfree(acm->notification_buffer);
+				acm->nb_size = 0;
 			}
-
-			acm->notification_buffer = new_buffer;
+			alloc_size = roundup_pow_of_two(expected_size);
+			/*
+			 * kmalloc ensures a valid notification_buffer after a
+			 * use of kfree in case the previous allocation was too
+			 * small. Final freeing is done on disconnect.
+			 */
+			acm->notification_buffer =
+				kmalloc(alloc_size, GFP_ATOMIC);
+			if (!acm->notification_buffer)
+				goto exit;
 			acm->nb_size = alloc_size;
-			dr = (struct usb_cdc_notification *)acm->notification_buffer;
 		}
 
 		copy_size = min(current_size,
@@ -494,6 +481,11 @@ static void acm_read_bulk_callback(struct urb *urb)
 
 	dev_vdbg(&acm->data->dev, "got urb %d, len %d, status %d\n",
 		rb->index, urb->actual_length, status);
+
+	if (!acm->dev) {
+		dev_dbg(&acm->data->dev, "%s - disconnected\n", __func__);
+		return;
+	}
 
 	switch (status) {
 	case 0:
@@ -664,8 +656,7 @@ static void acm_port_dtr_rts(struct tty_port *port, int raise)
 
 	res = acm_set_control(acm, val);
 	if (res && (acm->ctrl_caps & USB_CDC_CAP_LINE))
-		/* This is broken in too many devices to spam the logs */
-		dev_dbg(&acm->control->dev, "failed to set dtr/rts\n");
+		dev_err(&acm->control->dev, "failed to set dtr/rts\n");
 }
 
 static int acm_port_activate(struct tty_port *port, struct tty_struct *tty)
@@ -750,7 +741,6 @@ static void acm_port_shutdown(struct tty_port *port)
 	 * Need to grab write_lock to prevent race with resume, but no need to
 	 * hold it due to the tty-port initialised flag.
 	 */
-	acm_poison_urbs(acm);
 	spin_lock_irq(&acm->write_lock);
 	spin_unlock_irq(&acm->write_lock);
 
@@ -767,8 +757,7 @@ static void acm_port_shutdown(struct tty_port *port)
 		usb_autopm_put_interface_async(acm->control);
 	}
 
-	acm_unpoison_urbs(acm);
-
+	acm_kill_urbs(acm);
 }
 
 static void acm_tty_cleanup(struct tty_struct *tty)
@@ -987,6 +976,8 @@ static int set_serial_info(struct acm *acm,
 		if ((new_serial.close_delay != old_close_delay) ||
 	            (new_serial.closing_wait != old_closing_wait))
 			retval = -EPERM;
+		else
+			retval = -EOPNOTSUPP;
 	} else {
 		acm->port.close_delay  = close_delay;
 		acm->port.closing_wait = closing_wait;
@@ -1559,16 +1550,12 @@ skip_countries:
 
 	return 0;
 alloc_fail6:
-	if (!acm->combined_interfaces) {
-		/* Clear driver data so that disconnect() returns early. */
-		usb_set_intfdata(data_interface, NULL);
-		usb_driver_release_interface(&acm_driver, data_interface);
-	}
 	if (acm->country_codes) {
 		device_remove_file(&acm->control->dev,
 				&dev_attr_wCountryCodes);
 		device_remove_file(&acm->control->dev,
 				&dev_attr_iCountryCodeRelDate);
+		kfree(acm->country_codes);
 	}
 	device_remove_file(&acm->control->dev, &dev_attr_bmCapabilities);
 alloc_fail5:
@@ -1600,14 +1587,8 @@ static void acm_disconnect(struct usb_interface *intf)
 	if (!acm)
 		return;
 
-	acm->disconnected = true;
-	/*
-	 * there is a circular dependency. acm_softint() can resubmit
-	 * the URBs in error handling so we need to block any
-	 * submission right away
-	 */
-	acm_poison_urbs(acm);
 	mutex_lock(&acm->mutex);
+	acm->disconnected = true;
 	if (acm->country_codes) {
 		device_remove_file(&acm->control->dev,
 				&dev_attr_wCountryCodes);
@@ -1626,6 +1607,7 @@ static void acm_disconnect(struct usb_interface *intf)
 		tty_kref_put(tty);
 	}
 
+	acm_kill_urbs(acm);
 	cancel_delayed_work_sync(&acm->dwork);
 
 	tty_unregister_device(acm_tty_driver, acm->minor);
@@ -1667,7 +1649,7 @@ static int acm_suspend(struct usb_interface *intf, pm_message_t message)
 	if (cnt)
 		return 0;
 
-	acm_poison_urbs(acm);
+	acm_kill_urbs(acm);
 	cancel_delayed_work_sync(&acm->dwork);
 	acm->urbs_in_error_delay = 0;
 
@@ -1684,8 +1666,6 @@ static int acm_resume(struct usb_interface *intf)
 
 	if (--acm->susp_count)
 		goto out;
-
-	acm_unpoison_urbs(acm);
 
 	if (tty_port_initialized(&acm->port)) {
 		rv = usb_submit_urb(acm->ctrlurb, GFP_ATOMIC);
@@ -1997,11 +1977,6 @@ static const struct usb_device_id acm_ids[] = {
 
 	/* Exclude Goodix Fingerprint Reader */
 	{ USB_DEVICE(0x27c6, 0x5395),
-	.driver_info = IGNORE_DEVICE,
-	},
-
-	/* Exclude Heimann Sensor GmbH USB appset demo */
-	{ USB_DEVICE(0x32a7, 0x0000),
 	.driver_info = IGNORE_DEVICE,
 	},
 
