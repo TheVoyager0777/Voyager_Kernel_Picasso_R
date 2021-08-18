@@ -1,0 +1,62 @@
+[33mcd18c356fc60[m[33m ([m[1;36mHEAD -> [m[1;32mCAF-09000-ZSWAP[m[33m)[m HEAD@{0}: commit: fix complie
+[33m73627076b9d1[m HEAD@{1}: commit (cherry-pick): Merge 4.19.158 into neutrino/SM8250_R_11.0
+[33mb29830ec4b8d[m HEAD@{2}: commit (cherry-pick): Merge tag 'LA.UM.9.12.r1-11000-SMxx50.0' into neutrino-msm-kebab-4.19
+[33m205d918f42f8[m HEAD@{3}: commit: cleanup
+[33m40a145c50cee[m HEAD@{4}: reset: moving to 40a145c50cee9f2cf6c7f49c3543b1cf638f0a41
+[33m84abac0b7569[m HEAD@{5}: cherry-pick: sched/uclamp: Create a new uclamp.boosted tunable
+[33m0792cc22f388[m HEAD@{6}: cherry-pick: sched/uclamp: Make uclamp_boosted() return proper boosted value
+[33m7371ca9fb273[m HEAD@{7}: cherry-pick: sched/uclamp: Fix incorrect uclamp.latency_sensitive setting
+[33m1f770f1c89f1[m HEAD@{8}: cherry-pick: sched/uclamp: Move all tunables to cpusets
+[33me5ff658fb7a0[m HEAD@{9}: commit (cherry-pick): sched/cpufreq_schedutil: Reflect uclamp changes
+[33m60226f6ca719[m HEAD@{10}: commit (cherry-pick): sched/fair: Make boosted and prefer_idle tunables uclamp aware
+[33m7c3e7f80dd9a[m HEAD@{11}: commit (cherry-pick): sched/fair: Modify boosted_task_util() to reflect uclamp changes
+[33m871e9aaf2676[m HEAD@{12}: cherry-pick: ANDROID: sched: Introduce uclamp latency and boost wrapper
+[33mf0c385a70c6a[m HEAD@{13}: cherry-pick: ANDROID: sched/core: Add a latency-sensitive flag to uclamp
+[33mbb758bf0a4c5[m HEAD@{14}: commit (cherry-pick): BACKPORT: sched/uclamp: Add a new sysctl to control RT default boost value
+[33mbbb53d9c256a[m HEAD@{15}: cherry-pick: UPSTREAM: sched/uclamp: Fix a deadlock when enabling uclamp static key
+[33m3a6568d6c499[m HEAD@{16}: cherry-pick: BACKPORT: sched/uclamp: Protect uclamp fast path code with static key
+[33mac1c0bde1107[m HEAD@{17}: commit (cherry-pick): UPSTREAM: sched/uclamp: Fix initialization of struct uclamp_rq
+[33m46ddca3d3b78[m HEAD@{18}: cherry-pick: UPSTREAM: sched/uclamp: Make uclamp util helpers use and return UL values
+[33m94256510fe17[m HEAD@{19}: cherry-pick: BACKPORT: sched/uclamp: Remove uclamp_util()
+[33md96d9e10a5d2[m HEAD@{20}: commit (cherry-pick): sched/core: Fix reset-on-fork from RT with uclamp
+[33mdffa64dafabe[m HEAD@{21}: commit (cherry-pick): sched/core: Fix size of rq::uclamp initialization
+[33m5fcb15811044[m HEAD@{22}: cherry-pick: sched/uclamp: Reject negative values in cpu_uclamp_write()
+[33m3c2e982c70f7[m HEAD@{23}: cherry-pick: UPSTREAM: sched/core: Fix compilation error when cgroup not selected
+[33m235f529dda3b[m HEAD@{24}: commit (cherry-pick): UPSTREAM: sched/core: Fix uclamp ABI bug, clean up and robustify sched_read_attr() ABI logic and code
+[33m96757e1dc4b4[m HEAD@{25}: commit (cherry-pick): UPSTREAM: sched/uclamp: Always use 'enum uclamp_id' for clamp_id values
+[33m7044710f798f[m HEAD@{26}: commit (cherry-pick): UPSTREAM: sched/uclamp: Update CPU's refcount on TG's clamp changes
+[33mc2d59f801612[m HEAD@{27}: commit (cherry-pick): UPSTREAM: sched/uclamp: Use TG's clamps to restrict TASK's clamps
+[33m7b164c230484[m HEAD@{28}: commit (cherry-pick): UPSTREAM: sched/uclamp: Propagate system defaults to the root group
+[33m53211c81371a[m HEAD@{29}: cherry-pick: UPSTREAM: sched/uclamp: Propagate parent clamps
+[33m3c6a9a7e00e9[m HEAD@{30}: commit (cherry-pick): UPSTREAM: sched/uclamp: Extend CPU's cgroup controller
+[33m998d2694ebe5[m HEAD@{31}: commit (cherry-pick): UPSTREAM: sched/uclamp: Add uclamp_util_with()
+[33m52f5ae79e5f3[m HEAD@{32}: commit (cherry-pick): BACKPORT: sched/cpufreq, sched/uclamp: Add clamps for FAIR and RT tasks
+[33mfb4629ea3778[m HEAD@{33}: cherry-pick: UPSTREAM: sched/uclamp: Set default clamps for RT tasks
+[33m6b54ba2bdeed[m HEAD@{34}: cherry-pick: UPSTREAM: sched/uclamp: Reset uclamp values on RESET_ON_FORK
+[33m80d3238b40f0[m HEAD@{35}: commit (cherry-pick): UPSTREAM: sched/uclamp: Extend sched_setattr() to support utilization clamping
+[33m2b1e5259ad39[m HEAD@{36}: commit (cherry-pick): UPSTREAM: sched/core: Allow sched_setattr() to use the current policy
+[33m09857101e120[m HEAD@{37}: commit (cherry-pick): UPSTREAM: sched/uclamp: Add system default clamps
+[33m6f8f0a30750d[m HEAD@{38}: cherry-pick: UPSTREAM: sched/uclamp: Enforce last task's UCLAMP_MAX
+[33m3cc89f6911a5[m HEAD@{39}: cherry-pick: UPSTREAM: sched/uclamp: Add bucket local max tracking
+[33mf0432f81e960[m HEAD@{40}: commit (cherry-pick): UPSTREAM: sched/uclamp: Add CPU's clamp buckets refcounting
+[33me6e1ab5327cc[m HEAD@{41}: cherry-pick: UPSTREAM: cgroup: add cgroup_parse_float()
+[33m4d93c8029828[m HEAD@{42}: commit (cherry-pick): Merge tag 'LA.UM.9.12.r1-10700-SMxx50.0' into neutrino/SM8250_R_11.0
+[33m0d85d8e08bb0[m HEAD@{43}: commit: fix complie
+[33m131e8832a8bd[m HEAD@{44}: commit (cherry-pick): Merge tag 'LA.UM.9.12.r1-10300-SMxx50.0' into neutrino/SM8250_R_11.0
+[33m5c367da26e3c[m HEAD@{45}: commit: fix complie
+[33mc963b0deec79[m HEAD@{46}: commit (cherry-pick): Merge tag 'LA.UM.9.12.r1-10000-SMxx50.0' into neutrino/SM8250_R_11.0
+[33m740a348d951e[m HEAD@{47}: commit: fix complie
+[33m114ee437adf7[m HEAD@{48}: commit (cherry-pick): Merge android-4.19-stable.157 (8ee67bc) into msm-4.19
+[33m497a9585e3ac[m HEAD@{49}: commit: 4.19.153
+[33m025df59f1277[m HEAD@{50}: commit (cherry-pick): Merge 4.19.153 into android-4.19-stable
+[33mcbca52959d69[m[33m ([m[1;31morigin/CAF-09000-ZSWAP[m[33m, [m[1;31mcloud/CAF-09000-ZSWAP[m[33m)[m HEAD@{51}: Branch: renamed refs/heads/CAF-09000 to refs/heads/CAF-09000-ZSWAP
+[33mcbca52959d69[m[33m ([m[1;31morigin/CAF-09000-ZSWAP[m[33m, [m[1;31mcloud/CAF-09000-ZSWAP[m[33m)[m HEAD@{53}: commit: cleanup
+[33mb60030a97422[m HEAD@{54}: commit (cherry-pick): Merge branch 'arter97/neutrino-msm-kebab-4.19' into neutrino-msm-kebab-4.19
+[33mf2b102fe0133[m HEAD@{55}: commit: fix complie
+[33m3832d12417c2[m HEAD@{56}: commit (cherry-pick): block: add base vnswap code for vbswap
+[33m107cf3ccaf2d[m HEAD@{57}: commit (cherry-pick): Merge branch 'arter97/neutrino-msm-kebab-4.19' into neutrino-msm-kebab-4.19
+[33mad9b092a8865[m HEAD@{58}: commit (cherry-pick): vbswap: Introduce VBSWAP_HELPER
+[33m58c8fc85cf72[m HEAD@{59}: commit: enable zswap
+[33m65785e731b76[m[33m ([m[1;31morigin/CAF-09000[m[33m)[m HEAD@{60}: reset: moving to HEAD
+[33m65785e731b76[m[33m ([m[1;31morigin/CAF-09000[m[33m)[m HEAD@{61}: reset: moving to HEAD
+[33m65785e731b76[m[33m ([m[1;31morigin/CAF-09000[m[33m)[m HEAD@{62}: clone: from https://github.com/TheVoyager0777/Kernel_Picasso_R
