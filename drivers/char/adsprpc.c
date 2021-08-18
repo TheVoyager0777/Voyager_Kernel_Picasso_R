@@ -2503,13 +2503,12 @@ static int fastrpc_init_process(struct fastrpc_file *fl,
 	unsigned long imem_dma_attr = 0;
 	char *proc_name = NULL;
 	bool init_flags = init->flags == FASTRPC_INIT_CREATE ? true : false;
-	int proc_attrs = uproc->attrs & FASTRPC_MODE_UNSIGNED_MODULE;
+	int proc_attrs = uproc->attrs;
 	int unsigned_request = proc_attrs && init_flags;
 	int cid = fl->cid;
 	struct fastrpc_channel_ctx *chan = &me->channel[cid];
 
-	if (chan->unsigned_support &&
-		fl->dev_minor == MINOR_NUM_DEV) {
+	if (fl->dev_minor == MINOR_NUM_DEV) {
 		/* Make sure third party applications */
 		/* can spawn only unsigned PD when */
 		/* channel configured as secure. */
