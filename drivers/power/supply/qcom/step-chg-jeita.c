@@ -18,6 +18,7 @@
 
 #define STEP_CHG_VOTER		"STEP_CHG_VOTER"
 #define JEITA_VOTER		"JEITA_VOTER"
+#define DYNAMIC_FV_VOTER	"DYNAMIC_FV_VOTER"
 
 #define is_between(left, right, value) \
 		(((left) >= (right) && (left) >= (value) \
@@ -390,6 +391,29 @@ static int get_step_chg_jeita_setting_from_profile(struct step_chg_info *chip)
 					rc);
 		chip->sw_jeita_cfg_valid = false;
 	}
+
+	chip->dynamic_fv_cfg_valid = true;
+	rc = read_range_data_from_node(profile_node,
+			"qcom,dynamic-fv-ranges",
+			chip->dynamic_fv_config->fv_cfg,
+			BATT_HOT_DECIDEGREE_MAX, max_fv_uv);
+	if (rc < 0) {
+		pr_err("Read qcom,dynamic-fv-ranges failed from battery profile, rc=%d\n",
+					rc);
+		chip->dynamic_fv_cfg_valid = false;
+	}
+
+	chip->dynamic_ffc_fv_cfg_valid = true;
+	rc = read_range_data_from_node(profile_node,
+			"qcom,dynamic-ffc-fv-ranges",
+			chip->dynamic_ffc_fv_config->fv_cfg,
+			BATT_HOT_DECIDEGREE_MAX, max_fv_uv);
+	if (rc < 0) {
+		pr_debug("Read qcom,dynamic-ffc-fv-ranges failed from battery profile, rc=%d\n",
+					rc);
+		chip->dynamic_ffc_fv_cfg_valid = false;
+	}
+
 	return rc;
 }
 
@@ -518,7 +542,6 @@ static int get_val(struct range_data *range, int hysteresis, int current_index,
 	 * of our current index.
 	 */
 	if (*new_index == current_index + 1) {
-	
 #ifdef CONFIG_BQ2597X_CHARGE_PUMP
 		if (threshold < range[*new_index].low_threshold) {
 #else
@@ -690,6 +713,82 @@ update_time:
 	return 0;
 }
 
+static int handle_dynamic_fv(struct step_chg_info *chip)
+{
+	union power_supply_propval pval = {0, };
+	int rc = 0, fv_uv, cycle_count;
+	u64 elapsed_us;
+	int batt_vol = 0;
+
+	rc = power_supply_get_property(chip->batt_psy,
+		POWER_SUPPLY_PROP_DYNAMIC_FV_ENABLED, &pval);
+	if (rc < 0)
+		chip->dynamic_fv_enable = 0;
+	else
+		chip->dynamic_fv_enable = pval.intval;
+
+	if (!chip->dynamic_fv_enable || !chip->dynamic_fv_cfg_valid) {
+		/*need recovery some setting*/
+		if (chip->fv_votable)
+			vote(chip->fv_votable, DYNAMIC_FV_VOTER, false, 0);
+		return 0;
+	}
+
+	elapsed_us = ktime_us_delta(ktime_get(), chip->dynamic_fv_last_update_time);
+	if (elapsed_us < STEP_CHG_HYSTERISIS_DELAY_US)
+		return 0;
+
+	rc = power_supply_get_property(chip->bms_psy,
+			POWER_SUPPLY_PROP_CYCLE_COUNT, &pval);
+	if (rc < 0) {
+		pr_err("Couldn't read %s property rc=%d\n",
+				chip->dynamic_fv_config->prop_name, rc);
+		return rc;
+	}
+	cycle_count = pval.intval;
+
+	rc = get_val(chip->dynamic_fv_config->fv_cfg,
+			0,
+			chip->dynamic_fv_index,
+			cycle_count,
+			&chip->dynamic_fv_index,
+			&fv_uv);
+	if (rc < 0) {
+		/* remove the vote if no step-based fv is found */
+		if (chip->fv_votable)
+			vote(chip->fv_votable, DYNAMIC_FV_VOTER, false, 0);
+		goto update_time;
+	}
+
+	power_supply_get_property(chip->batt_psy,
+		POWER_SUPPLY_PROP_VOLTAGE_NOW, &pval);
+	batt_vol = pval.intval;
+	if (batt_vol >= fv_uv) {
+		goto update_time;
+	}
+
+	chip->fv_votable = find_votable("FV");
+	if (!chip->fv_votable)
+		goto update_time;
+
+	vote(chip->fv_votable, DYNAMIC_FV_VOTER, true, fv_uv);
+
+	/*set battery full voltage to FLOAT VOLTAGE*/
+	pval.intval = fv_uv;
+	rc = power_supply_set_property(chip->bms_psy,
+		POWER_SUPPLY_PROP_VOLTAGE_MAX, &pval);
+	if (rc < 0) {
+		pr_err("Couldn't set CONSTANT VOLTAGE property rc=%d\n", rc);
+		return rc;
+	}
+
+	pr_debug("%s:cycle_count:%d,Batt_full:%d,fv:%d,\n", __func__, cycle_count, pval.intval, fv_uv);
+
+update_time:
+	chip->dynamic_fv_last_update_time = ktime_get();
+	return 0;
+}
+
 #define JEITA_SUSPEND_HYST_UV		50000
 #define BATT_COOL_THRESHOLD		150
 #define BATT_WARM_THRESHOLD		450
@@ -738,7 +837,7 @@ static int handle_jeita(struct step_chg_info *chip)
 			pr_err("%s:failed to read usb_is_removing", __func__);
 			return 0;
 		}
-		pr_debug("%s:usb_is_removing=%d\n", __func__,pval.intval);
+		pr_info("%s:usb_is_removing=%d\n", __func__,pval.intval);
 		if (!pval.intval)
 			return 0;
 	}
@@ -1112,6 +1211,7 @@ int qcom_step_chg_init(struct device *dev,
 	chip->jeita_fv_config->param.hysteresis = 5;
 
 	chip->dynamic_fv_config->prop_name = "BATT_CYCLE_COUNT";
+
 	INIT_DELAYED_WORK(&chip->status_change_work, status_change_work);
 	INIT_DELAYED_WORK(&chip->get_config_work, get_config_work);
 
