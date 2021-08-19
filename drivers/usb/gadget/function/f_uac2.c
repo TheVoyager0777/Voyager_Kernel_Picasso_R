@@ -278,6 +278,7 @@ static struct usb_endpoint_descriptor fs_epout_desc = {
 
 	.bEndpointAddress = USB_DIR_OUT,
 	.bmAttributes = USB_ENDPOINT_XFER_ISOC | USB_ENDPOINT_SYNC_SYNC,
+	.wMaxPacketSize = cpu_to_le16(1023),
 	/* .wMaxPacketSize = DYNAMIC */
 	.bInterval = 1,
 };
