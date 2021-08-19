@@ -12,6 +12,14 @@
 #include <linux/slab.h>
 #include <uapi/linux/sched/types.h>
 #include <drm/drm_panel.h>
+#include <linux/module.h>
+
+static bool disable_boosts __read_mostly;
+module_param(disable_boosts, bool, 0644);
+
+#ifndef CONFIG_CPU_INPUT_BOOST
+	unsigned long last_input_time;
+#endif
 
 enum {
 	SCREEN_ON,
@@ -70,6 +78,9 @@ static void __devfreq_boost_kick(struct boost_dev *b)
 void devfreq_boost_kick(enum df_device device)
 {
 	struct df_boost_drv *d = &df_boost_drv_g;
+	
+	if (disable_boosts)
+		return;
 
 	__devfreq_boost_kick(d->devices + device);
 }
@@ -102,6 +113,9 @@ static void __devfreq_boost_kick_max(struct boost_dev *b,
 void devfreq_boost_kick_max(enum df_device device, unsigned int duration_ms)
 {
 	struct df_boost_drv *d = &df_boost_drv_g;
+	
+	if (disable_boosts)
+		return;
 
 	__devfreq_boost_kick_max(d->devices + device, duration_ms);
 }
@@ -218,6 +232,10 @@ static void devfreq_boost_input_event(struct input_handle *handle,
 
 	for (i = 0; i < DEVFREQ_MAX; i++)
 		__devfreq_boost_kick(d->devices + i);
+
+#ifndef CONFIG_CPU_INPUT_BOOST
+	last_input_time = jiffies;
+#endif
 }
 
 static int devfreq_boost_input_connect(struct input_handler *handler,

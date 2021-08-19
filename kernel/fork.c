@@ -2380,10 +2380,6 @@ long _do_fork(unsigned long clone_flags,
 
 	/* Boost DDR bus to the max for 50 ms when userspace launches an app */
 	if (task_is_zygote(current)) {
-<<<<<<< HEAD
-		cpu_input_boost_kick_max(50);
-=======
->>>>>>> cb39f40f02d0 (kernel: Boost DDR bus for a short amount of time when zygote forks)
 		devfreq_boost_kick_max(DEVFREQ_MSM_LLCCBW_DDR, 50);
 		devfreq_boost_kick_max(DEVFREQ_MSM_CPU_LLCCBW, 50);
 	}

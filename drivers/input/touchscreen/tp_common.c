@@ -26,4 +26,6 @@ static int __init tp_common_init(void)
 	return 0;
 }
 
+struct drm_panel *lcd_active_panel;
+
 core_initcall(tp_common_init);
