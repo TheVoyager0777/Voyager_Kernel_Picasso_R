@@ -49,6 +49,27 @@ struct task_struct *kthread_create_on_cpu(int (*threadfn)(void *data),
 	__k;								   \
 })
 
+/**
+ * kthread_run_perf_critical - create and wake a performance-critical thread.
+ *
+ * Same as kthread_create(), but takes a perf cpumask to affine to.
+ */
+#define kthread_run_perf_critical(perfmask, threadfn, data, namefmt, ...)  \
+({									   \
+	struct task_struct *__k						   \
+		= kthread_create(threadfn, data, namefmt, ## __VA_ARGS__); \
+	if (!IS_ERR(__k)) {						   \
+		__k->flags |= PF_PERF_CRITICAL;				   \
+		BUILD_BUG_ON(perfmask != cpu_lp_mask &&			   \
+			     perfmask != cpu_perf_mask &&		   \
+			     perfmask != cpu_perfp_mask &&		   \
+			     perfmask != cpu_hp_mask);			   \
+		kthread_bind_mask(__k, perfmask);			   \
+		wake_up_process(__k);					   \
+	}								   \
+	__k;								   \
+})
+
 void free_kthread_struct(struct task_struct *k);
 void kthread_bind(struct task_struct *k, unsigned int cpu);
 void kthread_bind_mask(struct task_struct *k, const struct cpumask *mask);
@@ -200,3 +221,4 @@ bool kthread_cancel_delayed_work_sync(struct kthread_delayed_work *work);
 void kthread_destroy_worker(struct kthread_worker *worker);
 
 #endif /* _LINUX_KTHREAD_H */
+
