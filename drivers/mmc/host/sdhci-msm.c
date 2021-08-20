@@ -4685,14 +4685,14 @@ static bool sdhci_msm_is_bootdevice(struct device *dev)
 			return false;
 	}
 
-<<<<<<< HEAD
+
 	/*
 	 * "androidboot.bootdevice=" argument is not present then
 	 * return true as we don't know the boot device anyways.
 	 */
 	return true;
 }
-=======
+
 static const struct sdhci_pltfm_data sdhci_msm_pdata = {
 	.quirks = SDHCI_QUIRK_BROKEN_CARD_DETECTION |
 		  SDHCI_QUIRK_NO_CARD_NO_RESET |
@@ -4703,7 +4703,7 @@ static const struct sdhci_pltfm_data sdhci_msm_pdata = {
 	.quirks2 = SDHCI_QUIRK2_PRESET_VALUE_BROKEN,
 	.ops = &sdhci_msm_ops,
 };
->>>>>>> d6d7b18f40ce (Merge 4.14.185 into android-4.14-stable)
+
 
 static int sdhci_msm_probe(struct platform_device *pdev)
 {
