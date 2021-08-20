@@ -872,14 +872,11 @@ int sde_crtc_calc_vpadding_param(struct drm_crtc_state *state,
 int sde_crtc_get_num_datapath(struct drm_crtc *crtc,
 		struct drm_connector *connector);
 
-<<<<<<< HEAD
 uint32_t sde_crtc_get_mi_fod_sync_info(struct sde_crtc_state *cstate);
 
-=======
 /**
  * _sde_crtc_clear_dim_layers_v1 - clear all dim layer settings
  * @cstate:      Pointer to drm crtc state
  */
 void _sde_crtc_clear_dim_layers_v1(struct drm_crtc_state *state);
->>>>>>> 88eec3febe37 (Merge tag 'LA.UM.9.1.r1-10200-SMxxx0.0' of https://source.codeaurora.org/quic/la/kernel/msm-4.14 into eleven-wip)
 #endif /* _SDE_CRTC_H_ */
