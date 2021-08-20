@@ -24,6 +24,7 @@
 #include "node.h"
 #include "segment.h"
 #include "trace.h"
+#include "iostat.h"
 #include <trace/events/f2fs.h>
 #include <trace/events/android_fs.h>
 

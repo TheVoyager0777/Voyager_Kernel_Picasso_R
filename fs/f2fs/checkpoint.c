@@ -22,6 +22,7 @@
 #include "node.h"
 #include "segment.h"
 #include "trace.h"
+#include "iostat.h"
 #include <trace/events/f2fs.h>
 
 static struct kmem_cache *ino_entry_slab;
