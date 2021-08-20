@@ -98,7 +98,6 @@ CDEFINES +=	-DANI_LITTLE_BYTE_ENDIAN \
 		-DANI_OS_TYPE_ANDROID=6 \
 		-DPTT_SOCK_SVC_ENABLE \
 		-Wall\
-		-Werror\
 		-D__linux__
 
 KBUILD_CPPFLAGS += $(CDEFINES)
@@ -126,10 +125,6 @@ endif
 
 ifeq ($(CONFIG_SND_SOC_GCOV), y)
 GCOV_PROFILE := y
-endif
-
-ifdef CONFIG_SND_SOC_FOR_ULTRASOUND_PATH
-	CDEFINES += -DCONFIG_SND_SOC_FOR_ULTRASOUND_PATH
 endif
 
 # Module information used by KBuild framework

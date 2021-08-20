@@ -99,10 +99,6 @@ static int no_reset = 0;
 module_param(no_reset, int, S_IRUGO);
 MODULE_PARM_DESC(no_reset, "do not use the reset line; for debugging via user\n");
 
-static int pcm_sample_format = 0;
-module_param(pcm_sample_format, int, S_IRUGO);
-MODULE_PARM_DESC(pcm_sample_format, "PCM sample format: 0=S16_LE, 1=S24_LE, 2=S32_LE\n");
-
 static int pcm_no_constraint = 0;
 module_param(pcm_no_constraint, int, S_IRUGO);
 MODULE_PARM_DESC(pcm_no_constraint, "do not use constraints for PCM parameters\n");
@@ -211,7 +207,7 @@ static enum tfa_error tfa98xx_write_re25(struct tfa_device *tfa, int value)
 static enum tfa_error tfa98xx_tfa_start(struct tfa98xx *tfa98xx, int next_profile, int vstep)
 {
 	enum tfa_error err;
-	ktime_t start_time, stop_time;
+	ktime_t start_time = 0, stop_time;
 	u64 delta_time;
 
 	pr_debug("%s  next_profile=%d  vstep=%d\n", __func__, next_profile, vstep);
@@ -220,7 +216,7 @@ static enum tfa_error tfa98xx_tfa_start(struct tfa98xx *tfa98xx, int next_profil
 	}
 
 
-	err = tfa_dev_start(tfa98xx->tfa, next_profile, vstep);
+	err = tfa_dev_start(tfa98xx->tfa, next_profile, vstep, tfa98xx->pcm_format);
 
 	pr_debug("%s  after performed tfa_dev_start return (%d)\n", __func__, err);
 
@@ -390,16 +386,6 @@ static void tfa98xx_inputdev_unregister(struct tfa98xx *tfa98xx)
 {
 	__tfa98xx_inputdev_check_register(tfa98xx, true);
 }
-
-#ifdef CONFIG_TFA_NON_DSP_SOLUTION
-extern int send_tfa_cal_apr(void *buf, int cmd_size, bool bRead);
-#else
-int send_tfa_cal_apr(void *buf, int cmd_size, bool bRead)
-{
-	pr_info("this function is empty!!!\n");
-	return 0;
-}
-#endif
 
 #ifdef CONFIG_DEBUG_FS
 /* OTC reporting
@@ -752,6 +738,7 @@ static ssize_t tfa98xx_dbgfs_fw_state_get(struct file *file,
 	return simple_read_from_buffer(user_buf, count, ppos, str, strlen(str));
 }
 
+extern int send_tfa_cal_apr(void *buf, int cmd_size, bool bRead);
 static ssize_t tfa98xx_dbgfs_rpc_read(struct file *file,
 				     char __user *user_buf, size_t count,
 				     loff_t *ppos)
@@ -1528,7 +1515,6 @@ static int tfa98xx_get_cal_ctl(struct snd_kcontrol *kcontrol,
 	return 0;
 }
 
-#ifdef TFA_NON_DSP_SOLUTION
 static atomic_t g_bypass;
 static atomic_t g_Tx_enable;
 extern int send_tfa_cal_set_bypass(void *buf, int cmd_size);
@@ -1595,7 +1581,6 @@ const struct snd_kcontrol_new tfa987x_algo_controls[] = {
 	SOC_ENUM_EXT("TFA987X_ALGO_STATUS", tfa987x_algo_enum[0], tfa987x_algo_get_status, tfa987x_algo_set_status),
 	SOC_ENUM_EXT("TFA987X_TX_ENABLE", tfa987x_tx_enum[0], tfa987x_algo_get_tx_status, tfa987x_algo_set_tx_enable)
 };
-#endif
 
 static int tfa98xx_create_controls(struct tfa98xx *tfa98xx)
 {
@@ -1737,10 +1722,8 @@ static int tfa98xx_create_controls(struct tfa98xx *tfa98xx)
 	ret = snd_soc_add_codec_controls(tfa98xx->codec, tfa98xx_controls, mix_index);
 	pr_info("create tfa98xx_controls  ret=%d", ret);
 
-#ifdef TFA_NON_DSP_SOLUTION
 	ret = snd_soc_add_codec_controls(tfa98xx->codec, tfa987x_algo_controls, ARRAY_SIZE(tfa987x_algo_controls));
 	pr_info("create tfa987x_algo_controls  ret=%d", ret);
-#endif
 	if (!ret) {
 		ret = snd_soc_add_codec_controls(tfa98xx->codec,
 				nxp_spk_id_controls, ARRAY_SIZE(nxp_spk_id_controls));
@@ -2589,7 +2572,7 @@ static void tfa98xx_interrupt(struct work_struct *work)
 
 		mutex_lock(&tfa98xx->dsp_lock);
 
-		start_triggered = tfa_plop_noise_interrupt(tfa98xx->tfa, tfa98xx->profile, tfa98xx->vstep);
+		start_triggered = tfa_plop_noise_interrupt(tfa98xx->tfa, tfa98xx->profile, tfa98xx->vstep, tfa98xx->pcm_format);
 
 		/* Only enable when the return value is 1, otherwise the interrupt is triggered twice */
 		if(start_triggered)
@@ -2613,8 +2596,6 @@ static int tfa98xx_startup(struct snd_pcm_substream *substream,
 	unsigned int sr;
 	int len, prof, nprof, idx = 0;
 	char *basename;
-	u64 formats;
-	int err;
 
 	/*
 	 * Support CODEC to CODEC links,
@@ -2625,23 +2606,6 @@ static int tfa98xx_startup(struct snd_pcm_substream *substream,
 
 	if (pcm_no_constraint != 0)
 		return 0;
-
-	switch (pcm_sample_format) {
-	case 1:
-		formats = SNDRV_PCM_FMTBIT_S24_LE;
-		break;
-	case 2:
-		formats = SNDRV_PCM_FMTBIT_S32_LE;
-		break;
-	default:
-		formats = SNDRV_PCM_FMTBIT_S16_LE;
-		break;
-	}
-
-	err = snd_pcm_hw_constraint_mask64(substream->runtime,
-					SNDRV_PCM_HW_PARAM_FORMAT, formats);
-	if (err < 0)
-		return err;
 
 	if (no_start != 0)
 		return 0;
@@ -2777,11 +2741,12 @@ static int tfa98xx_hw_params(struct snd_pcm_substream *substream,
 	/* update to new rate */
 	tfa98xx->rate = rate;
 
+	/* update pcm format */
+	tfa98xx->pcm_format = snd_pcm_format_width(params_format(params));
 
 	return 0;
 }
 
-#ifdef TFA_NON_DSP_SOLUTION
 extern int send_tfa_cal_in_band(void *buf, int cmd_size);
 static uint8_t bytes[3*3+1] = {0};
 
@@ -2848,7 +2813,6 @@ static int tfa98xx_send_mute_cmd(void)
 	pr_info("send mute command to host DSP.\n");
 	return send_tfa_cal_in_band(&cmd[0], sizeof(cmd));
 }
-#endif
 
 static int tfa98xx_mute(struct snd_soc_dai *dai, int mute, int stream)
 {
@@ -2887,21 +2851,17 @@ static int tfa98xx_mute(struct snd_soc_dai *dai, int mute, int stream)
 		if (tfa98xx->dsp_fw_state != TFA98XX_DSP_FW_OK)
 			return 0;
 		mutex_lock(&tfa98xx->dsp_lock);
-#ifdef TFA_NON_DSP_SOLUTION
 		tfa98xx_send_mute_cmd();
 		msleep(60);
-#endif
 		tfa_dev_stop(tfa98xx->tfa);
 		tfa98xx->dsp_init = TFA98XX_DSP_INIT_STOPPED;
 		mutex_unlock(&tfa98xx->dsp_lock);
 	} else {
 		if (stream == SNDRV_PCM_STREAM_PLAYBACK) {
 			tfa98xx->pstream = 1;
-#ifdef TFA_NON_DSP_SOLUTION
 			if (tfa98xx->tfa->is_probus_device) {
 				tfa98xx_adsp_send_calib_values();
 			}
-#endif
 		} else {
 			tfa98xx->cstream = 1;
 		}
@@ -4277,3 +4237,4 @@ module_exit(tfa98xx_i2c_exit);
 
 MODULE_DESCRIPTION("ASoC TFA98XX driver");
 MODULE_LICENSE("GPL");
+

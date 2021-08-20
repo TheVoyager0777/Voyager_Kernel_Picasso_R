@@ -1,4 +1,4 @@
-/* Copyright (c) 2012-2021, The Linux Foundation. All rights reserved.
+/* Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
  * Copyright (C) 2021 XiaoMi, Inc.
  *
  * This program is free software; you can redistribute it and/or modify
@@ -28,18 +28,13 @@
 #include <dsp/q6core.h>
 #include <dsp/msm-audio-event-notify.h>
 #include <dsp/apr_elliptic.h>
-/* for mius start */
 #ifdef CONFIG_US_PROXIMITY
 #include <dsp/apr_mius.h>
 #endif
-/* for mius end */
 #include <ipc/apr_tal.h>
 #include "adsp_err.h"
 #include "q6afecal-hwdep.h"
-#ifdef CONFIG_SND_SOC_TFA9874_FOR_DAVI
 #include "../asoc/codecs/tfa98xx/inc/tfa_platform_interface_definition.h"
-#endif
-
 
 #define WAKELOCK_TIMEOUT	5000
 enum {
@@ -171,10 +166,8 @@ struct afe_ctl {
 	struct vad_config vad_cfg[AFE_MAX_PORTS];
 	struct work_struct afe_dc_work;
 	struct notifier_block event_notifier;
-#ifdef CONFIG_SND_SOC_TFA9874_FOR_DAVI
 	struct rtac_cal_block_data tfa_cal;
 	atomic_t tfa_state;
-#endif /*CONFIG_SND_SOC_TFA9874_FOR_DAVI*/
 	/* FTM spk params */
 	uint32_t initial_cal;
 	uint32_t v_vali_flag;
@@ -259,8 +252,8 @@ int afe_get_topology(int port_id)
 done:
 	return topology;
 }
-
 EXPORT_SYMBOL(afe_get_topology);
+
 /**
  * afe_set_aanc_info -
  *        Update AFE AANC info
@@ -574,19 +567,18 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 				payload, data->token);
 			return -EINVAL;
 		}
+
 		if (rtac_make_afe_callback(data->payload,
 					   data->payload_size))
 			return 0;
 
-		param_id = (data->opcode == AFE_PORT_CMDRSP_GET_PARAM_V3) ?
-					payload[3] :
-					payload[2];
+		param_id = (data->opcode == AFE_PORT_CMDRSP_GET_PARAM_V3)
+				? payload[3] : payload[2];
 
 		if (param_id == AFE_PARAM_ID_DEV_TIMING_STATS) {
 			av_dev_drift_afe_cb_handler(data->opcode, data->payload,
 						    data->payload_size);
 		} else {
-#ifdef CONFIG_SND_SOC_TFA9874_FOR_DAVI
 			if (atomic_read(&this_afe.tfa_state) == 1 &&
 				data->payload_size == sizeof(uint32_t)) {
 
@@ -601,8 +593,6 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 
 				return 0;
 			}
-#endif /*CONFIG_SND_SOC_TFA9874_FOR_DAVI*/
-
 			if (sp_make_afe_callback(data->opcode, data->payload,
 						 data->payload_size))
 				return -EINVAL;
@@ -611,7 +601,6 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 			wake_up(&this_afe.wait[data->token]);
 		else
 			return -EINVAL;
-/* for mius start */
 #ifdef CONFIG_US_PROXIMITY
 	} else if (data->opcode == MI_ULTRASOUND_OPCODE) {
 		if (NULL != data->payload) {
@@ -620,7 +609,6 @@ static int32_t afe_callback(struct apr_client_data *data, void *priv)
 		} else
 			pr_err("[EXPORT_SYMBOLLUS]: payload ptr is Invalid");
 #endif
-/* for mius end */
 	} else if (data->opcode == AFE_EVENT_MBHC_DETECTION_SW_WA) {
 		msm_aud_evt_notifier_call_chain(SWR_WAKE_IRQ_EVENT, NULL);
 	} else if (data->opcode ==
@@ -1696,7 +1684,6 @@ static int afe_spk_prot_prepare(int src_port, int dst_port, int param_id,
 	case AFE_PARAM_ID_SP_V2_EX_VI_FTM_CFG:
 		param_info.module_id = AFE_MODULE_SPEAKER_PROTECTION_V2_EX_VI;
 		break;
-#ifdef CONFIG_SND_SOC_TFA9874_FOR_DAVI
 	case AFE_PARAM_ID_TFADSP_RX_CFG:
 	case AFE_PARAM_ID_TFADSP_RX_SET_BYPASS:
 		param_info.module_id = AFE_MODULE_ID_TFADSP_RX;
@@ -1704,9 +1691,6 @@ static int afe_spk_prot_prepare(int src_port, int dst_port, int param_id,
 	case AFE_PARAM_ID_TFADSP_TX_SET_ENABLE:
 		param_info.module_id = AFE_MODULE_ID_TFADSP_TX;
 		break;
-#endif	/*CONFIG_SND_SOC_TFA9874_FOR_DAVI*/
-
-
 	default:
 		pr_err("%s: default case 0x%x\n", __func__, param_id);
 		goto fail_cmd;
@@ -1784,7 +1768,6 @@ afe_ultrasound_state_t elus_afe = {
 };
 EXPORT_SYMBOL(elus_afe);
 
-/* for mius start */
 #ifdef CONFIG_US_PROXIMITY
 afe_mi_ultrasound_state_t mius_afe = {
 	.ptr_apr = &this_afe.apr,
@@ -1795,7 +1778,6 @@ afe_mi_ultrasound_state_t mius_afe = {
 };
 EXPORT_SYMBOL(mius_afe);
 #endif
-/* for mius end */
 
 static void afe_send_cal_spkr_prot_tx(int port_id)
 {
@@ -2117,7 +2099,7 @@ static int afe_get_cal_topology_id(u16 port_id, u32 *topology_id,
 	cal_block = afe_find_cal_topo_id_by_port(
 		this_afe.cal_data[cal_type_index], port_id);
 	if (cal_block == NULL) {
-		pr_err("%s: cal_type %d not initialized for this port %d\n",
+		pr_debug("%s: cal_type %d not initialized for this port %d\n",
 			__func__, cal_type_index, port_id);
 		ret = -EINVAL;
 		goto unlock;
@@ -2442,7 +2424,7 @@ static int send_afe_cal_type(int cal_index, int port_id)
 				this_afe.cal_data[cal_index]);
 
 	if (cal_block == NULL || cal_utils_is_cal_stale(cal_block)) {
-		pr_err_ratelimited("%s cal_block not found!!\n", __func__);
+		pr_debug("%s cal_block not found!!\n", __func__);
 		ret = -EINVAL;
 		goto unlock;
 	}
@@ -2619,7 +2601,6 @@ done:
 	kfree(packed_param_data);
 	return ret;
 }
-
 
 static int afe_init_cdc_reg_config(void)
 {
@@ -7458,6 +7439,7 @@ static int afe_get_sp_th_vi_v_vali_data(
 
 	mutex_lock(&this_afe.afe_cmd_lock);
 	memset(&param_hdr, 0, sizeof(param_hdr));
+	memset(th_vi_v_vali, 0, sizeof(*th_vi_v_vali));
 
 	param_hdr.module_id = AFE_MODULE_SPEAKER_PROTECTION_V2_TH_VI;
 	param_hdr.instance_id = INSTANCE_ID_0;
@@ -8187,7 +8169,6 @@ static int afe_get_cal_sp_th_vi_param(int32_t cal_type, size_t data_size,
 
 	if (cal_data == NULL ||
 	    data_size > sizeof(*cal_data) ||
-	    data_size < sizeof(cal_data->cal_hdr) ||
 	    this_afe.cal_data[AFE_FB_SPKR_PROT_TH_VI_CAL] == NULL)
 		return 0;
 
@@ -8214,8 +8195,7 @@ static int afe_get_cal_sp_ex_vi_ftm_param(int32_t cal_type, size_t data_size,
 	pr_debug("%s: cal_type = %d\n", __func__, cal_type);
 	if (this_afe.cal_data[AFE_FB_SPKR_PROT_EX_VI_CAL] == NULL ||
 	    cal_data == NULL ||
-	    data_size > sizeof(*cal_data) ||
-	    data_size < sizeof(cal_data->cal_hdr))
+	    data_size != sizeof(*cal_data))
 		goto done;
 
 	mutex_lock(&this_afe.cal_data[AFE_FB_SPKR_PROT_EX_VI_CAL]->lock);
@@ -8569,8 +8549,6 @@ static void afe_release_uevent_data(struct kobject *kobj)
 	kfree(data);
 }
 
-#ifdef CONFIG_SND_SOC_TFA9874_FOR_DAVI
-
 int send_tfa_cal_apr(void *buf, int cmd_size, bool bRead)
 {
 	int32_t result, port_id = AFE_PORT_ID_TFADSP_RX;
@@ -8772,8 +8750,6 @@ int send_tfa_cal_set_tx_enable(void *buf, int cmd_size)
 }
 EXPORT_SYMBOL(send_tfa_cal_set_tx_enable);
 
-#endif /*CONFIG_SND_SOC_TFA9874_FOR_DAVI*/
-
 int __init afe_init(void)
 {
 	int i = 0, ret;
@@ -8832,11 +8808,7 @@ int __init afe_init(void)
 
 void afe_exit(void)
 {
-#ifdef CONFIG_SND_SOC_TFA9874_FOR_DAVI
 	afe_unmap_rtac_block(&this_afe.tfa_cal.map_data.map_handle);
-#endif /*CONFIG_SND_SOC_TFA9874_FOR_DAVI*/
-
-
 	if (this_afe.apr) {
 		apr_reset(this_afe.apr);
 		atomic_set(&this_afe.state, 0);
@@ -8999,4 +8971,3 @@ done:
 	return ret;
 }
 EXPORT_SYMBOL(afe_unvote_lpass_core_hw);
-

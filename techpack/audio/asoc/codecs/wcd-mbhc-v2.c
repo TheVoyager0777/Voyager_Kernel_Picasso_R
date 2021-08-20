@@ -2083,8 +2083,6 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 	const char *hs_thre = "qcom,msm-mbhc-hs-mic-max-threshold-mv";
 	const char *hph_thre = "qcom,msm-mbhc-hs-mic-min-threshold-mv";
 
-	impedance_det_en = true;
-	
 	pr_debug("%s: enter\n", __func__);
 
 	ret = of_property_read_u32(card->dev->of_node, hph_switch, &hph_swh);
@@ -2193,6 +2191,14 @@ int wcd_mbhc_init(struct wcd_mbhc *mbhc, struct snd_soc_codec *codec,
 				__func__);
 			return ret;
 		}
+		ret = snd_soc_card_jack_new(codec->component.card,
+					    "USB_3_5 Jack", WCD_MBHC_JACK_USB_3_5_MASK,
+					    &mbhc->usb_3_5_jack, NULL, 0);
+		if (ret) {
+			pr_err("%s: Failed to create new jack USB_3_5 Jack\n", __func__);
+			return ret;
+		}
+
 		ret = snd_soc_card_jack_new(codec->component.card,
 					    "USB_3_5 Jack", WCD_MBHC_JACK_USB_3_5_MASK,
 					    &mbhc->usb_3_5_jack, NULL, 0);
@@ -2359,6 +2365,7 @@ EXPORT_SYMBOL(wcd_mbhc_init);
 void wcd_mbhc_deinit(struct wcd_mbhc *mbhc)
 {
 	struct snd_soc_codec *codec = mbhc->codec;
+
 	class_unregister(&mbhc->hphlr_class);
 	mbhc->mbhc_cb->free_irq(codec, mbhc->intr_ids->mbhc_sw_intr, mbhc);
 	mbhc->mbhc_cb->free_irq(codec, mbhc->intr_ids->mbhc_btn_press_intr,

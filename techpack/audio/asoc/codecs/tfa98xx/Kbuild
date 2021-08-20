@@ -6,8 +6,6 @@ else
 	KERNEL_BUILD := 0
 endif
 
-
-
 ifeq ($(KERNEL_BUILD), 1)
 	# These are configurable via Kconfig for kernel-based builds
 	# Need to explicitly configure for Android-based builds
@@ -88,7 +86,7 @@ CDEFINES +=	-DANI_LITTLE_BYTE_ENDIAN \
 		-D__linux__ \
 		-DDEBUG
 
-ifdef CONFIG_TFA_NON_DSP_SOLUTION
+ifdef CONFIG_MACH_XIAOMI_SDMMAGPIE
 	CDEFINES += -DTFA_NON_DSP_SOLUTION
 endif
 

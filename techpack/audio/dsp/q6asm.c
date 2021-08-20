@@ -4509,8 +4509,6 @@ int q6asm_get_shared_pos(struct audio_client *ac, uint32_t *read_index,
 			continue;
 		return 0;
 	}
-	pr_err("%s out of tries trying to get a good read, try again\n",
-	       __func__);
 	return -EAGAIN;
 }
 EXPORT_SYMBOL(q6asm_get_shared_pos);
@@ -10831,7 +10829,7 @@ static int q6asm_get_asm_topology_apptype(struct q6asm_cal_info *cal_info)
 unlock:
 	mutex_unlock(&cal_data[ASM_TOPOLOGY_CAL]->lock);
 done:
-	pr_info("%s: Using topology %d app_type %d\n", __func__,
+	pr_debug("%s: Using topology %d app_type %d\n", __func__,
 			cal_info->topology_id, cal_info->app_type);
 
 	return 0;

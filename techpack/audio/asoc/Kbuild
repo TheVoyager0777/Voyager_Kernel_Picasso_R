@@ -183,19 +183,17 @@ CDEFINES +=	-DANI_LITTLE_BYTE_ENDIAN \
 		-DANI_OS_TYPE_ANDROID=6 \
 		-DPTT_SOCK_SVC_ENABLE \
 		-Wall\
-		-Werror\
 		-D__linux__
 
-ifdef CONFIG_SND_SOC_TFA9874_FOR_DAVI
+ifdef CONFIG_MACH_XIAOMI_SDMMAGPIE
 	CDEFINES += -DCONFIG_SND_SOC_TFA9874_FOR_DAVI
 endif
 
-
-ifdef CONFIG_SND_SOC_FOR_ULTRASOUND_PATH
+ifdef CONFIG_US_PROXIMITY
 	CDEFINES += -DCONFIG_SND_SOC_FOR_ULTRASOUND_PATH
 endif
 
-KBUILD_CPPFLAGS += $(CDEFINES)
+    KBUILD_CPPFLAGS += $(CDEFINES)
 
 # Currently, for versions of gcc which support it, the kernel Makefile
 # is disabling the maybe-uninitialized warning.  Re-enable it for the

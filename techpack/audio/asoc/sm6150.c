@@ -11,6 +11,7 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
  */
+
 #include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/gpio.h>
@@ -46,9 +47,7 @@
 #include <dt-bindings/sound/audio-codec-port-types.h>
 #include "codecs/bolero/wsa-macro.h"
 #include "codecs/wcd937x/wcd937x.h"
-#ifdef CONFIG_SND_SOC_TFA9874_FOR_DAVI
 #include "codecs/tfa98xx/inc/tfa_platform_interface_definition.h"
-#endif
 
 #define DRV_NAME "sm6150-asoc-snd"
 
@@ -424,11 +423,7 @@ static struct dev_config mi2s_rx_cfg[] = {
 };
 
 static struct dev_config mi2s_tx_cfg[] = {
-#ifdef CONFIG_SND_SOC_TFA9874_FOR_DAVI
 	[PRIM_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 2},
-#else
-	[PRIM_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
-#endif
 	[SEC_MI2S]  = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 	[TERT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
 	[QUAT_MI2S] = {SAMPLING_RATE_48KHZ, SNDRV_PCM_FORMAT_S16_LE, 1},
@@ -5802,6 +5797,10 @@ static int sm6150_tdm_snd_startup(struct snd_pcm_substream *substream)
 		dev_err(rtd->card->dev, "%s: Invalid tdm_mode\n", __func__);
 		return tdm_mode;
 	}
+	/* currently only supporting TDM_RX_0 and TDM_TX_0 */
+	if (pdata->mi2s_gpio_p[tdm_mode])
+		ret = msm_cdc_pinctrl_select_active_state(
+				pdata->mi2s_gpio_p[tdm_mode]);
 
 	/* currently only supporting TDM_RX_0 and TDM_TX_0 */
 	if (pdata->mi2s_gpio_p[tdm_mode])
@@ -5916,6 +5915,7 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 			goto clk_off;
 		}
 		if (mi2s_intf_conf[index].msm_is_ext_mclk) {
+			mi2s_mclk[index].enable = 1;
 			pr_debug("%s: Enabling mclk, clk_freq_in_hz = %u\n",
 				__func__, mi2s_mclk[index].clk_freq_in_hz);
 			ret = afe_set_lpass_clock_v2(port_id,
@@ -5925,7 +5925,6 @@ static int msm_mi2s_snd_startup(struct snd_pcm_substream *substream)
 					__func__, ret);
 				goto clk_off;
 			}
-			mi2s_mclk[index].enable = 1;
 		}
 		if (pdata->mi2s_gpio_p[index])
 			msm_cdc_pinctrl_select_active_state(
@@ -5974,16 +5973,17 @@ static void msm_mi2s_snd_shutdown(struct snd_pcm_substream *substream)
 		if (ret < 0)
 			pr_err("%s:clock disable failed for MI2S (%d); ret=%d\n",
 				__func__, index, ret);
+	}
 
-		if (mi2s_intf_conf[index].msm_is_ext_mclk) {
-			pr_debug("%s: Disabling mclk, clk_freq_in_hz = %u\n",
-				 __func__, mi2s_mclk[index].clk_freq_in_hz);
-			ret = afe_set_lpass_clock_v2(port_id,
-						     &mi2s_mclk[index]);
-			if (ret < 0)
-				pr_err("%s: mclk disable failed for MCLK (%d); ret=%d\n",
-					__func__, index, ret);
-			mi2s_mclk[index].enable = 0;
+	if (mi2s_intf_conf[index].msm_is_ext_mclk) {
+		mi2s_mclk[index].enable = 0;
+		pr_debug("%s: Disabling mclk, clk_freq_in_hz = %u\n",
+			 __func__, mi2s_mclk[index].clk_freq_in_hz);
+		ret = afe_set_lpass_clock_v2(port_id,
+					     &mi2s_mclk[index]);
+		if (ret < 0) {
+			pr_err("%s: mclk disable failed for MCLK (%d); ret=%d\n",
+				__func__, index, ret);
 		}
 	}
 	mutex_unlock(&mi2s_intf_conf[index].lock);
@@ -6644,7 +6644,6 @@ static struct snd_soc_dai_link msm_common_dai_links[] = {
 };
 
 static struct snd_soc_dai_link msm_tavil_fe_dai_links[] = {
-#ifdef CONFIG_SND_SOC_TFA9874_FOR_DAVI
 	{
 		.name = TFA_TX_HOSTLESS_CODEC_NAME,
 		.stream_name = TFA_TX_HOSTLESS_STREAM_NAME,
@@ -6662,7 +6661,6 @@ static struct snd_soc_dai_link msm_tavil_fe_dai_links[] = {
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
 	},
-#else
 	{
 		.name = LPASS_BE_SLIMBUS_4_TX,
 		.stream_name = "Slimbus4 Capture",
@@ -6676,7 +6674,6 @@ static struct snd_soc_dai_link msm_tavil_fe_dai_links[] = {
 		.no_host_mode = SND_SOC_DAI_LINK_NO_HOST,
 		.ignore_suspend = 1,
 	},
-#endif
 	/* Ultrasound RX DAI Link */
 	{
 		.name = "SLIMBUS_2 Hostless Playback",
@@ -6883,7 +6880,6 @@ static struct snd_soc_dai_link msm_tasha_fe_dai_links[] = {
 	},
 };
 
-
 static struct snd_soc_dai_link msm_common_misc_fe_dai_links[] = {
 	{
 		.name = MSM_DAILINK_NAME(ASM Loopback),
@@ -6922,7 +6918,7 @@ static struct snd_soc_dai_link msm_common_misc_fe_dai_links[] = {
 
 #ifdef CONFIG_SND_SOC_FOR_ULTRASOUND_PATH
 static struct snd_soc_dai_link msm_common_ultrasound_dai_links[] = {
-	{/* hw:x,41 */
+	{
 		.name = "CDC_DMA Hostless_USRX",
 		.stream_name = "CDC_DMA Hostless_USRX",
 		.cpu_dai_name = "CDC_DMA_HOSTLESS_USRX",
@@ -6938,7 +6934,7 @@ static struct snd_soc_dai_link msm_common_ultrasound_dai_links[] = {
 		.codec_dai_name = "snd-soc-dummy-dai",
 		.codec_name = "snd-soc-dummy",
 	},
-	{/* hw:x,42 */
+	{
 		.name = "CDC_DMA Hostless_USTX",
 		.stream_name = "CDC_DMA Hostless_USTX",
 		.cpu_dai_name = "CDC_DMA_HOSTLESS_USTX",
@@ -7661,7 +7657,6 @@ static struct snd_soc_dai_link ext_disp_be_dai_link[] = {
 };
 
 static struct snd_soc_dai_link msm_mi2s_be_dai_links[] = {
-
 	{
 		.name = LPASS_BE_PRI_MI2S_RX,
 		.stream_name = "Primary MI2S Playback",
@@ -7677,14 +7672,13 @@ static struct snd_soc_dai_link msm_mi2s_be_dai_links[] = {
 		.ignore_suspend = 1,
 		.ignore_pmdown_time = 1,
 	},
-
 	{
 		.name = LPASS_BE_PRI_MI2S_TX,
 		.stream_name = "Primary MI2S Capture",
 		.cpu_dai_name = "msm-dai-q6-mi2s.0",
 		.platform_name = "msm-pcm-routing",
-		 .codec_name = "msm-stub-codec.1",
-		 .codec_dai_name = "msm-stub-tx",
+		.codec_name = "msm-stub-codec.1",
+		.codec_dai_name = "msm-stub-tx",
 		.no_pcm = 1,
 		.dpcm_capture = 1,
 		.id = MSM_BACKEND_DAI_PRI_MI2S_TX,
@@ -8457,6 +8451,7 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 
 		total_links += ARRAY_SIZE(msm_common_ultrasound_dai_links);
 #endif
+
 		rc = of_property_read_u32(dev->of_node, "qcom,tavil_codec",
 						&tavil_codec);
 		if (rc)
@@ -8558,16 +8553,8 @@ static struct snd_soc_card *populate_snd_card_dailinks(struct device *dev)
 					dev_info(dev, "%s: hardware is HARDWARE_PLATFORM_DAVINCI.\n", __func__);
 					msm_mi2s_be_dai_links[0].codec_name = "tfa98xx.3-0034";
 					msm_mi2s_be_dai_links[0].codec_dai_name = "tfa98xx-aif-3-34";
-				} else if (HARDWARE_PLATFORM_PHOENIX == hw_platform) {
-					dev_info(dev, "%s: hardware is HARDWARE_PLATFORM_PHOENIX.\n", __func__);
-					msm_mi2s_be_dai_links[0].codec_name = "tfa98xx.1-0034";
-					msm_mi2s_be_dai_links[0].codec_dai_name = "tfa98xx-aif-1-34";
 				} else if (HARDWARE_PLATFORM_TUCANA == hw_platform) {
 					dev_info(dev, "%s: hardware is HARDWARE_PLATFORM_DAVINCI.\n", __func__);
-					msm_mi2s_be_dai_links[0].codec_name = "tfa98xx.2-0034";
-					msm_mi2s_be_dai_links[0].codec_dai_name = "tfa98xx-aif-2-34";
-				} else if (HARDWARE_PLATFORM_TOCO == hw_platform) {
-					dev_info(dev, "%s: hardware is HARDWARE_PLATFORM_TOCO.\n", __func__);
 					msm_mi2s_be_dai_links[0].codec_name = "tfa98xx.2-0034";
 					msm_mi2s_be_dai_links[0].codec_dai_name = "tfa98xx-aif-2-34";
 				} else {

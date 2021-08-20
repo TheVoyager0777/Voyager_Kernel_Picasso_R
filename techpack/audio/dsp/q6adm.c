@@ -2851,7 +2851,7 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 	void *adm_params = NULL;
 	int param_size;
 
-	pr_err("%s:port %#x path:%d rate:%d mode:%d perf_mode:%d,topo_id 0x%x bit_width %d app_type %d acdb_id %d\n",
+	pr_info("%s:port %#x path:%d rate:%d mode:%d perf_mode:%d,topo_id 0x%x bit_width %d app_type %d acdb_id %d\n",
 		__func__, port_id, path, rate, channel_mode, perf_mode,
 			 topology, bit_width, app_type, acdb_id);
 
@@ -2929,7 +2929,6 @@ int adm_open(int port_id, int path, int rate, int channel_mode, int topology,
 		pr_debug("%s: set channel_mode as 1 for topology=%d\n", __func__, topology);
 		channel_mode = 1;
 	}
-
 
 	/*
 	 * Routing driver reuses the same adm for streams with the same

@@ -2071,6 +2071,10 @@ static int swrm_probe(struct platform_device *pdev)
 	/* Make inband tx interrupts as wakeup capable for slave irq */
 	if (swrm->master_id == MASTER_ID_TX)
 		irq_set_irq_wake(swrm->irq, 1);
+
+	/* Make inband tx interrupts as wakeup capable for slave irq */
+	if (swrm->master_id == MASTER_ID_TX)
+		irq_set_irq_wake(swrm->irq, 1);
 	ret = device_init_wakeup(swrm->dev, true);
 	if (ret) {
 		dev_err(swrm->dev, "Device wakeup init failed: %d\n", ret);
