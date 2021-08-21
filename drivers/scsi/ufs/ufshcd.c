@@ -7664,8 +7664,6 @@ static int ufshcd_eh_device_reset_handler(struct scsi_cmnd *cmd)
 	hba = shost_priv(host);
 
 	ufshcd_print_cmd_log(hba);
-	lrbp = &hba->lrb[tag];
-	err = ufshcd_issue_tm_cmd(hba, lrbp->lun, 0, UFS_LOGICAL_RESET, &resp);
 	lun = ufshcd_scsi_to_upiu_lun(cmd->device->lun);
 	if (err || resp != UPIU_TASK_MANAGEMENT_FUNC_COMPL) {
 		if (!err)
@@ -7702,7 +7700,6 @@ static void ufshcd_set_req_abort_skip(struct ufs_hba *hba, unsigned long bitmap)
 	int tag;
 
 	for_each_set_bit(tag, &bitmap, hba->nutrs) {
-		lrbp = &hba->lrb[tag];
 		lrbp->req_abort_skip = true;
 	}
 }
@@ -7740,8 +7737,6 @@ static int ufshcd_abort(struct scsi_cmnd *cmd)
 			__func__, tag, cmd, cmd->request);
 		BUG();
 	}
-
-	lrbp = &hba->lrb[tag];
 
 	ufshcd_update_error_stats(hba, UFS_ERR_TASK_ABORT);
 
