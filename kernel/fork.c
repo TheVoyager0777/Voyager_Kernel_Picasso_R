@@ -94,11 +94,7 @@
 #include <linux/thread_info.h>
 #include <linux/cpufreq_times.h>
 #include <linux/scs.h>
-<<<<<<< HEAD
-=======
-#include <linux/simple_lmk.h>
 #include <linux/devfreq_boost.h>
->>>>>>> fb866844c952 (kernel: Boost DDR bus for a short amount of time when zygote forks)
 
 #include <asm/pgtable.h>
 #include <asm/pgalloc.h>

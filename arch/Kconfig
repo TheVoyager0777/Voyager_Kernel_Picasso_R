@@ -603,7 +603,6 @@ config THIN_ARCHIVES
 	  Select this if the architecture wants to use thin archives
 	  instead of ld -r to create the built-in.o files.
 
-<<<<<<< HEAD
 choice
 	prompt "Kernel linker"
 	default LD_BFD if !LTO_CLANG
