@@ -683,7 +683,6 @@ static int dsi_panel_update_backlight_demura_level(struct dsi_panel *panel,
 {
 	int rc = 0;
 
-<<<<<<< HEAD
 	if (panel->in_aod || 0 == bl_lvl) {
 		pr_debug("skip set demura_level: in_aod=%d bkl=%d\n", panel->in_aod, bl_lvl);
 		return rc;
@@ -696,15 +695,6 @@ static int dsi_panel_update_backlight_demura_level(struct dsi_panel *panel,
 			panel->backlight_demura_level = DEMURA_STATUS_DC_L1;
 		} else if (bl_lvl <= panel->dc_demura_threshold
 			&& panel->backlight_demura_level != DEMURA_STATUS_DC_L2) {
-=======
-	if (panel->dc_enable && panel->dc_demura_threshold) {
-		if (bl_lvl > panel->dc_demura_threshold
-				&& panel->backlight_demura_level != DEMURA_STATUS_DC_L1) {
-			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_DC_DEMURA_L1);
-			panel->backlight_demura_level = DEMURA_STATUS_DC_L1;
-		} else if (bl_lvl <= panel->dc_demura_threshold
-				&& panel->backlight_demura_level != DEMURA_STATUS_DC_L2) {
->>>>>>> 997e414048ec (drm: msm: Implement demura dc dimming)
 			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_DC_DEMURA_L2);
 			panel->backlight_demura_level = DEMURA_STATUS_DC_L2;
 		}
@@ -713,19 +703,11 @@ static int dsi_panel_update_backlight_demura_level(struct dsi_panel *panel,
 			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_DEMURA_LEVEL02);
 			panel->backlight_demura_level = DEMURA_STATUS_LEVEL2;
 		} else if (bl_lvl >= DEMURA_LEVEL_08 && bl_lvl <= DEMURA_LEVEL_02
-<<<<<<< HEAD
 					&& panel->backlight_demura_level != DEMURA_STATUS_LEVEL8) {
 			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_DEMURA_LEVEL08);
 			panel->backlight_demura_level = DEMURA_STATUS_LEVEL8;
 		} else if (bl_lvl >= DEMURA_LEVEL_0D && bl_lvl < DEMURA_LEVEL_08
 					&& panel->backlight_demura_level != DEMURA_STATUS_LEVELD) {
-=======
-				&& panel->backlight_demura_level != DEMURA_STATUS_LEVEL8) {
-			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_DEMURA_LEVEL08);
-			panel->backlight_demura_level = DEMURA_STATUS_LEVEL8;
-		} else if (bl_lvl >= DEMURA_LEVEL_0D && bl_lvl < DEMURA_LEVEL_08
-				&& panel->backlight_demura_level != DEMURA_STATUS_LEVELD) {
->>>>>>> 997e414048ec (drm: msm: Implement demura dc dimming)
 			rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_DEMURA_LEVEL0D);
 			panel->backlight_demura_level = DEMURA_STATUS_LEVELD;
 		}
@@ -771,27 +753,8 @@ static int dsi_panel_update_backlight(struct dsi_panel *panel,
 	if (panel->bl_config.xiaomi_f4_41_flag)
 		rc = dsi_panel_update_backlight_demura_level(panel, bl_temp);
 
-<<<<<<< HEAD
 	if (rc < 0)
 		pr_err("failed to update dcs backlight:%d\n", bl_temp);
-=======
-	/* For the f4_41 panel, we need to switch the DEMURA_LEVEL according to the value of the 51 register. */
-	if (panel->bl_config.xiaomi_f4_41_flag)
-		rc = dsi_panel_update_backlight_demura_level(panel, bl_lvl);
-
-	if (rc < 0) {
-		pr_err("failed to update demura backlight:%d\n", bl_lvl);
-		goto exit;
-	}
-
-	if (panel->doze_enabled) {
-		rc = dsi_panel_update_lp_mode(panel);
-		if (rc < 0) {
-			pr_err("failed to update lp mode");
-			goto exit;
-		}
-	}
->>>>>>> 997e414048ec (drm: msm: Implement demura dc dimming)
 
 	return rc;
 }
@@ -949,7 +912,6 @@ ssize_t dsi_panel_get_doze_backlight(struct dsi_display *display, char *buf)
 
 bool dc_skip_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 {
-<<<<<<< HEAD
 /* 1. dc enable is 1;
  * 2. bl lvl should less than dc theshold;
  * 3. bl lvl not 0, we should not skip set 0;
@@ -961,15 +923,6 @@ bool dc_skip_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 	} else {
 		return false;
 	}
-=======
-	/* 1. dc enable is 1;
-	 * 2. bl lvl should less than dc theshold;
-	 * 3. bl lvl not 0, we should not skip set 0;
-	 * 4. dc type is 1 means need backlight control here, 0 means IC can switch automatically.
-	 * When meet all the 4 conditions at the same time, skip set this bl.
-	 */
-	return panel->dc_enable && bl_lvl < panel->dc_threshold && bl_lvl != 0 && panel->dc_type && panel->last_bl_lvl != 0;
->>>>>>> 997e414048ec (drm: msm: Implement demura dc dimming)
 }
 
 int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
@@ -981,7 +934,6 @@ int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 	if (panel->host_config.ext_bridge_num)
 		return 0;
 
-<<<<<<< HEAD
 	pr_debug("backlight type:%d lvl:%d\n", bl->type, bl_lvl);
 
 	if (dc_skip_set_backlight(panel, bl_lvl)) {
@@ -998,16 +950,6 @@ int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 		dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_DIMMINGOFF);
 	}
 
-=======
-	pr_info("backlight type:%d lvl:%d\n", bl->type, bl_lvl);
-
-	if (dc_skip_set_backlight(panel, bl_lvl)) {
-		panel->last_bl_lvl = bl_lvl;
-		pr_info("skip set backlight because dc is enabled %d, bl %d\n", panel->dc_enable, bl_lvl);
-		return rc;
-	}
-
->>>>>>> 997e414048ec (drm: msm: Implement demura dc dimming)
 	switch (bl->type) {
 	case DSI_BACKLIGHT_WLED:
 		rc = backlight_device_set_brightness(bl->raw_bd, bl_lvl);
@@ -1038,7 +980,6 @@ int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 		rc = -ENOTSUPP;
 	}
 
-<<<<<<< HEAD
 	if ((panel->last_bl_lvl == 0 || (panel->skip_dimmingon == STATE_DIM_RESTORE)) && bl_lvl) {
 		if (panel->panel_on_dimming_delay)
 			schedule_delayed_work(&panel->cmds_work,
@@ -1049,10 +990,6 @@ int dsi_panel_set_backlight(struct dsi_panel *panel, u32 bl_lvl)
 	}
 
 	panel->last_bl_lvl = bl_lvl;
-=======
-	panel->last_bl_lvl = bl_lvl;
-
->>>>>>> 997e414048ec (drm: msm: Implement demura dc dimming)
 	return rc;
 }
 
@@ -2146,7 +2083,6 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-dispparam-hbm-off-command",
 	"qcom,mdss-dsi-dispparam-hbm-fod-on-command",
 	"qcom,mdss-dsi-dispparam-hbm-fod-off-command",
-<<<<<<< HEAD
 	"qcom,mdss-dsi-dispparam-hbm-fod2norm-command",
 	"qcom,mdss-dsi-displayoff-command",
 	"qcom,mdss-dsi-displayon-command",
@@ -2164,8 +2100,6 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-dispparam-four-pluse-command",
 	"qcom,mdss-dsi-dispparam-flat-mode-on-command",
 	"qcom,mdss-dsi-dispparam-flat-mode-off-command",
-=======
->>>>>>> 997e414048ec (drm: msm: Implement demura dc dimming)
 	"qcom,mdss-dsi-dispparam-demura-level2-command",
 	"qcom,mdss-dsi-dispparam-demura-level8-command",
 	"qcom,mdss-dsi-dispparam-demura-leveld-command",
@@ -2173,11 +2107,8 @@ const char *cmd_set_prop_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-dispparam-dc-demura-l2-command",
 	"qcom,mdss-dsi-dispparam-dc-on-command",
 	"qcom,mdss-dsi-dispparam-dc-off-command",
-<<<<<<< HEAD
 	"qcom,mdss-dsi-dispparam-bc-120hz-command",
 	"qcom,mdss-dsi-dispparam-bc-60hz-command",
-=======
->>>>>>> 997e414048ec (drm: msm: Implement demura dc dimming)
 };
 
 const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
@@ -2244,7 +2175,6 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-dispparam-hbm-off-command-state",
 	"qcom,mdss-dsi-dispparam-hbm-fod-on-command-state",
 	"qcom,mdss-dsi-dispparam-hbm-fod-off-command-state",
-<<<<<<< HEAD
 	"qcom,mdss-dsi-dispparam-hbm-fod2norm-command-state",
 	"qcom,mdss-dsi-displayoff-command-state",
 	"qcom,mdss-dsi-displayon-command-state",
@@ -2262,8 +2192,6 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-dispparam-four-pluse-command-state",
 	"qcom,mdss-dsi-dispparam-flat-mode-on-command-state",
 	"qcom,mdss-dsi-dispparam-flat-mode-off-command-state",
-=======
->>>>>>> 997e414048ec (drm: msm: Implement demura dc dimming)
 	"qcom,mdss-dsi-dispparam-demura-level2-command-state",
 	"qcom,mdss-dsi-dispparam-demura-level8-command-state",
 	"qcom,mdss-dsi-dispparam-demura-leveld-command-state",
@@ -2271,11 +2199,8 @@ const char *cmd_set_state_map[DSI_CMD_SET_MAX] = {
 	"qcom,mdss-dsi-dispparam-dc-demura-l2-command-state",
 	"qcom,mdss-dsi-dispparam-dc-on-command-state",
 	"qcom,mdss-dsi-dispparam-dc-off-command-state",
-<<<<<<< HEAD
 	"qcom,mdss-dsi-dispparam-bc-120hz-command-state",
 	"qcom,mdss-dsi-dispparam-bc-60hz-command-state",
-=======
->>>>>>> 997e414048ec (drm: msm: Implement demura dc dimming)
 };
 
 
@@ -2840,73 +2765,8 @@ static int dsi_panel_parse_bl_config(struct dsi_panel *panel)
 	panel->bl_config.bl_remap_flag = utils->read_bool(utils->data,
 								"qcom,mdss-brightness-remap");
 
-<<<<<<< HEAD
 	panel->bl_config.samsung_prepare_hbm_flag = utils->read_bool(utils->data,
 									"qcom,samsung-prepare-hbm");
-=======
-	rc = utils->read_u32(utils->data,
-		"qcom,disp-doze-backlight-threshold", &val);
-	if (rc) {
-		panel->doze_backlight_threshold = 5;
-		pr_info("set doze backlight threshold to 5\n");
-	} else {
-		panel->doze_backlight_threshold = val;
-	}
-
-	rc = utils->read_u32(utils->data,
-			"qcom,disp-doze-lbm-backlight", &val);
-	if (rc) {
-		panel->bl_config.bl_doze_lbm = 0;
-		pr_debug("set doze lbm backlight to 0\n");
-	} else {
-		panel->bl_config.bl_doze_lbm = val;
-	}
-
-	rc = utils->read_u32(utils->data,
-			"qcom,disp-doze-hbm-backlight", &val);
-	if (rc) {
-		panel->bl_config.bl_doze_hbm = 0;
-		pr_debug("set doze hbm backlight to 0\n");
-	} else {
-		panel->bl_config.bl_doze_hbm = val;
-	}
-
-	rc = utils->read_u32(utils->data,
-			"qcom,mdss-dsi-panel-dc-demura-threshold", &val);
-	if (rc) {
-		panel->dc_demura_threshold = 0;
-		pr_info("dc demura disabled\n");
-	} else {
-		panel->dc_demura_threshold = val;
-	}
-
-	rc = utils->read_u32(utils->data,
-			"mi,mdss-dsi-panel-dc-threshold", &val);
-	if (rc) {
-		panel->dc_threshold = 488;
-		pr_info("default dc backlight threshold is %d\n", panel->dc_threshold);
-	} else {
-		panel->dc_threshold = val;
-	}
-
-	rc = utils->read_u32(utils->data,
-			"mi,mdss-dsi-panel-dc-type", &val);
-	if (rc) {
-		panel->dc_type = 1;
-		pr_info("default dc backlight type is %d\n", panel->dc_type);
-	} else {
-		panel->dc_type = val;
-	}
-
-	panel->dc_enable = false;
-
-	rc = dsi_panel_parse_fod_dim_lut(panel, utils);
-	if (rc)
-		pr_err("[%s failed to parse fod dim lut\n", panel->name);
-
-	panel->bl_config.bl_inverted_dbv = utils->read_bool(utils->data,
-		"qcom,mdss-dsi-bl-inverted-dbv");
->>>>>>> 997e414048ec (drm: msm: Implement demura dc dimming)
 
 	if (panel->bl_config.type == DSI_BACKLIGHT_PWM) {
 		rc = dsi_panel_parse_bl_pwm_config(panel);
@@ -6321,15 +6181,10 @@ int dsi_panel_enable(struct dsi_panel *panel)
 			pr_err("[%s] failed to send DSI_CMD_SET_DISP_DC_ON cmd, rc=%d\n",
 					panel->name, rc);
 	}
-<<<<<<< HEAD
-=======
-
->>>>>>> 997e414048ec (drm: msm: Implement demura dc dimming)
 	if (panel->dc_type == 0 && panel->dc_enable) {
 		rc = dsi_panel_tx_cmd_set(panel, DSI_CMD_SET_DISP_DC_ON);
 		if (rc)
 			pr_err("[%s] failed to send DSI_CMD_SET_DISP_DC_ON cmd, rc=%d\n",
-<<<<<<< HEAD
 			panel->name, rc);
 	}
 
@@ -6345,11 +6200,6 @@ int dsi_panel_enable(struct dsi_panel *panel)
 
 	mutex_unlock(&panel->panel_lock);
 	pr_info("[SDE] %s: DSI_CMD_SET_ON\n", __func__);
-=======
-					panel->name, rc);
-	}
-
->>>>>>> 997e414048ec (drm: msm: Implement demura dc dimming)
 	return rc;
 }
 
@@ -6810,28 +6660,3 @@ ssize_t dsi_panel_mipi_reg_read(struct dsi_panel *panel, char *buf)
 	return count;
 }
 
-<<<<<<< HEAD
-=======
-int dsi_panel_apply_dc_mode(struct dsi_panel *panel)
-{
-	int rc;
-
-	enum dsi_cmd_set_type type = panel->dc_enable
-			? DSI_CMD_SET_DISP_DC_ON
-			: DSI_CMD_SET_DISP_DC_OFF;
-
-	mutex_lock(&panel->panel_lock);
-
-	rc = dsi_panel_tx_cmd_set(panel, type);
-	if (rc)
-		pr_err("[%s] failed to send %s cmd, rc=%d\n",
-				panel->name, type, rc);
-	else
-		rc = dsi_panel_update_backlight(panel,
-				panel->last_bl_lvl);
-
-	mutex_unlock(&panel->panel_lock);
-
-	return rc;
-}
->>>>>>> 997e414048ec (drm: msm: Implement demura dc dimming)
