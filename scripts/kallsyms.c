@@ -523,7 +523,7 @@ static void forget_symbol(unsigned char *symbol, int len)
 /* do the initial token count */
 static void build_initial_tok_table(void)
 {
-	unsigned int i;
+	unsigned int i, pos;
 
 	pos = 0;
 	for (i = 0; i < table_cnt; i++) {
