@@ -362,6 +362,7 @@ static void sugov_iowait_boost(struct sugov_cpu *sg_cpu, unsigned long *util,
 		*util = boost_util;
 		*max = boost_max;
 	}
+>>>>>>> a5a0809bc58e (cpufreq: schedutil: Make iowait boost more energy efficient)
 }
 
 #ifdef CONFIG_NO_HZ_COMMON
@@ -491,7 +492,8 @@ static unsigned int sugov_next_freq_shared(struct sugov_cpu *sg_cpu, u64 time)
 		 * enough, don't take the CPU into account as it probably is
 		 * idle now (and clear iowait_boost for it).
 		 */
-		if ((time - j_sg_cpu->last_update) > TICK_NSEC) {
+		delta_ns = time - j_sg_cpu->last_update;
+		if (delta_ns > TICK_NSEC) {
 			j_sg_cpu->iowait_boost = 0;
 			j_sg_cpu->iowait_boost_pending = false;
 			continue;

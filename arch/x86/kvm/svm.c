@@ -389,9 +389,6 @@ static void recalc_intercepts(struct vcpu_svm *svm)
 	c->intercept_dr = h->intercept_dr | g->intercept_dr;
 	c->intercept_exceptions = h->intercept_exceptions | g->intercept_exceptions;
 	c->intercept = h->intercept | g->intercept;
-
-	c->intercept |= (1ULL << INTERCEPT_VMLOAD);
-	c->intercept |= (1ULL << INTERCEPT_VMSAVE);
 }
 
 static inline struct vmcb *get_host_vmcb(struct vcpu_svm *svm)
@@ -1211,7 +1208,12 @@ static __init int svm_hardware_setup(void)
 		}
 	}
 
-	vgif = false; /* Disabled for CVE-2021-3653 */
+	if (vgif) {
+		if (!boot_cpu_has(X86_FEATURE_VGIF))
+			vgif = false;
+		else
+			pr_info("Virtual GIF supported\n");
+	}
 
 	return 0;
 
@@ -3159,13 +3161,7 @@ static bool nested_svm_vmrun(struct vcpu_svm *svm)
 	svm->nested.intercept            = nested_vmcb->control.intercept;
 
 	svm_flush_tlb(&svm->vcpu, true);
-
-	svm->vmcb->control.int_ctl &=
-			V_INTR_MASKING_MASK | V_GIF_ENABLE_MASK | V_GIF_MASK;
-
-	svm->vmcb->control.int_ctl |= nested_vmcb->control.int_ctl &
-			(V_TPR_MASK | V_IRQ_INJECTION_BITS_MASK);
-
+	svm->vmcb->control.int_ctl = nested_vmcb->control.int_ctl | V_INTR_MASKING_MASK;
 	if (nested_vmcb->control.int_ctl & V_INTR_MASKING_MASK)
 		svm->vcpu.arch.hflags |= HF_VINTR_MASK;
 	else
