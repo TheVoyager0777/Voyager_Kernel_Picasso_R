@@ -135,7 +135,6 @@ struct zram {
 	 */
 	bool claim; /* Protected by bdev->bd_mutex */
 	bool use_dedup;
-	struct file *backing_dev;
 
 #ifdef CONFIG_ZRAM_WRITEBACK
 	struct file *backing_dev;
