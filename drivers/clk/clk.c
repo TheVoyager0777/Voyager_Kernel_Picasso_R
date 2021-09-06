@@ -30,6 +30,11 @@
 
 #include "clk.h"
 
+#include <linux/kobject.h>
+#include <linux/sysfs.h>
+#include <linux/proc_fs.h>
+#include "../soc/qcom/rpmh_master_stat.h"
+
 #if defined(CONFIG_COMMON_CLK)
 
 static DEFINE_SPINLOCK(enable_lock);
@@ -41,6 +46,8 @@ static struct task_struct *enable_owner;
 static int prepare_refcnt;
 static int enable_refcnt;
 
+static unsigned int debug_suspend_flag;
+
 static HLIST_HEAD(clk_root_list);
 static HLIST_HEAD(clk_orphan_list);
 static LIST_HEAD(clk_notifier_list);
@@ -48,17 +55,6 @@ static LIST_HEAD(clk_notifier_list);
 struct clk_handoff_vdd {
 	struct list_head list;
 	struct clk_vdd_class *vdd_class;
-};
-
-static struct hlist_head *all_lists[] = {
-	&clk_root_list,
-	&clk_orphan_list,
-	NULL,
-};
-
-static struct hlist_head *orphan_list[] = {
-	&clk_orphan_list,
-	NULL,
 };
 
 static LIST_HEAD(clk_handoff_vdd_list);
@@ -2705,6 +2701,7 @@ EXPORT_SYMBOL_GPL(clk_set_flags);
 #include <linux/debugfs.h>
 
 static struct dentry *rootdir;
+static struct proc_dir_entry *procdir;
 static int inited = 0;
 static u32 debug_suspend;
 static DEFINE_MUTEX(clk_debug_lock);
@@ -2997,55 +2994,6 @@ static int clock_debug_enable_get(void *data, u64 *val)
 
 	return 0;
 }
-
-static void clk_state_subtree(struct clk_core *c)
-{
-	int vdd_level = 0;
-	struct clk_core *child;
-
-	if (!c)
-		return;
-
-	if (c->vdd_class) {
-		vdd_level = clk_find_vdd_level(c, c->rate);
-		if (vdd_level < 0)
-			vdd_level = 0;
-	}
-
-	trace_clk_state(c->name, c->prepare_count, c->enable_count,
-						c->rate, vdd_level);
-
-	hlist_for_each_entry(child, &c->children, child_node)
-		clk_state_subtree(child);
-}
-
-static int clk_state_show(struct seq_file *s, void *data)
-{
-	struct clk_core *c;
-	struct hlist_head **lists = (struct hlist_head **)s->private;
-
-	clk_prepare_lock();
-
-	for (; *lists; lists++)
-		hlist_for_each_entry(c, *lists, child_node)
-			clk_state_subtree(c);
-
-	clk_prepare_unlock();
-
-	return 0;
-}
-
-static int clk_state_open(struct inode *inode, struct file *file)
-{
-	return single_open(file, clk_state_show, inode->i_private);
-}
-
-static const struct file_operations clk_state_fops = {
-	.open		= clk_state_open,
-	.read		= seq_read,
-	.llseek		= seq_lseek,
-	.release	= single_release,
-};
 
 DEFINE_SIMPLE_ATTRIBUTE(clock_enable_fops, clock_debug_enable_get,
 			clock_debug_enable_set, "%lld\n");
@@ -3519,6 +3467,25 @@ void clock_debug_print_enabled(bool print_parent)
 }
 EXPORT_SYMBOL_GPL(clock_debug_print_enabled);
 
+static ssize_t debug_suspend_show(struct kobject *kobj,
+			struct kobj_attribute *attr, char *buf)
+{
+	return snprintf(buf, sizeof(buf), "%d\n", debug_suspend_flag);
+}
+
+static ssize_t debug_suspend_store(struct kobject *kobj,
+		struct kobj_attribute *attr, const char *buf, size_t count)
+{
+	if (kstrtouint(buf, 10, &debug_suspend_flag))
+		return -EINVAL;
+
+	pr_info("debug_suspend flag: %d", debug_suspend_flag);
+	return count;
+}
+
+static struct kobj_attribute debug_suspend_attribute =
+__ATTR(debug_suspend, 0644, debug_suspend_show, debug_suspend_store);
+
 /**
  * clk_debug_init - lazily populate the debugfs clk directory
  *
@@ -3531,54 +3498,38 @@ EXPORT_SYMBOL_GPL(clock_debug_print_enabled);
 static int __init clk_debug_init(void)
 {
 	struct clk_core *core;
-	struct dentry *d;
+	int ret;
 
 	rootdir = debugfs_create_dir("clk", NULL);
 
-	if (!rootdir)
-		return -ENOMEM;
-
-	d = debugfs_create_file("clk_summary", 0444, rootdir, &all_lists,
-				&clk_summary_fops);
-	if (!d)
-		return -ENOMEM;
-
-	d = debugfs_create_file("clk_dump", 0444, rootdir, &all_lists,
-				&clk_dump_fops);
-	if (!d)
-		return -ENOMEM;
-
-	d = debugfs_create_file("clk_orphan_summary", 0444, rootdir,
-				&orphan_list, &clk_summary_fops);
-	if (!d)
-		return -ENOMEM;
-
-	d = debugfs_create_file("clk_orphan_dump", 0444, rootdir,
-				&orphan_list, &clk_dump_fops);
-	if (!d)
-		return -ENOMEM;
-
-	d = debugfs_create_file("clk_enabled_list", 0444, rootdir,
-				&clk_debug_list, &clk_enabled_list_fops);
-	if (!d)
-		return -ENOMEM;
-
-
-	d = debugfs_create_u32("debug_suspend", 0644, rootdir, &debug_suspend);
-	if (!d)
-		return -ENOMEM;
-
-	d = debugfs_create_file("trace_clocks", 0444, rootdir, &all_lists,
-				&clk_state_fops);
-	if (!d)
-		return -ENOMEM;
-
+	debugfs_create_file("clk_summary", 0444, rootdir, &all_lists,
+			&clk_summary_fops);
+	debugfs_create_file("clk_dump", 0444, rootdir, &all_lists,
+			&clk_dump_fops);
+	debugfs_create_file("clk_orphan_summary", 0444, rootdir,
+			&orphan_list, &clk_summary_fops);
+	debugfs_create_file("clk_orphan_dump", 0444, rootdir,
+			&orphan_list, &clk_dump_fops);
+	debugfs_create_file("clk_enabled_list", 0444, rootdir,
+		&clk_debug_list, &clk_enabled_list_fops);
+	debugfs_create_u32("debug_suspend", 0644, rootdir, &debug_suspend);
+	debugfs_create_file("trace_clocks", 0444, rootdir, &all_lists,
+			&clk_state_fops);
 	mutex_lock(&clk_debug_lock);
 	hlist_for_each_entry(core, &clk_debug_list, debug_node)
 		clk_debug_create_one(core, rootdir);
 
 	inited = 1;
 	mutex_unlock(&clk_debug_lock);
+
+	ret = sysfs_create_file(power_kobj, &debug_suspend_attribute.attr);
+	if (ret < 0)
+		pr_err("Failed to create debug_suspend sysfs.");
+	else
+		pr_err("Success to create debug_suspend sysfs.");
+
+	procdir = proc_mkdir("power", NULL);
+	proc_create("clk_enabled_list", 0444, procdir, &clk_enabled_list_fops);
 
 	return 0;
 }
