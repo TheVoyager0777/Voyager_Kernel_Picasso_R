@@ -1271,7 +1271,6 @@ struct task_struct {
 	struct list_head		pi_state_list;
 	struct futex_pi_state		*pi_state_cache;
 	struct mutex			futex_exit_mutex;
-	unsigned int			futex_state;
 #endif
 #ifdef CONFIG_PERF_EVENTS
 	struct perf_event_context	*perf_event_ctxp[perf_nr_task_contexts];
@@ -1518,7 +1517,6 @@ struct task_struct {
 	ANDROID_KABI_RESERVE(5);
 	ANDROID_KABI_RESERVE(6);
 #else
-	struct mutex			futex_exit_mutex;
 #endif
 
 	ANDROID_KABI_RESERVE(7);

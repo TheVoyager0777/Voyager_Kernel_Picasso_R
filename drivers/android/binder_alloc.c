@@ -351,8 +351,6 @@ static inline struct vm_area_struct *binder_alloc_get_vma(
 	return vma;
 }
 
-<<<<<<< HEAD
-=======
 static void debug_low_async_space_locked(struct binder_alloc *alloc, int pid)
 {
 	/*
@@ -370,8 +368,6 @@ static void debug_low_async_space_locked(struct binder_alloc *alloc, int pid)
 	for (n = rb_first(&alloc->allocated_buffers); n != NULL;
 		 n = rb_next(n)) {
 		buffer = rb_entry(n, struct binder_buffer, rb_node);
-		if (buffer->pid != pid)
-			continue;
 		if (!buffer->async_transaction)
 			continue;
 		total_alloc_size += binder_alloc_buffer_size(alloc, buffer)
@@ -394,7 +390,6 @@ static void debug_low_async_space_locked(struct binder_alloc *alloc, int pid)
 extern struct task_struct *binder_buff_owner(struct binder_alloc *alloc);
 #endif
 
->>>>>>> 93f252c7e548 (kernel: Add modifications for miui millet optimization)
 static struct binder_buffer *binder_alloc_new_buf_locked(
 				struct binder_alloc *alloc,
 				size_t data_size,
