@@ -51,6 +51,15 @@
 static struct ion_device *internal_dev;
 static atomic_long_t total_heap_bytes;
 
+static struct ion_device ion_dev = {
+	.heaps = PLIST_HEAD_INIT(ion_dev.heaps),
+	.dev = {
+		.minor = MISC_DYNAMIC_MINOR,
+		.name = "ion",
+		.fops = &ion_fops
+		}
+	}
+
 int ion_walk_heaps(int heap_id, enum ion_heap_type type, void *data,
 		   int (*f)(struct ion_heap *heap, void *data))
 {
@@ -68,7 +77,7 @@ int ion_walk_heaps(int heap_id, enum ion_heap_type type, void *data,
 			continue;
 		ret_val = f(heap, data);
 		break;
-	}
+		}
 	up_write(&dev->lock);
 	return ret_val;
 }
@@ -1109,13 +1118,12 @@ struct dma_buf *ion_alloc_dmabuf(size_t len, unsigned int heap_id_mask,
 	}
 
 	down_read(&dev->lock);
-	plist_for_each_entry(heap, &dev->heaps, node) {
-		/* if the caller didn't specify this heap id */
-		if (!((1 << heap->id) & heap_id_mask))
-			continue;
-		buffer = ion_buffer_create(heap, dev, len, flags);
-		if (!IS_ERR(buffer) || PTR_ERR(buffer) == -EINTR)
-			break;
+        plist_for_each_entry(heap, &idev->heaps, node) {
+		if (BIT(heap->id) & heap_id_mask) {
+			buffer = ion_buffer_create(heap, len, flags);
+			if (!IS_ERR(buffer) || PTR_ERR(buffer) == -EINTR)
+				break;
+		}
 	}
 	up_read(&dev->lock);
 
@@ -1203,15 +1211,29 @@ int ion_alloc_fd(size_t len, unsigned int heap_id_mask, unsigned int flags)
 	return fd;
 }
 
+void ion_add_heap(struct ion_device *idev, struct ion_heap *heap)
 int ion_alloc_fd_with_caller_pid(size_t len, unsigned int heap_id_mask, unsigned int flags, int pid_info)
 {
 	int fd;
 	struct dma_buf *dmabuf;
+	struct ion_heap_data *hdata = &idev->heap_data[idev->heap_count];
+
+	if (heap->flags & ION_HEAP_FLAG_DEFER_FREE) {
+		heap->wq = alloc_workqueue("%s", WQ_UNBOUND | WQ_MEM_RECLAIM |
+					   WQ_CPU_INTENSIVE, 1, heap->name);
+		BUG_ON(!heap->wq);
+	}
 
 	dmabuf = ion_alloc_dmabuf(len, heap_id_mask, flags, pid_info);
 	if (IS_ERR(dmabuf))
 		return PTR_ERR(dmabuf);
 
+        plist_node_init(&heap->node, -heap->id);
+	plist_add(&heap->node, &idev->heaps);
+	strlcpy(hdata->name, heap->name, sizeof(hdata->name));
+	hdata->type = heap->type;
+	hdata->heap_id = heap->id;
+	idev->heap_count++;
 	fd = dma_buf_fd(dmabuf, O_CLOEXEC);
 	if (fd < 0)
 		dma_buf_put(dmabuf);
@@ -1241,7 +1263,11 @@ int ion_query_heaps(struct ion_heap_query *query)
 
 	max_cnt = query->cnt;
 
-	plist_for_each_entry(heap, &dev->heaps, node) {
+	plist_for_each_entry(heap, &idev->heaps, node) {
+		if (heap->type == type && ION_HEAP(heap->id) == heap_id) {
+			ret = f(heap, data);
+			break;
+			}
 		strlcpy(hdata.name, heap->name, sizeof(hdata.name));
 		hdata.name[sizeof(hdata.name) - 1] = '\0';
 		hdata.type = heap->type;
@@ -1286,6 +1312,18 @@ static int ion_debug_heap_show(struct seq_file *s, void *unused)
 
 	if (heap->debug_show)
 		heap->debug_show(heap, s, unused);
+
+static int ion_query_heaps(struct ion_heap_query *query)
+{
+	struct ion_device *idev = &ion_dev;
+
+	if (!query->cnt)
+		return -EINVAL;
+
+	if (copy_to_user(u64_to_user_ptr(query->heaps), idev->heap_data,
+			 min(query->cnt, idev->heap_count) *
+			 sizeof(*idev->heap_data)))
+		return -EFAULT;
 
 	return 0;
 }
@@ -1456,11 +1494,80 @@ static int ion_init_sysfs(void)
 		kobject_put(ion_kobj);
 		return ret;
 	}
+	
+static long ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
+{
+	struct ion_device *idev = &ion_dev;
+	union {
+		struct ion_allocation_data allocation;
+		struct ion_prefetch_data prefetch;
+		struct ion_heap_query query;
+	} data;
+	int fd, *output;
+
+	switch (cmd) {
+	case ION_IOC_ALLOC:
+		if (copy_from_user(&data, (void __user *)arg,
+				   sizeof(struct ion_allocation_data)))
+			return -EFAULT;
+
+		fd = ion_alloc_fd(&data.allocation);
+		if (fd < 0)
+			return fd;
+
+		output = &fd;
+		arg += offsetof(struct ion_allocation_data, fd);
+		break;
+	case ION_IOC_HEAP_QUERY:
+		/* The data used in ion_heap_query ends at `heaps` */
+		if (copy_from_user(&data, (void __user *)arg,
+				   offsetof(struct ion_heap_query, heaps) +
+				   sizeof(data.query.heaps)))
+			return -EFAULT;
+
+		if (data.query.heaps)
+			return ion_query_heaps(&data.query);
+
+		output = &idev->heap_count;
+		/* `arg` already points to the ion_heap_query member we want */
+		break;
+	case ION_IOC_PREFETCH:
+		/* The data used in ion_prefetch_data begins at `regions` */
+		if (copy_from_user(&data.prefetch.regions,
+				   (void __user *)arg +
+				   offsetof(struct ion_prefetch_data, regions),
+				   sizeof(struct ion_prefetch_data) -
+				   offsetof(struct ion_prefetch_data, regions)))
+			return -EFAULT;
+
+		return ion_walk_heaps(data.prefetch.heap_id,
+				      ION_HEAP_TYPE_SYSTEM_SECURE,
+				      &data.prefetch,
+				      ion_system_secure_heap_prefetch);
+	case ION_IOC_DRAIN:
+		/* The data used in ion_prefetch_data begins at `regions` */
+		if (copy_from_user(&data.prefetch.regions,
+				   (void __user *)arg +
+				   offsetof(struct ion_prefetch_data, regions),
+				   sizeof(struct ion_prefetch_data) -
+				   offsetof(struct ion_prefetch_data, regions)))
+			return -EFAULT;
+
+		return ion_walk_heaps(data.prefetch.heap_id,
+				      ION_HEAP_TYPE_SYSTEM_SECURE,
+				      &data.prefetch,
+				      ion_system_secure_heap_drain);
+	default:
+		return -ENOTTY;
+	}
+
+	if (copy_to_user((void __user *)arg, output, sizeof(*output)))
+		return -EFAULT;
 
 	return 0;
 }
 
-struct ion_device *ion_device_create(void)
+struct ion_device *ion_device_create(struct ion_heap_data *heap_data)
 {
 	struct ion_device *idev;
 	int ret;
@@ -1485,6 +1592,7 @@ struct ion_device *ion_device_create(void)
 		goto err_sysfs;
 	}
 
+        idev->heap_data = heap_data;
 	idev->debug_root = debugfs_create_dir("ion", NULL);
 	if (!idev->debug_root) {
 		pr_err("ion: failed to create debugfs root directory.\n");
