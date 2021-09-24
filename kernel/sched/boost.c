@@ -1,14 +1,29 @@
-// SPDX-License-Identifier: GPL-2.0-only
-/*
- * Copyright (c) 2012-2020, The Linux Foundation. All rights reserved.
- * Copyright (C) 2021 XiaoMi, Inc.
+/* Copyright (c) 2012-2019, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  */
 
 #include "sched.h"
+#ifdef CONFIG_SCHED_WALT
 #include "walt.h"
 #include <linux/of.h>
 #include <linux/sched/core_ctl.h>
 #include <trace/events/sched.h>
+#endif
+#ifndef CONFIG_SCHED_WALT
+#define NO_BOOST 0
+#define FULL_THROTTLE_BOOST 1
+#define CONSERVATIVE_BOOST 2
+#define RESTRAINED_BOOST 3
+#define RESTRAINED_BOOST_DISABLE -3
+#endif
 
 /*
  * Scheduler boost is a mechanism to temporarily place tasks on CPUs
@@ -23,11 +38,14 @@ unsigned int mi_sched_boost;
 unsigned int sysctl_sched_boost_top_app;
 #endif
 unsigned int sched_boost_type; /* currently activated sched boost */
+#ifdef CONFIG_SCHED_WALT
 enum sched_boost_policy boost_policy;
 
 static enum sched_boost_policy boost_policy_dt = SCHED_BOOST_NONE;
+#endif
 static DEFINE_MUTEX(boost_mutex);
 
+#ifdef CONFIG_SCHED_WALT
 /*
  * Scheduler boost type and boost policy might at first seem unrelated,
  * however, there exists a connection between them that will allow us
@@ -41,6 +59,10 @@ static DEFINE_MUTEX(boost_mutex);
  */
 static void set_boost_policy(int type)
 {
+	if (type == NO_BOOST || type == RESTRAINED_BOOST) {
+		boost_policy = SCHED_BOOST_NONE;
+		return;
+	}
 
 	if (boost_policy_dt) {
 		boost_policy = boost_policy_dt;
@@ -54,6 +76,7 @@ static void set_boost_policy(int type)
 
 	boost_policy = SCHED_BOOST_ON_ALL;
 }
+#endif
 
 static bool verify_boost_params(int type)
 {
@@ -77,34 +100,46 @@ static bool verify_boost_top_app_params(int type)
 
 static void sched_full_throttle_boost_enter(void)
 {
+#ifdef CONFIG_SCHED_WALT
 	core_ctl_set_boost(true);
 	walt_enable_frequency_aggregation(true);
+#endif
 }
 
 static void sched_full_throttle_boost_exit(void)
 {
+#ifdef CONFIG_SCHED_WALT
 	core_ctl_set_boost(false);
 	walt_enable_frequency_aggregation(false);
+#endif
 }
 
 static void sched_conservative_boost_enter(void)
 {
+#ifdef CONFIG_SCHED_WALT
 	update_cgroup_boost_settings();
+#endif
 }
 
 static void sched_conservative_boost_exit(void)
 {
+#ifdef CONFIG_SCHED_WALT
 	restore_cgroup_boost_settings();
+#endif
 }
 
 static void sched_restrained_boost_enter(void)
 {
+#ifdef CONFIG_SCHED_WALT
 	walt_enable_frequency_aggregation(true);
+#endif
 }
 
 static void sched_restrained_boost_exit(void)
 {
+#ifdef CONFIG_SCHED_WALT
 	walt_enable_frequency_aggregation(false);
+#endif
 }
 
 struct sched_boost_data {
@@ -135,49 +170,6 @@ static struct sched_boost_data sched_boosts[] = {
 		.exit = sched_restrained_boost_exit,
 	},
 };
-
-#ifdef CONFIG_PERF_HUMANTASK
-static inline bool jump_queue(struct task_struct *tsk, struct rb_node *root)
-{
-	bool jump = false;
-
-	if (tsk && tsk->human_task && root) {
-		if (tsk->human_task > MAX_LEVER ||
-			sched_mi_boost() == MI_BOOST) {
-			jump = true;
-			goto out;
-		}
-
-		if (tsk->human_task < MAX_LEVER)
-			jump = true;//66%
-
-		tsk->human_task = jump ? ++tsk->human_task : 1;
-	}
-out:
-	if (jump) {
-		trace_sched_debug_einfo(tsk, "jumper", "boostx", tsk->human_task,
-			sched_boost(), sched_mi_boost(), sched_boost_top_app(), 0);
-	}
-
-	return jump;
-}
-#endif
-
-#ifdef CONFIG_PERF_HUMANTASK
-	bool speed = false;
-	struct task_struct *tsk = NULL;
-	if (entity_is_task(se)) {
-		tsk = task_of(se);
-		speed = jump_queue(tsk, *link);
-	}
-	if (speed)
-		se->vruntime =  tsk->human_task * 1000000;
-#endif
-
-#ifdef CONFIG_PERF_HUMANTASK
-	if (speed)
-		se->vruntime = entry->vruntime-1;
-#endif
 
 #define SCHED_BOOST_START FULL_THROTTLE_BOOST
 #define SCHED_BOOST_END (RESTRAINED_BOOST + 1)
@@ -287,8 +279,10 @@ static void _sched_set_boost(int type)
 
 	sched_boost_type = sched_effective_boost();
 	sysctl_sched_boost = sched_boost_type;
+#ifdef CONFIG_SCHED_WALT
 	set_boost_policy(sysctl_sched_boost);
 	trace_sched_set_boost(sysctl_sched_boost);
+#endif
 }
 
 #ifdef CONFIG_MIHW
@@ -298,6 +292,7 @@ static void sched_set_boost_top_app(int type)
 }
 #endif
 
+#ifdef CONFIG_SCHED_WALT
 void sched_boost_parse_dt(void)
 {
 	struct device_node *sn;
@@ -314,10 +309,13 @@ void sched_boost_parse_dt(void)
 			boost_policy_dt = SCHED_BOOST_ON_ALL;
 	}
 }
+#endif
 
 int sched_set_boost(int type)
 {
 	int ret = 0;
+
+	return 0;
 
 	mutex_lock(&boost_mutex);
 	if (verify_boost_params(type))
