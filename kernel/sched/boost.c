@@ -140,6 +140,49 @@ static struct sched_boost_data sched_boosts[] = {
 	},
 };
 
+#ifdef CONFIG_PERF_HUMANTASK
+static inline bool jump_queue(struct task_struct *tsk, struct rb_node *root)
+{
+	bool jump = false;
+
+	if (tsk && tsk->human_task && root) {
+		if (tsk->human_task > MAX_LEVER ||
+			sched_mi_boost() == MI_BOOST) {
+			jump = true;
+			goto out;
+		}
+
+		if (tsk->human_task < MAX_LEVER)
+			jump = true;//66%
+
+		tsk->human_task = jump ? ++tsk->human_task : 1;
+	}
+out:
+	if (jump) {
+		trace_sched_debug_einfo(tsk, "jumper", "boostx", tsk->human_task,
+			sched_boost(), sched_mi_boost(), sched_boost_top_app(), 0);
+	}
+
+	return jump;
+}
+#endif
+
+#ifdef CONFIG_PERF_HUMANTASK
+	bool speed = false;
+	struct task_struct *tsk = NULL;
+	if (entity_is_task(se)) {
+		tsk = task_of(se);
+		speed = jump_queue(tsk, *link);
+	}
+	if (speed)
+		se->vruntime =  tsk->human_task * 1000000;
+#endif
+
+#ifdef CONFIG_PERF_HUMANTASK
+	if (speed)
+		se->vruntime = entry->vruntime-1;
+#endif
+
 #define SCHED_BOOST_START FULL_THROTTLE_BOOST
 #define SCHED_BOOST_END (RESTRAINED_BOOST + 1)
 
@@ -295,9 +338,6 @@ int sched_boost_handler(struct ctl_table *table, int write,
 {
 	int ret;
 	unsigned int *data = (unsigned int *)table->data;
-	
-	if (task_is_booster(current))
-		return 0;
 
 	mutex_lock(&boost_mutex);
 
