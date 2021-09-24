@@ -806,10 +806,6 @@ int f2fs_register_sysfs(struct f2fs_sb_info *sbi)
 				segment_info_seq_show, sb);
 		proc_create_single_data("segment_bits", S_IRUGO, sbi->s_proc,
 				segment_bits_seq_show, sb);
-		proc_create_single_data("iostat_info", S_IRUGO, sbi->s_proc,
-				iostat_info_seq_show, sb);
-		proc_create_single_data("victim_bits", S_IRUGO, sbi->s_proc,
-
 #ifdef CONFIG_F2FS_IOSTAT
 		proc_create_single_data("iostat_info", 0444, sbi->s_proc,
 				iostat_info_seq_show, sb);
