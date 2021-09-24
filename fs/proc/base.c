@@ -2668,7 +2668,7 @@ static const struct file_operations proc_pid_set_timerslack_ns_operations = {
 };
 
 static int proc_pident_instantiate(struct inode *dir,
-	struct dentry *dentry, struct task_struct *task, const void *ptr)
+	struct dentry *dentry, struct task_struct *task, const void *ptr);
 
 #ifdef CONFIG_MIHW
 static int top_app_show(struct seq_file *m, void *v)
